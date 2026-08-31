@@ -14,6 +14,39 @@ logger = logging.getLogger("corvus.health")
 
 _start_time = time.time()
 
+# Same rule as auth/middleware.py and backend.py: "explicitly development",
+# not "not production". An unset FLASK_ENV must not select the lenient branch.
+_FLASK_ENV = os.getenv("FLASK_ENV", "").strip().lower()
+IS_EXPLICIT_DEV = _FLASK_ENV in ("development", "dev", "debug", "local", "test")
+
+# Variables the deployment cannot do its job without. Reported by NAME only —
+# never a value, not even a prefix.
+REQUIRED_ENV = {
+    "FLASK_ENV":                     "production-only behaviour (error detail, webhook signature checks)",
+    "FIREBASE_SERVICE_ACCOUNT_JSON": "server-side token verification (Flask API)",
+    "FIREBASE_PROJECT_ID":           "Firestore access from the serverless JS handlers",
+    "FIREBASE_CLIENT_EMAIL":         "Firestore access from the serverless JS handlers",
+    "FIREBASE_PRIVATE_KEY":          "Firestore access from the serverless JS handlers",
+}
+
+
+def _config_report():
+    """
+    Which required variables are absent, by name.
+
+    This block exists because every symptom of the real problem was
+    misleading. The deployment answered /api/health with 200, /api/ready with
+    "ready", /api/announcements with an empty list, and /api/referral/stats
+    with an opaque platform crash — while the actual cause was five unset
+    environment variables. An operator had no single place to look.
+    """
+    missing = [k for k in REQUIRED_ENV if not os.getenv(k, "").strip()]
+    return {
+        "missing_env": missing,
+        "why": {k: REQUIRED_ENV[k] for k in missing},
+        "ok": not missing,
+    }
+
 
 @health_bp.route("/api/health", methods=["GET"])
 def health():
@@ -21,10 +54,15 @@ def health():
     Liveness probe — responds fast, minimal checks.
     Returns 200 if process is alive.
     """
+    cfg = _config_report()
     return jsonify({
         "status": "ok",
         "service": "corvus-backend",
-        "env": os.getenv("FLASK_ENV", "development"),
+        # The literal value, and "(unset)" when there isn't one. It used to
+        # default to "development", which reads like a deliberate setting and
+        # hid the fact that nothing was configured at all.
+        "env": _FLASK_ENV or "(unset)",
+        "config": cfg,
         "uptime_sec": round(time.time() - _start_time),
     }), 200
 
@@ -42,7 +80,11 @@ def ready():
     try:
         from auth.middleware import _firebase_ok
         checks["firebase"] = "ok" if _firebase_ok else "not_configured"
-        if not _firebase_ok and os.getenv("FLASK_ENV") == "production":
+        # Without Firebase Admin the server cannot verify a single token, so
+        # it is not ready to serve traffic. This used to require
+        # FLASK_ENV == "production" to count, which meant the live deployment
+        # reported "ready" while no authentication was possible.
+        if not _firebase_ok and not IS_EXPLICIT_DEV:
             overall = False
     except Exception as e:
         checks["firebase"] = f"error: {e}"
@@ -66,8 +108,8 @@ def ready():
         checks["supabase"] = "ok" if result else "degraded"
     except Exception as e:
         checks["supabase"] = f"error: {str(e)[:80]}"
-        # DB failure IS fatal in production
-        if os.getenv("FLASK_ENV") == "production":
+        # DB failure IS fatal anywhere that is not an explicit dev box.
+        if not IS_EXPLICIT_DEV:
             overall = False
 
     # ── Stripe check ───────────────────────────────────────────
@@ -92,6 +134,6 @@ def version():
     return jsonify({
         "version": os.getenv("APP_VERSION", "17.0.0"),
         "python": sys.version.split()[0],
-        "env": os.getenv("FLASK_ENV", "development"),
+        "env": _FLASK_ENV or "(unset)",
         "commit": os.getenv("GIT_COMMIT", "local"),
     }), 200

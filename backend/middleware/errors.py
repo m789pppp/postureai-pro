@@ -11,7 +11,19 @@ from flask import jsonify
 
 logger = logging.getLogger("corvus.errors")
 
-IS_PRODUCTION = os.getenv("FLASK_ENV", "development") == "production"
+# Fail closed. This used to be `os.getenv("FLASK_ENV", "development") ==
+# "production"`, so an UNSET variable meant development, and development means
+# the full traceback goes back to the caller in the response body.
+#
+# FLASK_ENV is not set on Vercel. /api/health on the live deployment reports
+# "env": "development" — which is how this was found. Every one of the ~177
+# safe_error() call sites across the API was therefore returning file paths,
+# line numbers and local frame context to anyone who could provoke an error.
+#
+# Verbose errors are a debugging convenience and must be opted into explicitly.
+# Absence of configuration is not consent to leak internals.
+_ENV = os.getenv("FLASK_ENV", "").strip().lower()
+IS_PRODUCTION = _ENV not in ("development", "dev", "debug", "local", "test")
 
 
 def safe_error(e: Exception, msg: str = "Internal server error", status: int = 500):

@@ -23,6 +23,22 @@ _firebase_lock = threading.Lock()
 _firebase_ok   = False
 _fb_auth       = None
 
+# ── What counts as a development environment ──────────────────────
+# Deliberately "is this EXPLICITLY development", not "is this production".
+#
+# Every security decision in this file used to be written as
+# `os.getenv("FLASK_ENV", "development") == "production"`, which means an
+# UNSET variable selected the development branch. FLASK_ENV is not set on the
+# Vercel deployment, and the development branch of _verify_token below hands
+# out a fixed user for any token string at all. That was live: a GET to
+# /api/user/activity on production with `Authorization: Bearer
+# obviously-not-a-valid-jwt` returned 200.
+#
+# A missing environment variable must never be what unlocks an auth bypass.
+_FLASK_ENV = os.getenv("FLASK_ENV", "").strip().lower()
+IS_EXPLICIT_DEV = _FLASK_ENV in ("development", "dev", "debug", "local", "test")
+
+
 def _init_firebase():
     global _firebase_ok, _fb_auth
     with _firebase_lock:
@@ -66,14 +82,28 @@ _init_firebase()
 # ── PRODUCTION STARTUP GUARD ──────────────────────────────────────
 # If Firebase Admin is not configured in production, refuse to start.
 # This prevents the silent auth-bypass that existed in v2.
-if os.getenv("FLASK_ENV", "development") == "production" and not _firebase_ok:
+if not _firebase_ok and not IS_EXPLICIT_DEV:
+    if _FLASK_ENV == "production":
+        print(
+            "\n🚨 FATAL: Firebase Admin SDK not initialized in PRODUCTION.\n"
+            "   Authentication is disabled — refusing to start.\n"
+            "   Fix: Set FIREBASE_SERVICE_ACCOUNT_JSON in your environment (Railway/Render/Docker).\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    # FLASK_ENV is not set at all — the case that was live. Do NOT exit:
+    # this module is imported on every serverless cold start, so exiting
+    # here turns one unset variable into a total API outage. Token
+    # verification below fails closed regardless, so the service degrades
+    # to "nobody is authenticated" rather than "anybody is".
     print(
-        "\n🚨 FATAL: Firebase Admin SDK not initialized in PRODUCTION.\n"
-        "   Authentication is disabled — refusing to start.\n"
-        "   Fix: Set FIREBASE_SERVICE_ACCOUNT_JSON in your environment (Railway/Render/Docker).\n",
-        file=sys.stderr,
+        "\n🚨 Firebase Admin SDK not initialized and FLASK_ENV is not set.\n"
+        "   Every authenticated endpoint will return 401 until\n"
+        "   FIREBASE_SERVICE_ACCOUNT_JSON is configured.\n"
+        "   Set FLASK_ENV=production as well so the production-only\n"
+        "   behaviour elsewhere in the app switches on.\n",
+        file=sys.stderr, flush=True,
     )
-    sys.exit(1)
 
 # ── Token cache (in-memory, thread-safe) ──────────────────────────
 _token_lock   = threading.Lock()
@@ -101,15 +131,18 @@ def _verify_token(id_token: str) -> dict | None:
     # ── HARD FAIL if Firebase not configured ─────────────────────
     # In v2 this fell back to decoding without verification — REMOVED.
     if not _firebase_ok:
-        # Allow dev-mode with a fixed test user ONLY when not production
-        if os.getenv("FLASK_ENV", "development") != "production":
+        # A fixed test user, for an EXPLICITLY declared development
+        # environment only. This condition used to be `!= "production"`, so an
+        # unset FLASK_ENV — the state of the live deployment — meant any
+        # non-empty token string authenticated as this user.
+        if IS_EXPLICIT_DEV:
             # Return a fixed dev user — never decode an unverified JWT
             dev_user = {"uid": "dev-user-local", "email": "dev@local.test", "email_verified": True, "auth_time": int(time.time())}
             with _token_lock:
                 _token_cache[h] = {"user": dev_user, "exp": time.time() + TOKEN_TTL}
             return dev_user
-        # Production with no Firebase: reject all tokens
-        print("[auth] REJECTED token — Firebase Admin not initialized in production", file=sys.stderr)
+        # Anything that is not an explicitly declared dev box: reject.
+        print("[auth] REJECTED token — Firebase Admin not initialized", file=sys.stderr)
         return None
 
     try:
