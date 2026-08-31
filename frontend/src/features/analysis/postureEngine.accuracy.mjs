@@ -259,6 +259,27 @@ console.log("\nALERTS — the right instruction, and only the right one");
   check("Lateral lean is not headlined by chin/armrest advice",
         !/tuck chin|armrest|chair height/i.test(lean[0] || ""), `headline: ${lean[0]}`);
 
+  // The LIVE headline — alerts.detailed[0] — is what App.jsx now shows on
+  // screen, speaks aloud and pushes as a desktop notification. Before it was
+  // wired to this list the live loop ran its own hardcoded neck/yaw/distance
+  // chain that knew nothing about forward head, slouching, twist or shrug.
+  const headlineKey = (pose) => {
+    const d = read(pose)?.alerts?.detailed?.[0];
+    return d ? String(d.key).replace(/_(sev|mid|cl|c|f|hi|lo|calib_tip)$/, "") : null;
+  };
+  const headlines = [
+    ["upright",      {},                     null],
+    ["forward head", { forwardHeadCm: 8 },   "fhp"],
+    ["lateral lean", { lateralLeanDeg: 18 }, "spine"],
+    ["trunk twist",  { trunkRotDeg: 35 },    "twist"],
+    ["shoulder shrug",{ shoulderElevCm: 4 }, "shrug"],
+  ];
+  for (const [label, pose, want] of headlines) {
+    const got = headlineKey(pose);
+    if (VERBOSE) console.log(`    live headline, ${label}: ${got ?? "(none)"}`);
+    check(`Live headline for ${label} is ${want ?? "nothing"}`, got === want, `got ${got ?? "(none)"}`);
+  }
+
   // Severity levels of one metric are mutually exclusive.
   const slouch = alertsFor({ trunkFlexDeg: 20 });
   const both = slouch.some(x => /Slouching forward/.test(x)) && slouch.some(x => /starting to slump/.test(x));
