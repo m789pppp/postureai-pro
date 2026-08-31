@@ -1,0 +1,6 @@
+
+# Rules-test harness deps — installed on demand by `npm test` in this
+# directory and in CI. No lockfile is committed: this is a throwaway
+# emulator harness, not shipped code.
+node_modules/
+package-lock.json

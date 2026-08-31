@@ -68,9 +68,91 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # --max-warnings 9999 in the script: this fails on errors only
+      # (undefined variables, duplicate keys), which is the class that
+      # reaches production as a blank page. Nothing ran it before.
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
       - name: Build
         working-directory: frontend
         run: npx vite build
+
+  posture-engine:
+    name: Posture engine accuracy (44 assertions)
+    runs-on: ubuntu-latest
+    # No `npm ci`: the engine and both harnesses import nothing outside
+    # node: builtins and each other, deliberately, so this gate costs seconds.
+    #
+    # It exists because the engine is the product. Its numbers were tuned
+    # against a synthetic subject with known joint angles — forward head reads
+    # 8.0cm for a true 8cm, lateral lean 0.00 deg RMS — and nothing else in
+    # this repo would notice if a refactor quietly turned one of those into
+    # noise. A build that compiles is not evidence that the measurement is
+    # still correct.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Engine self-test and accuracy harness
+        working-directory: frontend
+        run: npm run test:posture
+
+  api-routes:
+    name: API route coverage
+    runs-on: ubuntu-latest
+    # vercel.json routes are matched in order and the first match wins, with
+    # no fall-through. A broad prefix route handed 45 backend endpoints to a
+    # JS router that implements one of them, so they answered 404 in
+    # production while their code sat in backend.py working fine — the whole
+    # MFA login path among them. Nothing failed; the endpoints were simply
+    # never reached. This check re-derives the mapping from the files and
+    # fails if any caller-visible path lands on a handler that cannot serve it.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check every API path reaches a handler that implements it
+        run: node scripts/check-api-routes.mjs
+
+  firestore-rules:
+    name: Firestore security rules (emulator)
+    runs-on: ubuntu-latest
+    # These 20 assertions are the evidence behind specific sentences in the
+    # DPIA and the ethics submission — that a participant cannot read another
+    # participant's sessions, that a consent withdrawal cannot be deleted,
+    # that a user cannot promote themselves to admin. If one fails, a document
+    # in front of a review committee is false, so it is worth a JVM in CI.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The emulator is a JVM process. ubuntu-latest ships a JDK, but pinning
+      # one keeps this from breaking the day the runner image drops it.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install rules-test dependencies
+        working-directory: tests/rules
+        # npm install, not npm ci — no lockfile is committed for this
+        # throwaway harness.
+        run: npm install
+
+      - name: Run rules assertions against the real firestore.rules
+        working-directory: tests/rules
+        run: npm test
 
   e2e-smoke:
     name: E2E smoke tests (Playwright, chromium only)

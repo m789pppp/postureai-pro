@@ -15,6 +15,16 @@ import {
 
 const env = await initializeTestEnvironment({
   projectId: "demo-corvus",
+  // Read from the repo root, which is also where `npm test` runs the
+  // emulator from (see tests/rules/package.json). Both this process and the
+  // emulator therefore load the one real firestore.rules.
+  //
+  // This used to be a copy of the rules checked into tests/rules/, which the
+  // README asked you to refresh by hand — so the suite passed against
+  // whatever version someone last remembered to copy. It cannot be a
+  // relative path out of the test directory either: the Firebase CLI rejects
+  // a rules file outside the project directory ("... is outside of project
+  // directory"), which is why the emulator runs from the root instead.
   firestore: { rules: readFileSync("firestore.rules", "utf8"), host: "127.0.0.1", port: 8080 },
 });
 

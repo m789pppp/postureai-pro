@@ -9,9 +9,84 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
+  # ── Firestore security rules ────────────────────────────────────────────
+  #
+  # Nothing used to deploy firestore.rules. The file was edited, reviewed and
+  # unit-tested against the emulator, and every one of those changes stayed on
+  # disk — the rules actually enforcing access in production were whatever was
+  # last pushed by hand from someone's laptop, of unknown vintage. That matters
+  # beyond hygiene: the DPIA and the ethics submission both describe the access
+  # controls in this file as the reason participant data is protected. If the
+  # file is not deployed, those documents describe something that is not true.
+  #
+  # This job runs BEFORE the app deploy so rules are never older than the code
+  # that assumes them. It does not block the deploy (see `if: always()` below)
+  # so a missing secret cannot strand a release — but it does go red, loudly,
+  # instead of failing silently the way "no job at all" did.
+  firestore-rules:
+    name: Deploy Firestore rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check credentials are configured
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          # Plain `if`s rather than `[ ... ] && missing=...` one-liners.
+          # These steps run under `bash -e`, and while a short-circuiting
+          # AND-list happens to be exempt from -e today, that exemption is a
+          # subtlety no one should have to recall when editing a step whose
+          # whole job is to fail accurately.
+          missing=""
+          if [ -z "$SA" ]; then      missing="$missing FIREBASE_SERVICE_ACCOUNT_JSON"; fi
+          if [ -z "$PROJECT" ]; then missing="$missing FIREBASE_PROJECT_ID"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::Firestore rules were NOT deployed — missing repository secret(s):$missing"
+            echo "Add them under Settings -> Secrets and variables -> Actions:" >> "$GITHUB_STEP_SUMMARY"
+            echo "  * FIREBASE_SERVICE_ACCOUNT_JSON — a service account key with the" >> "$GITHUB_STEP_SUMMARY"
+            echo "    'Firebase Rules Admin' role, pasted as raw JSON" >> "$GITHUB_STEP_SUMMARY"
+            echo "  * FIREBASE_PROJECT_ID — e.g. postureai-prod" >> "$GITHUB_STEP_SUMMARY"
+            echo "Until then firestore.rules in this repo is NOT what is enforced in production." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools@13
+
+      - name: Write service account key
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        # printf, not echo — the key is a single JSON blob and must not be
+        # word-split or have escapes interpreted. Written outside the workspace
+        # so it can never be picked up by a build step or an artifact upload.
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/firebase-sa.json"
+          chmod 600 "$RUNNER_TEMP/firebase-sa.json"
+
+      - name: Deploy rules and indexes
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+          PROJECT: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: firebase deploy --only firestore:rules,firestore:indexes --project "$PROJECT" --non-interactive
+
+      - name: Remove service account key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-sa.json"
+
+  # ── Application ─────────────────────────────────────────────────────────
   deploy:
     name: Deploy production
     runs-on: ubuntu-latest
+    needs: [firestore-rules]
+    # Runs after the rules job for ordering, but not conditional on it: a
+    # rules-deploy failure should be visible without blocking a release.
+    if: always()
     steps:
       - uses: actions/checkout@v4
 

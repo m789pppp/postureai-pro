@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "description": "Corvus PostureAI Pro — root package for Vercel serverless functions",
+  "scripts": {
+    "check:routes": "node scripts/check-api-routes.mjs",
+    "deploy:rules": "npx --yes firebase-tools@13 deploy --only firestore:rules,firestore:indexes",
+    "test:rules": "npm --prefix tests/rules install --silent && npm --prefix tests/rules test"
+  },
   "dependencies": {
     "firebase-admin": "^12.2.0"
   },
