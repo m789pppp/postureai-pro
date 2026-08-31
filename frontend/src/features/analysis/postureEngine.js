@@ -1803,7 +1803,9 @@ function buildAlerts(modules, distCm, lo, hi) {
   const add = (key, condition, text, impact = 0) => {
     if (!condition || !text || seen.has(key)) return null;
     seen.add(key);
-    items.push({ text, impact });
+    // `key` is carried through so a caller can rate-limit per CAUSE rather
+    // than per message — two different neck messages are the same nag.
+    items.push({ key, text, impact });
     return text;
   };
 
@@ -1816,9 +1818,21 @@ function buildAlerts(modules, distCm, lo, hi) {
   // True when a lateral trunk lean accounts for most of the head's deviation
   // from vertical — the head is going with the body, not independently of it.
   const _spineAbs = Math.abs(spine?.signedAngle ?? spine?.angle ?? 0);
-  const trunkExplainsHead = (spine?.reliable ?? false) &&
-                            _spineAbs > 8 &&
-                            (neck?.angle ?? 0) <= _spineAbs * 1.25;
+  const _leanExplains = (spine?.reliable ?? false) &&
+                        _spineAbs > 8 &&
+                        (neck?.angle ?? 0) <= _spineAbs * 1.25;
+
+  // A trunk TWIST also produces a phantom neck lean. Rotating the shoulders
+  // brings one of them nearer the lens, so perspective magnifies it and the
+  // projected shoulder midpoint shifts sideways — which tilts the
+  // midpoint-to-head line even though the neck has not moved. Measured on the
+  // synthetic harness, a 35° twist produced a phantom 17° "neck lean", and
+  // because neck outweighs trunk rotation it became the headline: a user
+  // turned toward a badly placed monitor was told to tuck their chin.
+  const _rotAbs = Math.abs(trunkRot?.angle ?? 0);
+  const _twistExplains = (trunkRot?.reliable ?? false) && _rotAbs > 12;
+
+  const trunkExplainsHead = _leanExplains || _twistExplains;
 
   const _built = [
     // The neck alerts are suppressed when the trunk already explains the head
@@ -1912,7 +1926,12 @@ function buildAlerts(modules, distCm, lo, hi) {
   // alert cause — is whatever is actually doing the most damage to the score,
   // not whichever condition happens to be written first in this file.
   items.sort((a, b) => b.impact - a.impact);
-  return items.map(i => i.text);
+  // Both shapes: a plain string array for every existing caller, and the
+  // structured list for the live loop, which needs the cause key to apply its
+  // per-cause cooldown.
+  const out = items.map(i => i.text);
+  out.detailed = items;
+  return out;
 }
 
 // ═══════════════════════════════════════════════════════════════════

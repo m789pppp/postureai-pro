@@ -117,6 +117,37 @@ const COUPONS = {}; // Coupons validated server-side via /api/coupon/validate
 // ── B2C Pricing (Egypt + Gulf) ────────────────────────────────────
 // Egypt: Kashier in EGP | Gulf/Global: Stripe in USD
 // Amounts stored in CENTS (EGP cents / USD cents)
+/**
+ * Arabic copy for a live posture alert, keyed by the engine's cause.
+ *
+ * The engine builds its alert text in English only. Before the live loop used
+ * that list it had hand-written Arabic for its three hardcoded causes; routing
+ * through the engine would otherwise have shown English mid-session to Arabic
+ * users, which is a regression even though the advice got better. Values are
+ * filled from the same metrics the English copy uses, so the two stay in step.
+ */
+function msgArFor(causeKey, res) {
+  const m = res?.metrics || {};
+  const v = k => m[k]?.value;
+  switch (causeKey) {
+    case "neck":    return `ميل رقبة ${v("neck_lean")}° — ارفع الشاشة لمستوى عينيك`;
+    case "fhp":     return `الرأس لقدام ${v("fhp_index")}سم — ارجع دقنك لورا وارفع الشاشة`;
+    case "spine":   return `مايل ${(m.spine_lean?.signed ?? 0) > 0 ? "يمين" : "شمال"} ${v("spine_lean")}° — اقعد في النص وثبّت وزنك على الجنبين`;
+    case "slouch":  return `منحني لقدام — رصّ ضهرك على الكرسي وخلي صدرك فوق حوضك`;
+    case "twist":
+    case "rot":     return `جذعك ملتوي ${v("trunk_rotation")}° — لف الكرسي ناحية الشاشة بدل ما تلف جسمك`;
+    case "shrug":   return `كتافك مرفوعة — رخّيهم لتحت ولورا`;
+    case "round":   return `كتافك لقدام — افتح صدرك وقرّب لوحي كتفك`;
+    case "tilt":    return `راسك مايلة ${v("head_tilt")}° — راجع ارتفاع الكرسي`;
+    case "sh":      return `فرق في مستوى الكتفين ${v("shoulder_level")}° — اظبط مساند الذراع`;
+    case "yaw":     return `الرأس مائل ${Math.abs(v("head_yaw") || 0)}° — واجه الشاشة مباشرة`;
+    case "dist":    return `المسافة ${v("screen_distance")}سم — اظبط بعدك عن الشاشة`;
+    case "elbow":   return `زاوية الكوع ${v("elbow_angle")}° — اظبط ارتفاع الكيبورد`;
+    case "mon":     return `ارتفاع الشاشة مش مظبوط — خلي أعلى الشاشة عند مستوى عينيك`;
+    default:        return null;
+  }
+}
+
 const TIERS = {
   standard:{
     id:"standard", name:"Free", color:"#6366f1", colorDim:"rgba(99,102,241,.12)",
@@ -3686,9 +3717,42 @@ export default function App(){
                 const dist=finalResult.distCm||0;
                 const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:[50,80];
 
-                // Pick the most actionable alert cause
+                // Pick the most actionable alert cause.
+                //
+                // This used to be a hardcoded three-way chain — neck, then
+                // yaw, then distance — completely separate from the alert list
+                // the engine builds. Two consequences, both bad:
+                //
+                //  1. It led with neck lean, which from a front camera is
+                //     largely a duplicate of spine lean, so a user leaning
+                //     sideways was told to "raise the monitor to eye level" —
+                //     the wrong correction, spoken aloud and pushed as a
+                //     desktop notification.
+                //  2. It knew nothing about forward head, slouching, trunk
+                //     rotation or shoulder shrug. Someone sitting with 8cm of
+                //     forward head got the generic "Sustained poor posture",
+                //     while the engine had already worked out exactly what was
+                //     wrong and how to fix it.
+                //
+                // The engine's list is now sorted by how much each fault is
+                // actually costing the score, so its first entry IS the most
+                // actionable cause. Use it, and keep the hardcoded chain only
+                // as a fallback for the case where no specific alert fired.
                 let causeKey="posture", msg="Sustained poor posture — correct position now", msgAr="وضعية سيئة مستمرة — صحّح وضعيتك الآن";
-                if(nl>14){causeKey="neck";msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
+                const _top = finalResult.alerts?.detailed?.[0];
+                if(_top?.text){
+                  // Cause key drives the per-cause cooldown below; collapse the
+                  // engine's severity suffixes so "fhp_sev" and "fhp_mid" are
+                  // one cause and cannot alternate past the cooldown.
+                  causeKey = String(_top.key||"posture").replace(/_(sev|mid|cl|c|f|hi|lo|calib_tip)$/,"");
+                  msg = _top.text;
+                  // The engine emits one language; the Arabic UI keeps the
+                  // localised fallback rather than showing English mid-session.
+                  msgAr = isAr ? (msgArFor(causeKey, finalResult) || msg) : msg;
+                  if(causeKey==="neck") acRef.current.neck++;
+                  else if(causeKey==="dist") acRef.current.dist++;
+                }
+                else if(nl>14){causeKey="neck";msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
                 else if(Math.abs(yaw)>12){causeKey="yaw";msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
                 else if(dist&&dist<lo){causeKey="dist";msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
 
