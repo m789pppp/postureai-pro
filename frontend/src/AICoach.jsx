@@ -193,7 +193,7 @@ function Bubble({ msg, isAr, index, onReact, onRegenerate }) {
         background: isUser ? T.userBg : "linear-gradient(135deg,#1a2d4a,#0a3a5c)",
         border: isUser?"none":`1px solid ${T.borderH}`,
         boxShadow: isUser?"0 2px 8px rgba(17,88,199,.35)":"0 2px 8px rgba(6,182,212,.1)",
-        userSelect:"none",flexShrink:0,marginTop:2,
+        userSelect:"none",marginTop:2,
       }}>
         {isUser?"M":"✦"}
       </div>

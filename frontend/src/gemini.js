@@ -65,11 +65,7 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
     fullSystemPrompt = [systemPrompt, ctxBlock, langLine].filter(Boolean).join("\n\n");
   }
 
-  try {
-    return await localChat(messages, { systemPrompt: fullSystemPrompt, maxTokens });
-  } catch (e) {
-    throw e;
-  }
+  return await localChat(messages, { systemPrompt: fullSystemPrompt, maxTokens });
 }
 
 // ── Direct local-AI wrappers (used by components that check
@@ -107,11 +103,7 @@ export async function geminiAnalysis(prompt, { lang = "en", context = {}, maxTok
     .filter(Boolean)
     .join("\n\n");
 
-  try {
-    return await localAnalysis(prompt, { systemPrompt: fullSystemPrompt, maxTokens });
-  } catch (e) {
-    throw e;
-  }
+  return await localAnalysis(prompt, { systemPrompt: fullSystemPrompt, maxTokens });
 }
 
 // ── buildCoachContext — readable text summary for direct-prompt use ──

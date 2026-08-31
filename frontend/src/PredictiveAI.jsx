@@ -12,9 +12,7 @@ import { tierAtLeast } from "./lib/tierQuality.js";
 import { weekKey } from "./lib/exercisePlanLib.js";
 
 async function callGemini(prompt, system, maxTokens = 900) {
-  try {
-    return await geminiAnalysis(prompt, { systemPrompt: system, maxTokens });
-  } catch (e) { throw e; }
+  return await geminiAnalysis(prompt, { systemPrompt: system, maxTokens });
 }
 
 // ── Design tokens (consistent across entire component) ─────────────

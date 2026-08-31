@@ -189,7 +189,11 @@ const standaloneLoader = STANDALONE_ROUTES[path];
 // fetch itself succeeded), force one guarded reload instead of calling
 // createRoot().render(<undefined/>), which is what threw the minified
 // React error #306 in production.
-function reloadOnceForStaleChunk() {
+// An arrow const rather than a function declaration: this sits inside an
+// `else` block, where a hoisted declaration is a portability wart. Every
+// call site is below this line and inside an async .then(), so nothing
+// depended on the hoisting.
+const reloadOnceForStaleChunk = () => {
   const key = "corvus_stale_entry_reload";
   if (!sessionStorage.getItem(key)) {
     sessionStorage.setItem(key, "1");
@@ -197,7 +201,7 @@ function reloadOnceForStaleChunk() {
     return true;
   }
   return false;
-}
+};
 
 if (!isKnownPath) {
   // Unknown path → render 404
