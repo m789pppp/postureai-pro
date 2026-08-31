@@ -479,8 +479,11 @@ function AuditLogs({orgId,isAr}) {
 
   useEffect(()=>{
     if(!orgId){
-      // Mock logs for demo
-      setLogs(generateMockLogs());
+      // Was generateMockLogs() — invented audit entries with real-looking
+      // actors and timestamps, in the panel whose entire purpose is to be the
+      // record of what actually happened. Fabricated evidence is worse than no
+      // evidence, because someone will screenshot it for a security review.
+      setLogs([]);
       setLoading(false);
       return;
     }
@@ -632,14 +635,24 @@ function ActivityTracking({orgId,isAr,members=[]}) {
       const isMorning = h >= 8 && h <= 11;
       const isLunch   = h >= 13 && h <= 14;
       const basePct   = (isWeekday && isMorning) ? 0.7 : (isWeekday && isLunch) ? 0.4 : isWeekday ? 0.15 : 0.05;
-      const count = Math.round(members.length * basePct * (0.8 + Math.random() * 0.4));
+      // Math.random() previously supplied the jitter here, so this "access
+      // heatmap" was literally a random number generator drawn as compliance
+      // evidence, and it changed on every render. There is no per-hour access
+      // data to draw from, so the shape is now a plain deterministic model of
+      // the working day and the panel says so below rather than implying it is
+      // measured.
+      const count = Math.round(members.length * basePct);
       return { day:d, hour:h, count: Math.max(0, count) };
     })
   );
   const maxAct = Math.max(...heatData.flat().map(c=>c.count), 1);
 
   return (
-    <Sec title={isAr?"تتبع النشاط":"Activity Tracking"} sub={isAr?"خريطة نشاط القوى العاملة في الوقت الفعلي":"Real-time workforce activity heatmap"} icon="🌡️" accent={RBAC_TOKENS.teal}>
+    <Sec title={isAr?"تتبع النشاط":"Activity Tracking"} sub={isAr?"نمط تقديري لأوقات العمل — مش قياس فعلي":"Modelled working-hours pattern — not measured activity"} icon="🌡️" accent={RBAC_TOKENS.teal}>
+      {/* The subtitle used to read "Real-time workforce activity heatmap".
+          Nothing here is real-time and nothing is measured: there is no
+          per-hour access data in the system, so this is a shape, and it now
+          says so in the one place a reader would otherwise assume otherwise. */}
       {/* Live stats */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
         {[
@@ -923,7 +936,10 @@ function GDPRTools({orgId,adminUid,isAr}) {
 
   useEffect(()=>{
     getGDPRRequests(orgId||"demo").then(r=>{
-      setRequests(r.length?r:mockGDPRRequests());
+      // Was mockGDPRRequests() when the real query came back empty — three
+      // invented subject-access requests, including a pending deletion for an
+      // "ex-employee". An empty queue is the correct answer to "no requests".
+      setRequests(r);
       setLoading(false);
     });
   },[orgId]);

@@ -2,7 +2,28 @@
  * WhiteLabel.jsx — Corvus Phase 12
  * Complete white-label configuration: branding, domain, colors, emails, login page
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
+
+/**
+ * Honest notice about what this panel currently changes.
+ *
+ * The config saves 21 fields and persists them, but only two have any visible
+ * effect today — the favicon and the browser-tab title. The three CSS custom
+ * properties it sets (--brand-primary, --brand-bg, --brand-font) are read by no
+ * stylesheet in the codebase, so colours, logo, tagline, footer, login copy and
+ * the rest are stored and never applied. An admin configuring all of it and
+ * seeing nothing change has no way to tell whether they did it wrong.
+ */
+function NotAppliedNotice({ children }) {
+  return (
+    <div style={{ display:"flex", gap:8, alignItems:"flex-start", margin:"0 0 14px",
+      padding:"10px 12px", borderRadius:9,
+      background:"rgba(214,162,76,.08)", border:"1px solid rgba(214,162,76,.26)" }}>
+      <span style={{ fontSize:13, lineHeight:1.3 }}>⚠️</span>
+      <span style={{ fontSize:11.5, color:"#D6A24C", lineHeight:1.55 }}>{children}</span>
+    </div>
+  );
+}
 import { BrandingAPI } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
@@ -49,8 +70,6 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
   const [saveError, setSaveError] = useState("");
   const [loading, setLoading] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
-  const logoRef = useRef();
-  const faviconRef = useRef();
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +180,19 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
           <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>
 
             {/* ── BRANDING ── */}
+            {/* What this panel actually changes today.
+                Placed once, above every tab, because the gap between "saved"
+                and "applied" is invisible from the UI: an admin can configure
+                all 21 fields, press Save, get a success state, and see nothing
+                change anywhere — with no way to tell whether they did it wrong
+                or the product did. */}
+            <NotAppliedNotice>
+              Saved settings are stored, but only the <b>favicon</b> and the <b>browser-tab
+              title</b> are applied to the app today. Colours, logo, tagline, footer and
+              login copy are kept for a future release and won't change what your team
+              sees yet — talk to us if you need full branding for a rollout.
+            </NotAppliedNotice>
+
             {tab === "branding" && (
               <div>
                 <InputRow label="Company / Brand Name" value={config.companyName} onChange={v => set("companyName", v)} placeholder="Acme Corp" />
@@ -174,8 +206,12 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                       {config.logoUrl ? <img src={config.logoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} /> : "🖼"}
                     </div>
                     <div>
-                      <button onClick={() => logoRef.current?.click()} style={{ background: "transparent", border: `1px solid ${cs.border}`, color: cs.text, borderRadius: 8, padding: "7px 14px", cursor: "pointer", fontSize: 12, display: "block", marginBottom: 5 }}>Upload Logo</button>
-                      <InputRow label="" value={config.logoUrl} onChange={v => set("logoUrl", v)} placeholder="or paste URL" />
+                      {/* "Upload Logo" called logoRef.current?.click() and
+                          there is no <input type="file"> anywhere in this file,
+                          so it was a silent no-op. Removed rather than faked;
+                          the URL field beside it always worked and is now the
+                          labelled path. */}
+                      <InputRow label="Logo URL" value={config.logoUrl} onChange={v => set("logoUrl", v)} placeholder="https://…/logo.svg" />
                     </div>
                   </div>
                 </div>
@@ -277,7 +313,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                 <div style={{ background: cs.bg, borderRadius: 12, padding: 16, border: `1px solid ${cs.border}`, marginTop: 8 }}>
                   <div style={{ fontWeight: 700, color: cs.text, marginBottom: 12, fontSize: 13 }}>Login Methods</div>
                   {["Google SSO", "Microsoft SSO", "SAML 2.0", "Email / Password", "Magic Link"].map(m => (
-                    <Toggle key={m} label={m} value={["Google SSO", "Email / Password"].includes(m)} onChange={() => {}} />
+                    <Toggle key={m} label={m} value={["Google SSO", "Email / Password"].includes(m)} onChange={() => {}} disabled />
                   ))}
                 </div>
               </div>
@@ -295,8 +331,8 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                     <div key={t} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${cs.border}` }}>
                       <span style={{ fontSize: 13, color: cs.text }}>📧 {t}</span>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button style={{ background: "transparent", border: `1px solid ${cs.border}`, color: cs.muted, borderRadius: 7, padding: "4px 11px", cursor: "pointer", fontSize: 11 }}>Preview</button>
-                        <button style={{ background: "transparent", border: `1px solid ${cs.border}`, color: "#8b5cf6", borderRadius: 7, padding: "4px 11px", cursor: "pointer", fontSize: 11 }}>Edit</button>
+                        <button disabled title="Email template editing isn't available yet" style={{ background: "transparent", border: `1px solid ${cs.border}`, color: cs.muted, borderRadius: 7, padding: "4px 11px", cursor: "not-allowed", fontSize: 11, opacity: .5 }}>Preview</button>
+                        <button disabled title="Email template editing isn't available yet" style={{ background: "transparent", border: `1px solid ${cs.border}`, color: "#8b5cf6", borderRadius: 7, padding: "4px 11px", cursor: "not-allowed", fontSize: 11, opacity: .5 }}>Edit</button>
                       </div>
                     </div>
                   ))}
@@ -304,11 +340,15 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 <div style={{ marginTop: 16, background: cs.bg, borderRadius: 12, padding: 16, border: `1px solid ${cs.border}` }}>
                   <div style={{ fontWeight: 700, color: cs.text, marginBottom: 10, fontSize: 13 }}>SMTP Configuration</div>
-                  <InputRow label="SMTP Host" value="" onChange={() => {}} placeholder="smtp.yourcompany.com" />
-                  <InputRow label="SMTP Port" value="" onChange={() => {}} placeholder="587" />
-                  <InputRow label="SMTP Username" value="" onChange={() => {}} placeholder="apikey" />
-                  <InputRow label="SMTP Password" value="" onChange={() => {}} placeholder="••••••••••" type="password" />
-                  <button style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)", border: "none", color: "#fff", borderRadius: 9, padding: "9px 20px", cursor: "pointer", fontWeight: 700, fontSize: 13 }}>Test Connection</button>
+                  <NotAppliedNotice>
+                    Custom SMTP isn't available yet — these fields don't save and outgoing
+                    mail still uses the Corvus sender. Contact us if you need your own domain.
+                  </NotAppliedNotice>
+                  <InputRow label="SMTP Host" value="" onChange={() => {}} placeholder="smtp.yourcompany.com" disabled />
+                  <InputRow label="SMTP Port" value="" onChange={() => {}} placeholder="587" disabled />
+                  <InputRow label="SMTP Username" value="" onChange={() => {}} placeholder="apikey" disabled />
+                  <InputRow label="SMTP Password" value="" onChange={() => {}} placeholder="••••••••••" type="password" disabled />
+                  <button disabled title="Custom SMTP isn't available yet" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)", border: "none", color: "#fff", borderRadius: 9, padding: "9px 20px", cursor: "not-allowed", fontWeight: 700, fontSize: 13, opacity: .45 }}>Test Connection</button>
                 </div>
               </div>
             )}
@@ -326,7 +366,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                     ["Export CSV/PDF", true],
                     ["API Marketplace", false],
                   ].map(([label, on]) => (
-                    <Toggle key={label} label={label} value={on} onChange={() => {}} />
+                    <Toggle key={label} label={label} value={on} onChange={() => {}} disabled />
                   ))}
                 </div>
 
@@ -340,7 +380,10 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
 
                 <div style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 12, padding: 16 }}>
                   <div style={{ fontWeight: 700, color: "#ef4444", marginBottom: 10, fontSize: 13 }}>⚠️ Danger Zone</div>
-                  <button style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", borderRadius: 9, padding: "9px 18px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Reset to Default Branding</button>
+                  {/* Had no onClick. This one needed no backend — it just restores the
+                      local form to DEFAULT_CONFIG for the admin to save. */}
+                  <button onClick={() => { if (window.confirm("Reset all branding fields to their defaults? You'll still need to press Save.")) setConfig({ ...DEFAULT_CONFIG }); }}
+                    style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", borderRadius: 9, padding: "9px 18px", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Reset to Default Branding</button>
                 </div>
               </div>
             )}

@@ -1,3 +1,4 @@
+import { SUPPORT_EMAIL } from "./firebase.js";
 /**
  * APIMarketplace.jsx — Corvus Phase 12
  * Full API marketplace: key management, docs, usage analytics, webhooks, SDKs
@@ -99,6 +100,13 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
 
   // Mock usage data — kept as illustrative placeholder for the usage chart;
   // no backend endpoint for per-day request counts exists yet.
+  // PLACEHOLDER SERIES — not this account's telemetry.
+  //
+  // Fourteen hardcoded numbers, with the period selector only re-slicing the
+  // same array. The code comment called it a placeholder; the USER saw a
+  // request-volume chart with real-looking "N req" tooltips and nothing to
+  // indicate it was invented. Labelled in the UI below until it reads real
+  // usage.
   const usageData = [820,940,1100,880,1250,1380,1520,1200,1680,1750,1900,2100,1950,2300];
 
   const copy = (text, id) => {
@@ -464,7 +472,16 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
               </div>
               {/* Simple bar chart */}
               <div style={{ background:cs.bg, borderRadius:14, padding:20, border:`1px solid ${cs.border}` }}>
-                <div style={{ fontWeight:600, color:cs.text, marginBottom:14, fontSize:13 }}>Requests / Day</div>
+                <div style={{ fontWeight:600, color:cs.text, marginBottom:6, fontSize:13 }}>Requests / Day</div>
+                <div style={{ display:"flex", gap:7, alignItems:"flex-start", marginBottom:12,
+                  padding:"9px 11px", borderRadius:9,
+                  background:"rgba(214,162,76,.08)", border:"1px solid rgba(214,162,76,.26)" }}>
+                  <span style={{ fontSize:12, lineHeight:1.3 }}>⚠️</span>
+                  <span style={{ fontSize:11.5, color:"#D6A24C", lineHeight:1.5 }}>
+                    Sample shape, not your usage. Live API telemetry isn't wired up yet,
+                    so these bars are illustrative.
+                  </span>
+                </div>
                 <div style={{ display:"flex", alignItems:"flex-end", gap:4, height:120 }}>
                   {usageData.slice(-(usagePeriod==="7d"?7:usagePeriod==="30d"?14:usageData.length)).map((v,i)=>{
                     const max=Math.max(...usageData);
@@ -505,9 +522,19 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                     {p.features.map(f=>(
                       <div key={f} style={{ fontSize:12, color:cs.text, marginBottom:6, display:"flex", gap:6 }}><span style={{ color:p.color }}>✓</span>{f}</div>
                     ))}
-                    <button style={{ marginTop:14, width:"100%", background:selectedPlan===p.id?p.color:"transparent", border:`1px solid ${p.color}`, color:selectedPlan===p.id?"#fff":p.color, borderRadius:10, padding:"9px", cursor:"pointer", fontWeight:700, fontSize:13 }}>
-                      {p.price===null?"Contact Sales":"Select Plan"}
-                    </button>
+                    {/* Had no onClick at all: selecting a plan only changed the
+                        card's border, and "Select Plan" led nowhere. Until API
+                        billing exists, both routes go to a real conversation
+                        rather than a button that does nothing. */}
+                    <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Corvus API — ${p.name} plan`)}&body=${encodeURIComponent(`I'd like to discuss the ${p.name} API plan (${fmtNum(p.reqs)} req/mo).`)}`}
+                      onClick={e=>e.stopPropagation()}
+                      style={{ marginTop:14, width:"100%", display:"block", textAlign:"center",
+                        background:selectedPlan===p.id?p.color:"transparent", border:`1px solid ${p.color}`,
+                        color:selectedPlan===p.id?"#fff":p.color, borderRadius:10, padding:"9px",
+                        cursor:"pointer", fontWeight:700, fontSize:13, textDecoration:"none",
+                        boxSizing:"border-box" }}>
+                      {p.price===null?"Contact Sales":"Talk to us about this plan"}
+                    </a>
                   </div>
                 ))}
               </div>

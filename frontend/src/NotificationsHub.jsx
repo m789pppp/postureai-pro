@@ -257,15 +257,15 @@ function FeedTab({ profile, isAr }) {
   useEffect(() => {
     const uid = profile?.uid || profile?.id;
     if (!uid) {
-      // Fallback demo data when no uid
-      setNotifs([
-        { id:"d1", type:"burnout_alert",   icon:"🔥", title:isAr?"تنبيه إنهاك":"Burnout Risk Alert",    body:isAr?"مؤشر الإرهاق 76%":"Fatigue index at 76% — consider a break",     color:"#f85149", read:false, created_at:new Date(Date.now()-900000).toISOString(),   actions:[{label:"View",key:"view"},{label:"Dismiss",key:"dismiss"}] },
-        { id:"d2", type:"achievement",     icon:"🏆", title:isAr?"إنجاز جديد":"New Achievement!",        body:isAr?"٧ أيام متتالية 🔥":"7-day streak — keep it up!",                  color:"#3fb950", read:false, created_at:new Date(Date.now()-3600000).toISOString(),  actions:[{label:"Share",key:"share"}] },
-        { id:"d3", type:"ai_insight",      icon:"🧠", title:isAr?"رؤية Corvus AI":"AI Insight",          body:isAr?"وضعيتك تحسّنت 8% هذا الأسبوع":"Posture improved 8% this week 💪", color:"#a78bfa", read:false, created_at:new Date(Date.now()-7200000).toISOString(),  actions:[{label:"Details",key:"view"}] },
-        { id:"d4", type:"weekly_digest",   icon:"📊", title:isAr?"ملخصك الأسبوعي":"Weekly Digest",      body:isAr?"٧٩/١٠٠ · ٥ جلسات · أفضل يوم: الأربعاء":"79/100 · 5 sessions · Best: Wednesday", color:"#388bfd", read:true, created_at:new Date(Date.now()-86400000).toISOString(), actions:[{label:"Full Report",key:"report"}] },
-        { id:"d5", type:"posture_warning", icon:"⚠️", title:isAr?"تحذير وضعية":"Posture Warning",       body:isAr?"درجتك انخفضت ١٢ نقطة اليوم":"Score dropped 12pts today — check your setup", color:"#d29922", read:true, created_at:new Date(Date.now()-172800000).toISOString(), actions:[{label:"Check Setup",key:"setup"}] },
-        { id:"d6", type:"session_reminder",icon:"⏰", title:isAr?"وقت جلستك":"Session Reminder",        body:isAr?"حان وقت جلسة وضعيتك اليومية":"Time for your daily posture session!",   color:"#06b6d4", read:true, created_at:new Date(Date.now()-259200000).toISOString(), actions:[{label:"Start",key:"start"}] },
-      ]);
+      // Was six fabricated notifications — including "Burnout Risk Alert —
+      // fatigue index at 76%", a 7-day streak the user had not earned, and a
+      // weekly digest reading "79/100 · 5 sessions · Best: Wednesday" — all
+      // with plausible relative timestamps and working action buttons, shown to
+      // anyone whose profile had not loaded a uid yet.
+      //
+      // Health-flavoured alerts about a person, invented. Nothing is shown
+      // until there is something real to show.
+      setNotifs([]);
       return;
     }
 
