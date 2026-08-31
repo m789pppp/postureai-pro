@@ -116,6 +116,14 @@ except ImportError as _qe:
     def get_depth_instruction(tier):
         return ""
 
+# ── Environment mode ──────────────────────────────────────────────
+# One place that decides what "not production" means, used by every
+# fail-closed branch below. Deliberately phrased as "is this EXPLICITLY a
+# development environment", not "is this production" — the difference is what
+# happens when the variable is simply absent, which is the case on Vercel.
+_FLASK_ENV      = os.getenv("FLASK_ENV", "").strip().lower()
+_VERBOSE_ERRORS = _FLASK_ENV in ("development", "dev", "debug", "local", "test")
+
 # ── Centralized error handler ─────────────────────────────────────
 try:
     from middleware.errors import safe_error, register_error_handlers
@@ -285,8 +293,17 @@ def log_event(event, uid=None, meta=None):
 def safe_error(e, msg="Internal server error", status=500):
         import traceback, sys
         print(traceback.format_exc(), file=sys.stderr)
-        env = os.getenv("FLASK_ENV","development")
-        if env == "production":
+        # Fail closed: an unset FLASK_ENV must not mean "return the traceback".
+        # It is unset on Vercel — /api/health on the live deployment reports
+        # "env": "development" — so with the old `os.getenv("FLASK_ENV",
+        # "development") == "production"` test, all ~177 safe_error() call
+        # sites were serving file paths, line numbers and frame context to any
+        # caller who could provoke an error. Verbose errors are opt-in now.
+        #
+        # (Note this function shadows the identical one imported from
+        # middleware.errors further up — the import happens first, this def
+        # wins. Both were fixed; this is the one that actually runs.)
+        if not _VERBOSE_ERRORS:
             from flask import jsonify as _j
             return _j({"error": msg}), status
         from flask import jsonify as _j
@@ -838,7 +855,10 @@ if _sentry_dsn:
         sentry_sdk.init(
             dsn=_sentry_dsn,
             integrations=[FlaskIntegration()],
-            environment=os.getenv("FLASK_ENV", "development"),
+            # Not defaulted to "development": an unset FLASK_ENV on a live
+            # deployment would tag every production event as development and
+            # make Sentry's environment filter lie.
+            environment=(_FLASK_ENV or "production"),
             traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
             send_default_pii=False,   # GDPR: don't send personally identifiable info
         )
@@ -923,8 +943,30 @@ if not _redis_url:
             )
             import sys as _sys_redis
             _sys_redis.exit(1)
-    else:
+    elif _VERBOSE_ERRORS:
         print("⚠️  REDIS_URL not set — rate limiter using in-memory (OK for development only)", file=sys.stderr)
+    else:
+        # FLASK_ENV is neither "production" nor an explicit development value
+        # — i.e. it is simply not set, which is the case on Vercel today. The
+        # old code treated that as development and printed the reassuring
+        # "OK for development only" line, so a production deployment ran with
+        # per-process rate limiting and said nothing that looked like a
+        # problem.
+        #
+        # This branch deliberately does NOT exit. The block above documents
+        # why refusing to boot over a missing mitigation was the wrong
+        # failure mode, and that reasoning holds harder here, where the cause
+        # would be an unset variable rather than a deliberate choice. It just
+        # stops pretending everything is fine.
+        print(
+            "🚨 REDIS_URL not set and FLASK_ENV is not set either.\n"
+            "   Rate limiting is per-process/per-instance only — on serverless\n"
+            "   that means effectively no rate limiting at all, since each\n"
+            "   invocation may get a fresh process.\n"
+            "   Set REDIS_URL, and set FLASK_ENV=production so the rest of the\n"
+            "   production-only behaviour switches on.",
+            file=sys.stderr, flush=True
+        )
     _limiter_storage = "memory://"
 else:
     _limiter_storage = _redis_url
@@ -11183,12 +11225,22 @@ def paymob_webhook():
         hmac_secret = os.getenv("PAYMOB_HMAC_SECRET","")
         received_hmac = request.args.get("hmac","")
         payload_str = request.get_data(as_text=True)
-        # ── HMAC is MANDATORY in production ──────────────────────────────
-        env = os.getenv("FLASK_ENV","development")
+        # ── HMAC is MANDATORY unless this is EXPLICITLY a dev environment ──
+        #
+        # This used to read `os.getenv("FLASK_ENV","development") ==
+        # "production"`, so an unset FLASK_ENV took the else branch: signature
+        # validation skipped, webhook processed. FLASK_ENV is not set on
+        # Vercel (/api/health reports "env": "development"), which means a
+        # forged POST to this endpoint would have been accepted as a genuine
+        # PayMob callback and could mark an order paid.
+        #
+        # Now the skip requires FLASK_ENV to explicitly say development. A
+        # missing secret in any other case rejects the webhook — refusing a
+        # real payment callback is recoverable; accepting a forged one is not.
         if not hmac_secret:
-            if env == "production":
-                print("🚨 CRITICAL: PAYMOB_HMAC_SECRET missing in production — rejecting webhook", flush=True)
-                return jsonify({"error":"PAYMOB_HMAC_SECRET not configured — set it in Railway env vars"}), 503
+            if not _VERBOSE_ERRORS:
+                print("🚨 CRITICAL: PAYMOB_HMAC_SECRET missing — rejecting webhook", flush=True)
+                return jsonify({"error":"PAYMOB_HMAC_SECRET not configured"}), 503
             else:
                 print("⚠️  DEV: Skipping HMAC validation (PAYMOB_HMAC_SECRET not set)", flush=True)
         else:
@@ -15556,11 +15608,13 @@ def stripe_webhook():
         payload = request.get_data()
         sig     = request.headers.get("Stripe-Signature", "")
 
-        # SECURITY: Hard fail when secret not configured
-        _flask_env = os.getenv("FLASK_ENV", "development")
+        # SECURITY: hard fail when the secret is not configured, unless this
+        # is EXPLICITLY a development environment. Same fail-open bug as the
+        # PayMob handler above: the old default made an unset FLASK_ENV mean
+        # "skip the signature check", and FLASK_ENV is unset on Vercel.
         if not STRIPE_WEBHOOK_SECRET:
-            if _flask_env == "production":
-                print("🚨 CRITICAL: STRIPE_WEBHOOK_SECRET not set in production — rejecting all Stripe webhooks", file=sys.stderr)
+            if not _VERBOSE_ERRORS:
+                print("🚨 CRITICAL: STRIPE_WEBHOOK_SECRET not set — rejecting all Stripe webhooks", file=sys.stderr)
                 return jsonify({"error": "Stripe not configured"}), 503
             print("⚠️  DEV: STRIPE_WEBHOOK_SECRET not set — skipping signature check", file=sys.stderr)
         else:
