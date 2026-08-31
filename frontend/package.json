@@ -13,7 +13,10 @@
     "e2e:ui": "playwright test --ui",
     "analyze": "vite-bundle-visualizer",
     "fetch:mediapipe": "node scripts/fetch-mediapipe.mjs",
-    "prebuild": "node scripts/fetch-mediapipe.mjs"
+    "prebuild": "node scripts/fetch-mediapipe.mjs",
+    "test:engine": "node src/features/analysis/postureEngine.selftest.mjs",
+    "test:accuracy": "node src/features/analysis/postureEngine.accuracy.mjs",
+    "test:posture": "npm run test:engine && npm run test:accuracy"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.14",
