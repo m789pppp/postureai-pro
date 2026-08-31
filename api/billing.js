@@ -9,8 +9,9 @@ import billingProrateHandler from "./_handlers/billing-prorate.js";
 import companyBrandingHandler from "./_handlers/company-branding.js";
 import marketplaceSeedHandler from "./_handlers/marketplace-seed.js";
 import marketplaceTherapistsHandler from "./_handlers/marketplace-therapists.js";
+import { withConfigGuard } from "./_lib/routerGuard.js";
 
-export default async function handler(req, res) {
+async function route(req, res) {
   const path = (req.url || "").split("?")[0];
   if (path.endsWith("/billing/analytics")) return billingAnalyticsHandler(req, res);
   if (path.endsWith("/billing/payments")) return billingPaymentsHandler(req, res);
@@ -20,3 +21,7 @@ export default async function handler(req, res) {
   if (path.endsWith("/marketplace/therapists")) return marketplaceTherapistsHandler(req, res);
   return res.status(404).json({ error: "Unknown route: " + path });
 }
+
+// Unhandled throws become a JSON 503/500 instead of a Vercel
+// FUNCTION_INVOCATION_FAILED page — see api/_lib/routerGuard.js.
+export default withConfigGuard(route);

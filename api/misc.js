@@ -10,8 +10,9 @@ import whoami           from "./_handlers/misc/whoami.js";
 import gamificationCompute from "./_handlers/misc/gamification-compute.js";
 import announcements     from "./_handlers/misc/announcements.js";
 import stressCorrelation from "./_handlers/misc/stress-correlation.js";
+import { withConfigGuard } from "./_lib/routerGuard.js";
 
-export default async function handler(req, res) {
+async function route(req, res) {
   const path = req.url.split("?")[0];
   if (path.includes("/account/delete"))              return accountDelete(req, res);
   if (path.includes("/admin/seed-flags"))            return seedFlags(req, res);
@@ -35,3 +36,7 @@ export default async function handler(req, res) {
   }
   res.status(404).json({ error: "Not found" });
 }
+
+// Unhandled throws become a JSON 503/500 instead of a Vercel
+// FUNCTION_INVOCATION_FAILED page — see api/_lib/routerGuard.js.
+export default withConfigGuard(route);
