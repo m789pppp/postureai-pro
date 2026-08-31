@@ -71,6 +71,84 @@ try {
   record("fail", "Backend /api/health", e.message);
 }
 
+// ── 2b. An invalid token must be rejected ────────────────────────────────
+//
+// The check that would have caught the worst thing this script ever missed.
+//
+// backend/auth/middleware.py returns a fixed "dev-user-local" for ANY token
+// string when Firebase Admin is unconfigured and FLASK_ENV is not exactly
+// "production". Both were true on the live deployment, so this was real:
+//
+//   GET /api/user/activity
+//   Authorization: Bearer obviously-not-a-valid-jwt
+//   -> 200 {"events":[],"ok":true}
+//
+// Every previous run of this script passed 9/9 against that deployment.
+// A 401 is the only acceptable answer here.
+try {
+  const res = await get("/api/user/activity", {
+    headers: { Authorization: "Bearer preflight-not-a-real-token" },
+  });
+  const body = (await res.text()).slice(0, 200);
+  if (res.status === 401 || res.status === 403) {
+    record("pass", "Invalid token rejected", `HTTP ${res.status}`);
+  } else if (res.ok) {
+    record("fail", "Invalid token rejected",
+      `HTTP ${res.status} — AUTHENTICATION IS BYPASSED. Any bearer string is accepted. ` +
+      `Set FIREBASE_SERVICE_ACCOUNT_JSON and FLASK_ENV=production. Body: ${body}`);
+  } else {
+    // A 500 here still means the request got PAST authentication.
+    record("fail", "Invalid token rejected",
+      `HTTP ${res.status} — expected 401. A non-401 means the token was accepted ` +
+      `and the failure happened later. Body: ${body}`);
+  }
+} catch (e) {
+  record("fail", "Invalid token rejected", e.message);
+}
+
+// ── 2c. The deployment knows it is a deployment ──────────────────────────
+// FLASK_ENV gates error verbosity, webhook signature validation and the auth
+// fallback above. Unset means the lenient branch of each.
+try {
+  const res = await get("/api/health");
+  const j = await res.json().catch(() => ({}));
+  const env = String(j.env || "");
+  if (env === "production") record("pass", "FLASK_ENV", "production");
+  else record("fail", "FLASK_ENV",
+    `reported as "${env || "(absent from /api/health)"}" — set FLASK_ENV=production. ` +
+    `Until then error responses include full Python tracebacks and the payment ` +
+    `webhooks skip signature validation.`);
+
+  // /api/health reports which required variables are missing, by name.
+  const cfg = j.config;
+  if (!cfg) {
+    record("warn", "Server env vars", "/api/health has no config block — older build deployed");
+  } else if (cfg.ok) {
+    record("pass", "Server env vars", "all required variables set");
+  } else {
+    record("fail", "Server env vars", `missing: ${(cfg.missing_env || []).join(", ")}`);
+  }
+} catch (e) {
+  record("warn", "FLASK_ENV", e.message);
+}
+
+// ── 2d. Readiness ────────────────────────────────────────────────────────
+try {
+  const res = await get("/api/ready");
+  const j = await res.json().catch(() => ({}));
+  const checks = j.checks || {};
+  if (j.status === "ready") record("pass", "Readiness probe", JSON.stringify(checks));
+  else record("fail", "Readiness probe", `${j.status} — ${JSON.stringify(checks)}`);
+  if (checks.redis && String(checks.redis).includes("memory")) {
+    record("warn", "Rate limiting", "Redis absent — per-process limits only, which on serverless is close to none. Set REDIS_URL.");
+  }
+  if (checks.email === "not_configured") {
+    record("warn", "Email", "not configured — invites, welcome mail and weekly reports will not send");
+  }
+} catch (e) {
+  record("warn", "Readiness probe", e.message);
+}
+
 // ── 3. MediaPipe is self-hosted ──────────────────────────────────────────
 // If these 404, the prebuild step did not run and the app falls back to the
 // CDN — which is exactly what freezes the score on a filtered campus network.
@@ -166,9 +244,10 @@ const warns = results.filter(r => r.level === "warn");
 console.log("\n" + "─".repeat(64));
 console.log(`${results.length} checks · ${results.length - fails.length - warns.length} passed · ${warns.length} warnings · ${fails.length} failed`);
 console.log("\nStill to verify BY HAND — this script cannot see them:");
-console.log("  1. firestore.rules is deployed to the pilot project");
-console.log("     (nothing in CI deploys it; two security fixes live there)");
-console.log("     firebase deploy --only firestore:rules");
+console.log("  1. firestore.rules reached the pilot project. deploy.yml now");
+console.log("     pushes it, but only once FIREBASE_SERVICE_ACCOUNT_JSON and");
+console.log("     FIREBASE_PROJECT_ID are set as repository secrets — check");
+console.log("     the Actions run, do not assume.");
 console.log("  2. The build writes to the Firebase project you think it does.");
 console.log("     firebase.js has a hardcoded config fallback that a missing");
 console.log("     env var silently falls through to.");
