@@ -6,7 +6,10 @@
   "scripts": {
     "check:routes": "node scripts/check-api-routes.mjs",
     "deploy:rules": "npx --yes firebase-tools@13 deploy --only firestore:rules,firestore:indexes",
-    "test:rules": "npm --prefix tests/rules install --silent && npm --prefix tests/rules test"
+    "test:rules": "npm --prefix tests/rules install --silent && npm --prefix tests/rules test",
+    "preflight": "node scripts/preflight.mjs",
+    "probe:routes": "node scripts/probe-routes.mjs",
+    "test:guard": "node api/_lib/routerGuard.test.mjs"
   },
   "dependencies": {
     "firebase-admin": "^12.2.0"
