@@ -47,7 +47,7 @@ export function AccountActivity({ profile, cs, lang, onClose }) {
           id: d.id, ts: e.timestamp || e.created_at || "",
           type: e.category || "info",
           icon: ICONS[e.category] || "📌",
-          title: (e.action||"").replace(/_/g," ").replace(/\w/g,c=>c.toUpperCase()),
+          title: (e.action||"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()),
           detail: e.detail || "",
           severity: e.severity || "info",
         };

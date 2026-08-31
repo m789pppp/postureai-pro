@@ -1458,7 +1458,12 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
     for(const pid of selected){
       const pay=payments.find(p=>p.id===pid);
       if(!pay) continue;
-      // eslint-disable-next-line no-await-in-loop
+      // Sequential on purpose — each confirmation writes to Firestore and
+      // sends an invoice, and firing them all at once both hammers the
+      // backend and scrambles the per-payment error reporting below.
+      // (No eslint-disable here: `no-await-in-loop` is not enabled in this
+      // config, so the directive was reported as unused and failed the lint
+      // run under --report-unused-disable-directives.)
       const done=await doConfirm(pay);
       done?ok++:failed++;
     }

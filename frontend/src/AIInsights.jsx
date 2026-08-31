@@ -107,7 +107,7 @@ function MdText({ text, isAr }) {
       bulletBuffer.push(inlineFormat(line.slice(2)));
     } else if (/^\d+\./.test(line)) {
       flushBullets();
-      const [,num,rest] = line.match(/^(\d+)\.\s(.+)$/) || [,"","",line];
+      const [,num,rest] = line.match(/^(\d+)\.\s(.+)$/) || [null, "", line];
       elements.push(
         <div key={key++} style={{ display:"flex", gap:10, margin:"5px 0", alignItems:"baseline" }}>
           <span style={{ color:"#60a5fa", fontWeight:700, fontSize:12, minWidth:18, flexShrink:0 }}>{num || "•"}.</span>
