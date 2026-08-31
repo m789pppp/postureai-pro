@@ -18,12 +18,32 @@ services:
         value: 10000
       - key: PYTHON_VERSION
         value: 3.11.0
+      # Set in the Render dashboard, never in this file. The previous value
+      # was committed here in plaintext on 2026-06-07 and is in git history,
+      # so it must be treated as disclosed and replaced rather than reused.
+      #
+      # For the record, because it changes how urgently this matters: nothing
+      # in backend.py reads SECRET_KEY. `app.secret_key` is never assigned and
+      # Flask's `session` is never imported — authentication is entirely
+      # Firebase ID tokens verified per request. So the disclosed value signs
+      # nothing today and there is no forgeable cookie. It still comes out of
+      # the file: the moment anything starts using Flask sessions, signed
+      # URLs, or itsdangerous, a key from public history would be live.
       - key: SECRET_KEY
-        value: 2e69c60c8a4bf195feaf54b372c15fa7cc0be7b8f0761ae146feb2fa22ae691e
+        sync: false
+      # These pointed at https://m789pppp.github.io/postureai-pro, a GitHub
+      # Pages host the app no longer runs on. ALLOWED_ORIGINS is the CORS
+      # allow-list, so with the stale value this backend rejected every
+      # request from the actual production frontend — a Render deploy of it
+      # could not have served the app at all.
+      #
+      # ALLOWED_ORIGINS is an origin (scheme + host), never a path: a browser
+      # sends "https://host" in the Origin header, so the ".../postureai-pro"
+      # entry could never have matched anything either.
       - key: APP_URL
-        value: https://m789pppp.github.io/postureai-pro
+        value: https://postureai-pro-omega-nine.vercel.app
       - key: ALLOWED_ORIGINS
-        value: https://m789pppp.github.io,https://m789pppp.github.io/postureai-pro
+        value: https://postureai-pro-omega-nine.vercel.app
       - key: ADMIN_EMAIL
         value: admin@postureai.io
       - key: SUPPORT_EMAIL
