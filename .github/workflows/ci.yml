@@ -122,6 +122,9 @@ jobs:
       - name: Check every API path reaches a handler that implements it
         run: node scripts/check-api-routes.mjs
 
+      - name: Router config guard
+        run: node api/_lib/routerGuard.test.mjs
+
   firestore-rules:
     name: Firestore security rules (emulator)
     runs-on: ubuntu-latest
