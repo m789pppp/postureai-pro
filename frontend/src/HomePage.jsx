@@ -1788,7 +1788,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
-  onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA, onChangePassword,
+  onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA, onChangePassword, onHelp,
   lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
@@ -2454,6 +2454,30 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 setShowMFASetup here was a bare undeclared identifier: not a
                 silent no-op, an actual ReferenceError the moment this row
                 was clicked. */}
+            {/* Help & Support.
+                The Help Center is a complete panel that was mounted and had no
+                opener anywhere in the app — setShowHelp(true) was called from
+                nowhere — while failure toasts elsewhere told users to "contact
+                support". There was no support to contact. */}
+            <div onClick={()=>onHelp?.()} role="button" tabIndex={0}
+              onKeyDown={e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); onHelp?.(); } }}
+              style={{ padding:"14px 16px", background:cs.inp,
+              borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer", marginBottom:10,
+              display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <span style={{ fontSize:22 }}>💬</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                    {isAr?"المساعدة والدعم":"Help & Support"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                    {isAr?"أسئلة شائعة، أدلة، وطريقة التواصل معنا":"Guides, FAQs, and how to reach us"}
+                  </div>
+                </div>
+              </div>
+              <span style={{ fontSize:16, color:cs.muted }}>{isAr?"‹":"›"}</span>
+            </div>
+
             <div onClick={()=>onMFA?.()} style={{ padding:"14px 16px", background:cs.inp,
               borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -3252,7 +3276,14 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       id: "admin",
       header: { en:"Platform Admin", ar:"إدارة المنصة" },
       items: [
-        { id:"t-admin",  icon:"🔧", en:"Platform Admin", ar:"منصة المشرف", onClick:()=>setPage("admin") },
+        // "Platform Admin" opens the legacy inline Admin screen (payments
+        // approval), which is the one this menu has always reached.
+        { id:"t-admin",  icon:"🔧", en:"Payments Admin",  ar:"إدارة المدفوعات", onClick:()=>setPage("admin") },
+        // AdminDashboard was mounted, and its opener WAS passed down here — but
+        // HomePage never destructured it, so nothing could call it. It is also
+        // the only place that opens Feature Flags and Onboarding Analytics, so
+        // three finished panels were stranded behind one missing line.
+        { id:"t-admindash", icon:"📊", en:"Admin Dashboard", ar:"لوحة المشرف", onClick:()=>setShowAdmin?.(true) },
         { id:"t-growth", icon:"🚀", en:"Growth Hub",     ar:"مركز النمو",  onClick:()=>setShowGrowthHub?.(true) },
       ],
     }] : []),
@@ -3572,7 +3603,7 @@ export default function HomePage({
   setShowPredictiveAI, setShowMRR, setShowChangelog,
   setShowNotificationsHub, setShowEnterpriseRBAC,
   setShowBillingDashboard, setShowReferralProgram, setShowIntegrationsHub,
-  setShowMFASetup, setShowChangePw, setShowProductTour,
+  setShowMFASetup, setShowChangePw, setShowProductTour, setShowHelp, setShowAdmin,
   isAdmin, isHRAdmin, companyId,
   darkMode, setDarkMode, setLang,
   t, logOut, setUser,
@@ -3686,6 +3717,7 @@ export default function HomePage({
       onNotifications={()=>setShowNotificationsHub?.(true)}
       onIntegrations={()=>setShowIntegrationsHub?.(true)}
       onMFA={()=>setShowMFASetup?.(true)}
+      onHelp={()=>setShowHelp?.(true)}
       onChangePassword={()=>setShowChangePw?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>

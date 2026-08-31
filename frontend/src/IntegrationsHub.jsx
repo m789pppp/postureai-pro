@@ -142,6 +142,9 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
   const [catFilter,   setCatFilter]   = useState("all");
   const [saving,      setSaving]      = useState(false);
   const [savedId,     setSavedId]     = useState(null);
+  // Connect used to fail silently and mark the card connected anyway, so there
+  // was nowhere for a failure to appear. There is now.
+  const [saveError,   setSaveError]   = useState(null);
   const [testStatus,  setTestStatus]  = useState(null);
   const [loading,     setLoading]     = useState(true);
 
@@ -172,6 +175,7 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
 
   const handleSave = async (id) => {
     setSaving(true);
+    setSaveError(null);
     try {
       const cfg = configs[id] || {};
       if (id === "webhooks") {
@@ -190,24 +194,27 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
         if (webhookIds.includes(id) && cfg.webhook_url && !cfg.webhook_url.startsWith("http")) {
           throw new Error("Enter a valid webhook URL (must start with https://)");
         }
-        // Use notify/dispatch endpoint to save config (it writes to Firestore)
-        try {
-          await apiFetch("/notify?action=dispatch", {
-            method:"POST",
-            body:{ action:"save_integration", integration_id:id, config:cfg }
-          });
-        } catch {} // If this fails, still mark as connected locally
+        // POST /api/integrations/<id> — the endpoint built for exactly this.
+        //
+        // This used to POST to "/notify?action=dispatch" inside a
+        // `try { … } catch {}` whose comment read "If this fails, still mark as
+        // connected locally", and then set connected:true unconditionally. Two
+        // problems compounded: the URL was wrong (the notify route pattern does
+        // not match it, and the handler it would reach has no save_integration
+        // action), and the failure was designed to be invisible. So the card
+        // turned green on a 404, and the next reload — which reads the real
+        // GET /integrations — found nothing and silently showed it as
+        // disconnected again. The user configured the same integration twice
+        // and never learned why it kept coming undone.
+        await apiFetch(`/integrations/${id}`, { method:"POST", body:{ config: cfg } });
         setConnected(p => ({ ...p, [id]:true }));
         setSavedId(id);
-        // Also persist in localStorage as backup
-        try {
-          const saved = JSON.parse(localStorage.getItem("corvus_integrations")||"{}");
-          saved[id] = { ...cfg, connected_at: new Date().toISOString() };
-          localStorage.setItem("corvus_integrations", JSON.stringify(saved));
-        } catch {}
+        // The localStorage "backup" was removed with it: nothing ever read that
+        // key back, so it only served to make a failed save look persisted.
       }
     } catch (e) {
       console.error("[IntegrationsHub] save failed:", e);
+      setSaveError({ id, message: e?.message || "Could not save this integration." });
     } finally {
       setSaving(false);
       setTimeout(() => setSavedId(null), 2500);
@@ -223,7 +230,12 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
         await apiFetch(`/integrations/${id}`, { method:"DELETE" });
       }
     } catch (e) {
+      // Same fault in mirror image: the card was marked disconnected whether or
+      // not the server agreed, so a failed disconnect looked done and the
+      // integration kept running.
       console.error("[IntegrationsHub] disconnect failed:", e);
+      setSaveError({ id, message: e?.message || "Could not disconnect this integration — it is still active." });
+      return;
     }
     setConnected(p => ({ ...p, [id]: false }));
     setConfigs(p => { const n = { ...p }; delete n[id]; return n; });
@@ -370,9 +382,18 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                 {/* Actions */}
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                   {!connected[selected.id] ? (
+                    <>
                     <button onClick={() => handleSave(selected.id)} disabled={saving} style={{ background:`linear-gradient(135deg,${selected.color},${selected.color}cc)`, border:"none", color:"#fff", borderRadius:10, padding:"12px", cursor:"pointer", fontWeight:800, fontSize:14 }}>
                       {saving ? "Connecting…" : `Connect ${selected.name}`}
                     </button>
+                    {saveError?.id === selected.id && (
+                      <div role="alert" style={{ marginTop:8, padding:"10px 12px", borderRadius:10,
+                        background:"rgba(239,68,68,.08)", border:"1px solid rgba(239,68,68,.25)",
+                        color:"#ef4444", fontSize:12.5, lineHeight:1.55 }}>
+                        Couldn't connect — {saveError.message}
+                      </div>
+                    )}
+                    </>
                   ) : (
                     <>
                       <div style={{ textAlign:"center", padding:"10px", background:"rgba(16,185,129,0.1)", borderRadius:10, color:"#10b981", fontWeight:700, fontSize:13 }}>
@@ -384,6 +405,13 @@ export function IntegrationsHub({ profile, cs, lang, onClose }) {
                         </button>
                       )}
                       <button onClick={() => handleDisconnect(selected.id)} style={{ background:"rgba(239,68,68,0.08)", border:"1px solid rgba(239,68,68,0.25)", color:"#ef4444", borderRadius:10, padding:"10px", cursor:"pointer", fontWeight:600, fontSize:13 }}>Disconnect</button>
+                      {saveError?.id === selected.id && (
+                        <div role="alert" style={{ padding:"10px 12px", borderRadius:10,
+                          background:"rgba(239,68,68,.08)", border:"1px solid rgba(239,68,68,.25)",
+                          color:"#ef4444", fontSize:12.5, lineHeight:1.55 }}>
+                          {saveError.message}
+                        </div>
+                      )}
                     </>
                   )}
                   <a href={selected.docs} target="_blank" rel="noreferrer" style={{ textAlign:"center", fontSize:12, color:cs.muted, textDecoration:"none", padding:"6px" }}>📚 View documentation →</a>

@@ -72,14 +72,29 @@ export function DeveloperPortalModal({ profile, cs, isAr, onClose, addToast }) {
   async function revokeKey(key_id) {
     try {
       const token = await getToken();
-      await fetch("/api/posture-api/keys", {
+      const res = await fetch("/api/posture-api/keys", {
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
         body: JSON.stringify({ action:"revoke", key_id }),
       });
+      // Revoking a credential is a security action, so it must never claim
+      // success it cannot confirm. This used to ignore the status entirely and
+      // say "Key revoked" regardless — and a thrown error hit a bare catch {}
+      // and showed the user nothing at all, leaving a live key they believed
+      // was dead.
+      if (!res.ok) {
+        let detail = "";
+        try { detail = (await res.json())?.error || ""; } catch {}
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
       addToast?.(isAr?"تم إلغاء المفتاح":"Key revoked","info");
       fetchKeys();
-    } catch {}
+    } catch (e) {
+      addToast?.(isAr
+        ? "تعذّر إلغاء المفتاح — المفتاح لسه شغال. حاول تاني."
+        : "Couldn't revoke the key — it is still active. Please try again.","error");
+      console.warn("[api-keys] revoke failed:", e?.message);
+    }
   }
 
   const overlay = { position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:9999,
@@ -394,7 +409,7 @@ export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
     }
     setSending(true);
     try {
-      await fetch("/api/email/send", {
+      const res = await fetch("/api/email/send", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
@@ -406,9 +421,24 @@ export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
 <p><b>Insured Size:</b> ${form.size}</p>`,
         }),
       });
+      // The response was never inspected: a 500 from the email endpoint still
+      // produced "✅ Request sent — the partnerships team will reach out within
+      // 48 hours". Telling someone their enquiry was delivered when it was not
+      // is worse than an error, because they then sit and wait for a reply
+      // that is never coming.
+      if (!res.ok) {
+        let detail = "";
+        try { detail = (await res.json())?.error || ""; } catch {}
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
       setStep("done");
       addToast?.(isAr?"✅ تم إرسال طلبك":"✅ Request sent","success");
-    } catch { addToast?.("Error","error"); }
+    } catch (e) {
+      addToast?.(isAr
+        ? "تعذّر إرسال الطلب — حاول تاني أو ابعتلنا على partnerships@corvus.io"
+        : "Couldn't send your request — try again, or email partnerships@corvus.io","error");
+      console.warn("[insurance] send failed:", e?.message);
+    }
     setSending(false);
   }
 
@@ -461,7 +491,11 @@ export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
                 {isAr?"ليه Corvus + التأمين الصحي؟":"Why Corvus + Health Insurance?"}
               </div>
               {[
-                [isAr?"تقليل مطالبات الجهاز الحركي بـ 35%":"Reduce musculoskeletal claims by 35%","📉"],
+                // Was "Reduce musculoskeletal claims by 35%" / "تقليل المطالبات بـ 35%" —
+                // an outcome figure with no source, of exactly the kind already
+                // stripped from the marketing pages. Replaced with a statement of
+                // the problem rather than an unevidenced promise about the result.
+                [isAr?"شكاوى الجهاز الحركي بند تكلفة معروف في التأمين الجماعي":"Musculoskeletal complaints are a known cost driver in group health cover","📉"],
                 [isAr?"بيانات موضوعية للتسعير الدقيق":"Objective data for accurate risk pricing","📊"],
                 [isAr?"Corvus تحصل على referral fee":"Corvus earns referral fee per user","💰"],
                 [isAr?"العميل يحصل على خصم في التأمين":"Client gets insurance discount","🏷️"],
