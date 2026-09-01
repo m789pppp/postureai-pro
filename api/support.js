@@ -1,4 +1,7 @@
 // Router: /api/support/* → 2 handlers
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import reply           from "./_handlers/support/reply.js";
 import whatsappInbound from "./_handlers/support/whatsapp-inbound.js";
 import { withConfigGuard } from "./_lib/routerGuard.js";

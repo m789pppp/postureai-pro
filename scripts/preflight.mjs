@@ -126,7 +126,21 @@ try {
   } else if (cfg.ok) {
     record("pass", "Server env vars", "all required variables set");
   } else {
-    record("fail", "Server env vars", `missing: ${(cfg.missing_env || []).join(", ")}`);
+    const miss = cfg.missing_env || [];
+    // The three FIREBASE_* fields are derived from the service-account JSON
+    // by api/_lib/env.js, so say what to actually set rather than listing
+    // four names an operator would then paste separately.
+    const derived = ["FIREBASE_PROJECT_ID","FIREBASE_CLIENT_EMAIL","FIREBASE_PRIVATE_KEY"];
+    const shown = miss.filter(m => !derived.includes(m));
+    const needsJson = miss.some(m => derived.includes(m)) || miss.includes("FIREBASE_SERVICE_ACCOUNT_JSON");
+    const parts = [...new Set([...shown, ...(needsJson ? ["FIREBASE_SERVICE_ACCOUNT_JSON"] : [])])];
+    record("fail", "Server env vars", `set these: ${parts.join(", ")}`);
+  }
+
+  // Not failures — but each one silently switches off something the UI
+  // still offers, which is how "no payment method works" went unnoticed.
+  for (const d of (cfg?.degraded || [])) {
+    record("warn", `${d.name} not set`, d.disables);
   }
 } catch (e) {
   record("warn", "FLASK_ENV", e.message);
@@ -139,12 +153,6 @@ try {
   const checks = j.checks || {};
   if (j.status === "ready") record("pass", "Readiness probe", JSON.stringify(checks));
   else record("fail", "Readiness probe", `${j.status} — ${JSON.stringify(checks)}`);
-  if (checks.redis && String(checks.redis).includes("memory")) {
-    record("warn", "Rate limiting", "Redis absent — per-process limits only, which on serverless is close to none. Set REDIS_URL.");
-  }
-  if (checks.email === "not_configured") {
-    record("warn", "Email", "not configured — invites, welcome mail and weekly reports will not send");
-  }
 } catch (e) {
   record("warn", "Readiness probe", e.message);
 }

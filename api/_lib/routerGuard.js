@@ -34,6 +34,21 @@ export function missingFirebaseAdminVars() {
   return FIREBASE_ADMIN_VARS.filter((v) => !(process.env[v] || "").trim());
 }
 
+/**
+ * What to actually do about it. api/_lib/env.js fills all three from
+ * FIREBASE_SERVICE_ACCOUNT_JSON, so in practice there is one thing to set,
+ * not three — and the advice should say so rather than naming three
+ * variables an operator would then paste by hand.
+ */
+export function firebaseConfigAdvice(missing) {
+  if (!missing.length) return "Firebase Admin failed to initialise";
+  const hasJson = (process.env.FIREBASE_SERVICE_ACCOUNT_JSON || "").trim().startsWith("{");
+  return hasJson
+    ? `FIREBASE_SERVICE_ACCOUNT_JSON is set but did not yield ${missing.join(", ")} — check it is the full service-account JSON, unmodified`
+    : "Set FIREBASE_SERVICE_ACCOUNT_JSON to the full service-account JSON; " +
+      `${missing.join(", ")} are derived from it automatically`;
+}
+
 export function withConfigGuard(route) {
   return async function handler(req, res) {
     try {
@@ -47,9 +62,7 @@ export function withConfigGuard(route) {
         console.error(`[config] ${req.url} failed; missing env: ${missing.join(", ") || "(none — init failed for another reason)"}`, e);
         return res.status(503).json({
           error: "Server not configured",
-          detail: missing.length
-            ? `Firebase Admin credentials are not set on this deployment: ${missing.join(", ")}`
-            : "Firebase Admin failed to initialise",
+          detail: firebaseConfigAdvice(missing),
           missing_env: missing,
         });
       }

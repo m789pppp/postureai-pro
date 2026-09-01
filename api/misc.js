@@ -1,4 +1,7 @@
 // Router: /api/* misc → 9 handlers (account, admin, email, metrics, notify, org, cron, whoami, gamification)
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import accountDelete    from "./_handlers/misc/account-delete.js";
 import seedFlags        from "./_handlers/misc/seed-flags.js";
 import emailSend        from "./_handlers/misc/email-send.js";

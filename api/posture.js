@@ -1,4 +1,7 @@
 // Router: /api/posture-api/* → 3 handlers
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import analyze from "./_handlers/posture-api/analyze.js";
 import keys    from "./_handlers/posture-api/keys.js";
 import usage   from "./_handlers/posture-api/usage.js";

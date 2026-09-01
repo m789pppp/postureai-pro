@@ -134,18 +134,69 @@ def test_empty_token_is_never_accepted(monkeypatch):
 import routes.health as health  # noqa: E402
 
 
-def test_health_reports_missing_env_by_name_only(monkeypatch):
-    for k in health.REQUIRED_ENV:
+ALL_FIREBASE = ["FIREBASE_SERVICE_ACCOUNT_JSON", "FIREBASE_PROJECT_ID",
+                "FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY"]
+
+
+def _clear(monkeypatch):
+    for k in list(health.REQUIRED_ENV) + list(health.OPTIONAL_ENV) + ALL_FIREBASE + ["SMTP_HOST"]:
         monkeypatch.delenv(k, raising=False)
+
+
+def test_health_reports_missing_env_by_name_only(monkeypatch):
+    _clear(monkeypatch)
     cfg = health._config_report()
     assert cfg["ok"] is False
-    assert set(cfg["missing_env"]) == set(health.REQUIRED_ENV)
+    # Every required name, plus the three the JS handlers need when there is
+    # no service-account JSON to derive them from.
+    assert set(cfg["missing_env"]) == set(health.REQUIRED_ENV) | set(ALL_FIREBASE[1:])
     # names and explanations only — no values anywhere in the payload
     assert all(isinstance(v, str) for v in cfg["why"].values())
 
 
-def test_health_config_ok_when_everything_is_set(monkeypatch):
-    for k in health.REQUIRED_ENV:
+def test_service_account_json_covers_the_three_derived_vars(monkeypatch):
+    """
+    The point of api/_lib/env.js: one variable, not four. Health must not
+    keep demanding the three fields that are derived from the JSON, or it
+    reports a correctly configured deployment as broken.
+    """
+    _clear(monkeypatch)
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("FIREBASE_SERVICE_ACCOUNT_JSON", '{"project_id":"p"}')
+    cfg = health._config_report()
+    assert cfg["missing_env"] == [], cfg["missing_env"]
+    assert cfg["ok"] is True
+
+
+def test_health_config_ok_when_set_individually(monkeypatch):
+    """A deployment that sets the three by hand, with no JSON, is also fine."""
+    _clear(monkeypatch)
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("FIREBASE_SERVICE_ACCOUNT_JSON", "{}")
+    for k in ALL_FIREBASE[1:]:
+        monkeypatch.setenv(k, "x")
+    assert health._config_report()["ok"] is True
+
+
+def test_degraded_list_names_what_each_missing_var_switches_off(monkeypatch):
+    _clear(monkeypatch)
+    names = [d["name"] for d in health._config_report()["degraded"]]
+    assert "REDIS_URL" in names and "KASHIER_API_KEY" in names
+    assert all(d["disables"] for d in health._config_report()["degraded"])
+
+
+def test_smtp_satisfies_email_instead_of_resend(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    names = [d["name"] for d in health._config_report()["degraded"]]
+    assert "RESEND_API_KEY" not in names
+
+
+def test_a_configured_deployment_reports_nothing_degraded(monkeypatch):
+    _clear(monkeypatch)
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("FIREBASE_SERVICE_ACCOUNT_JSON", '{"project_id":"p"}')
+    for k in health.OPTIONAL_ENV:
         monkeypatch.setenv(k, "x")
     cfg = health._config_report()
-    assert cfg["ok"] is True and cfg["missing_env"] == []
+    assert cfg["ok"] is True and cfg["degraded"] == []

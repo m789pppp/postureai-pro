@@ -21,29 +21,64 @@ IS_EXPLICIT_DEV = _FLASK_ENV in ("development", "dev", "debug", "local", "test")
 
 # Variables the deployment cannot do its job without. Reported by NAME only —
 # never a value, not even a prefix.
+#
+# This used to list five. FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and
+# FIREBASE_PRIVATE_KEY are fields inside the service-account JSON, and
+# api/_lib/env.js now derives them from FIREBASE_SERVICE_ACCOUNT_JSON, so
+# there are two things to set. They are still checked below, because a
+# deployment can have them set individually without the JSON.
 REQUIRED_ENV = {
     "FLASK_ENV":                     "production-only behaviour (error detail, webhook signature checks)",
-    "FIREBASE_SERVICE_ACCOUNT_JSON": "server-side token verification (Flask API)",
-    "FIREBASE_PROJECT_ID":           "Firestore access from the serverless JS handlers",
-    "FIREBASE_CLIENT_EMAIL":         "Firestore access from the serverless JS handlers",
-    "FIREBASE_PRIVATE_KEY":          "Firestore access from the serverless JS handlers",
+    "FIREBASE_SERVICE_ACCOUNT_JSON": "server-side token verification, and the source the JS handlers' Firebase credentials are derived from",
 }
+
+# Not required to run, but each one silently disables a feature the UI still
+# offers. These are warnings, not failures — the point is that nobody should
+# have to discover "no email is configured" by watching an invite never
+# arrive.
+OPTIONAL_ENV = {
+    "REDIS_URL":        "shared rate limiting (without it, per-process only — on serverless, close to none)",
+    "RESEND_API_KEY":   "outbound email: invites, welcome, weekly reports (or set SMTP_HOST instead)",
+    "KASHIER_API_KEY":  "card and Vodafone Cash payments (the checkout the UI offers)",
+    "VITE_SENTRY_DSN":  "error reporting — without it a crash in front of a user is invisible to you",
+}
+
+
+def _has(name):
+    return bool(os.getenv(name, "").strip())
 
 
 def _config_report():
     """
-    Which required variables are absent, by name.
+    Which variables are absent, by name.
 
     This block exists because every symptom of the real problem was
     misleading. The deployment answered /api/health with 200, /api/ready with
     "ready", /api/announcements with an empty list, and /api/referral/stats
-    with an opaque platform crash — while the actual cause was five unset
+    with an opaque platform crash — while the actual cause was unset
     environment variables. An operator had no single place to look.
     """
-    missing = [k for k in REQUIRED_ENV if not os.getenv(k, "").strip()]
+    missing = [k for k in REQUIRED_ENV if not _has(k)]
+
+    # The JS handlers need these three. Either set directly, or derived from
+    # the service-account JSON by api/_lib/env.js.
+    derived = ["FIREBASE_PROJECT_ID", "FIREBASE_CLIENT_EMAIL", "FIREBASE_PRIVATE_KEY"]
+    if not _has("FIREBASE_SERVICE_ACCOUNT_JSON"):
+        missing += [k for k in derived if not _has(k)]
+
+    # Email is satisfied by either provider.
+    degraded = []
+    for k, why in OPTIONAL_ENV.items():
+        if k == "RESEND_API_KEY" and (_has("RESEND_API_KEY") or _has("SMTP_HOST")):
+            continue
+        if not _has(k):
+            degraded.append({"name": k, "disables": why})
+
     return {
         "missing_env": missing,
-        "why": {k: REQUIRED_ENV[k] for k in missing},
+        "why": {k: REQUIRED_ENV.get(k, "Firestore access from the serverless JS handlers")
+                for k in missing},
+        "degraded": degraded,
         "ok": not missing,
     }
 
