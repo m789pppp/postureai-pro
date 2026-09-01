@@ -6,6 +6,45 @@ import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 const API = API_BASE_URL;
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 
+// Kashier is off until VITE_KASHIER_ENABLED is explicitly "true".
+//
+// It used to be assumed live: the button always rendered and always fired
+// /api/kashier/create-order, which returns 503 when the merchant credentials
+// are not set — which they are not. So the one payment route the UI actually
+// offered was a button that failed every time it was pressed. Stripe already
+// had a "Coming Soon" state for exactly this situation; Kashier now has the
+// same, and both are opt-in rather than opt-out.
+const KASHIER_LIVE = import.meta.env.VITE_KASHIER_ENABLED === "true";
+const ANY_ONLINE_PAYMENT = !!STRIPE_KEY || KASHIER_LIVE;
+
+// Manual activation while online payment is being set up. Digits only —
+// wa.me rejects "+" and spaces.
+const SALES_WHATSAPP = (import.meta.env.VITE_SALES_WHATSAPP || "201210271841").replace(/\D/g, "");
+const SALES_WHATSAPP_DISPLAY = import.meta.env.VITE_SALES_WHATSAPP_DISPLAY || "01210271841";
+
+/**
+ * A wa.me link carrying which plan the person wants, so the conversation
+ * starts with the answer rather than a round trip asking for it.
+ */
+export function whatsappActivationLink({ planName, billing, price, currency, email, isAr }) {
+  const period = billing === "yearly" ? (isAr ? "سنوي" : "yearly") : (isAr ? "شهري" : "monthly");
+  const amount = price != null ? `${price.toLocaleString()} ${currency}` : "";
+  const msg = isAr
+    ? [
+        "السلام عليكم، عايز أفعّل اشتراك Corvus.",
+        `الباقة: ${planName}`,
+        `الاشتراك: ${period}${amount ? ` — ${amount}` : ""}`,
+        email ? `بريد الحساب: ${email}` : "",
+      ].filter(Boolean).join("\n")
+    : [
+        "Hi, I'd like to activate a Corvus subscription.",
+        `Plan: ${planName}`,
+        `Billing: ${period}${amount ? ` — ${amount}` : ""}`,
+        email ? `Account email: ${email}` : "",
+      ].filter(Boolean).join("\n");
+  return `https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+}
+
 // ── Stripe loader ─────────────────────────────────────────────────
 let stripeInstance = null;
 async function getStripe() {
@@ -237,6 +276,10 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       errEnterpriseContact: "Enterprise pricing is custom — please contact sales.",
       errPaymentUnavailable: "Payment isn't available right now. Please try again shortly or contact support.",
       errPortal: "Couldn't open your billing portal. Please try again in a moment.",
+      soonCard: "Credit Card — Coming Soon", soonKashier: "Kashier — Coming Soon",
+      waBtn: "Activate on WhatsApp",
+      waNote: "Online payment is coming soon. To start now, send us the plan you want on WhatsApp",
+      waPromise: "Activated within 30 minutes of your message.",
     },
     ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", kashierNote: "دفع آمن عبر Kashier — بطاقات ومحافظ مصرية", or: "أو ادفع بـ",
       errGeneric: "حصلت مشكلة في بدء الدفع. حاول تاني بعد لحظات.",
@@ -244,6 +287,10 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       errEnterpriseContact: "أسعار خطة Enterprise مخصصة — تواصل مع فريق المبيعات.",
       errPaymentUnavailable: "الدفع مش متاح دلوقتي. حاول تاني بعد شوية أو تواصل مع الدعم.",
       errPortal: "تعذر فتح صفحة الفوترة. حاول تاني بعد لحظات.",
+      soonCard: "بطاقة ائتمان — قريباً", soonKashier: "Kashier — قريباً",
+      waBtn: "فعّل عبر واتساب",
+      waNote: "الدفع الإلكتروني قريباً. لو عايز تبدأ دلوقتي، ابعتلنا الباقة اللي عايزها على واتساب",
+      waPromise: "التفعيل خلال 30 دقيقة من إرسال الرسالة.",
     },
   };
   const t = T[lang] || T.en;
@@ -468,19 +515,58 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                       </button>
                     ) : (
                       <button disabled style={{ width: "100%", background: "rgba(148,163,184,.06)", border: `1px dashed ${DARK.border}`, borderRadius: 9, padding: "10px 0", fontSize: 11, color: DARK.muted, cursor: "not-allowed" }}>
-                        💳 {isAr ? "بطاقة ائتمان — قريباً" : "Credit Card — Coming Soon"}
+                        💳 {t.soonCard}
                       </button>
                     )}
-                    {/* Kashier button */}
-                    <button onClick={() => handleKashier(planId)} disabled={!!loading} style={{ width: "100%", background: loading === ("ks_" + planId) ? "rgba(16,185,129,.3)" : "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 9, padding: "9px 0", fontSize: 11, fontWeight: 600, color: "#10b981", cursor: "pointer" }}>
-                      {loading === ("ks_" + planId) ? "..." : "Kashier \uD83C\uDDEA\uD83C\uDDEC (" + (isAr ? "\u0628\u0637\u0627\u0642\u0629/\u0645\u062D\u0641\u0638\u0629" : "Card/Wallet") + ")"}
-                    </button>
+                    {/* Kashier — live only when explicitly enabled */}
+                    {KASHIER_LIVE ? (
+                      <button onClick={() => handleKashier(planId)} disabled={!!loading} style={{ width: "100%", background: loading === ("ks_" + planId) ? "rgba(16,185,129,.3)" : "rgba(16,185,129,.08)", border: "1px solid rgba(16,185,129,.3)", borderRadius: 9, padding: "9px 0", fontSize: 11, fontWeight: 600, color: "#10b981", cursor: "pointer" }}>
+                        {loading === ("ks_" + planId) ? "..." : "Kashier \uD83C\uDDEA\uD83C\uDDEC (" + (isAr ? "\u0628\u0637\u0627\u0642\u0629/\u0645\u062D\u0641\u0638\u0629" : "Card/Wallet") + ")"}
+                      </button>
+                    ) : (
+                      <button disabled style={{ width: "100%", background: "rgba(148,163,184,.06)", border: `1px dashed ${DARK.border}`, borderRadius: 9, padding: "10px 0", fontSize: 11, color: DARK.muted, cursor: "not-allowed" }}>
+                        {t.soonKashier}
+                      </button>
+                    )}
+
+                    {/* The route that actually works today. Carries the plan,
+                        the billing period, the price and the account email
+                        into the message, so the reply can be "done" rather
+                        than "which plan?". */}
+                    {!ANY_ONLINE_PAYMENT && (
+                      <a href={whatsappActivationLink({
+                            planName: name, billing, price, currency,
+                            email: profile?.email || "", isAr,
+                          })}
+                         target="_blank" rel="noopener noreferrer"
+                         style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+                           width: "100%", background: "#25D366", border: "none", borderRadius: 9,
+                           padding: "11px 0", fontSize: 12, fontWeight: 700, color: "#06281a",
+                           textDecoration: "none", marginTop: 2 }}>
+                        <span aria-hidden="true">🟢</span>{t.waBtn}
+                      </a>
+                    )}
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+
+        {/* Said once, in full, rather than repeated on every card. */}
+        {!ANY_ONLINE_PAYMENT && (
+          <div style={{ margin: "0 20px 16px", padding: "14px 16px", borderRadius: 12,
+            background: "rgba(37,211,102,.06)", border: "1px solid rgba(37,211,102,.22)",
+            fontSize: 12, color: DARK.text, lineHeight: 1.75 }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>{t.waNote}</div>
+            <a href={`https://wa.me/${SALES_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
+               style={{ color: "#25D366", fontWeight: 700, textDecoration: "none",
+                 fontSize: 15, letterSpacing: ".02em", direction: "ltr", display: "inline-block" }}>
+              {SALES_WHATSAPP_DISPLAY}
+            </a>
+            <div style={{ color: DARK.muted, marginTop: 4 }}>{t.waPromise}</div>
+          </div>
+        )}
 
         {error && (
           <div style={{ margin: "0 20px 16px", padding: "10px 14px", background: "rgba(239,68,68,.08)", border: "0.5px solid rgba(239,68,68,.2)", borderRadius: 8, fontSize: 12, color: "#ef4444" }}>
@@ -490,7 +576,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
 
         <div style={{ padding: "12px 20px 20px", display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", borderTop: `0.5px solid ${DARK.border}` }}>
           <div style={{ fontSize: 10, color: DARK.muted, display: "flex", gap: 6, alignItems: "center" }}>
-            🔒 {STRIPE_KEY ? t.stripeNote : t.kashierNote}
+            🔒 {STRIPE_KEY ? t.stripeNote : KASHIER_LIVE ? t.kashierNote : t.waPromise}
           </div>
           <div style={{ fontSize: 10, color: DARK.muted }}>
             {isAr ? "الأسعار شاملة الضريبة • إلغاء في أي وقت" : "Prices include VAT • Cancel anytime"}

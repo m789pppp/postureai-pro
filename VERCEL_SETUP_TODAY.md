@@ -70,25 +70,43 @@ refuses `smtp.gmail.com` in production without one configured properly.
 
 ---
 
-## 3. Payments — no provider is configured
+## 3. Payments — manual for now, by design
 
-Right now every checkout path fails. Kashier is the one the UI is actually
-built around (card + Vodafone Cash, which is what matters for Egypt):
+Online checkout is switched **off** and shown as "Coming soon" on both pricing
+screens and in the billing modal. Someone who wants a paid plan sends a
+WhatsApp message instead, and the button carries the plan for them:
 
-| Variable | Value |
+> السلام عليكم، عايز أفعّل اشتراك Corvus.
+> الباقة: Professional
+> الاشتراك: سنوي — 3,990 EGP
+> بريد الحساب: ahmed@tkh.edu.eg
+
+The page states **activation within 30 minutes of the message**. That is a
+promise you are making by hand — worth deciding now whether you want it to
+read "within 30 minutes during working hours", because at 3am it is still on
+the page. Change the wording in `src/Billing.jsx` (`waPromise`) if so.
+
+You activate the account from the admin panel; the manual confirmation
+endpoints (`/api/admin/payments`, `/api/admin/confirm-payment`) already exist.
+
+Nothing to set for this — it is the default. Two optional overrides:
+
+| Variable | Effect |
 |---|---|
-| `KASHIER_MERCHANT_ID` | from the Kashier dashboard |
-| `KASHIER_API_KEY` | from the Kashier dashboard |
-| `KASHIER_MODE` | `test` while you are trying it, `live` when real |
+| `VITE_SALES_WHATSAPP` | the number the buttons link to, digits only, e.g. `201210271841` |
+| `VITE_SALES_WHATSAPP_DISPLAY` | how it is printed on the page, e.g. `01210271841` |
 
-Start in `test` mode and put a card through it once before believing it works.
+### When you want real checkout later
 
-**For the pilot itself you probably do not need this at all** — the pilot is
-free individual accounts. If payments are not part of what you are showing,
-leave this until after. What you should not do is leave the pricing page
-advertising plans that cannot be bought.
+| Variable | Turns on |
+|---|---|
+| `KASHIER_MERCHANT_ID` + `KASHIER_API_KEY` + `KASHIER_MODE` | the Kashier order endpoint |
+| `VITE_KASHIER_ENABLED=true` | the Kashier button in the UI |
+| `VITE_STRIPE_PUBLIC_KEY` + `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` | Stripe |
 
----
+Setting either **automatically hides the WhatsApp block** and restores the
+normal checkout, so there is nothing to undo. Put a real card through
+`KASHIER_MODE=test` before believing it works.
 
 ## 4. Two that prevent specific bad days
 

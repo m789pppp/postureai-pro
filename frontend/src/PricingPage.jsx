@@ -1,5 +1,13 @@
 import React, { useState } from "react";
 
+// Kept in step with src/Billing.jsx: online payment shows as "coming soon"
+// until a provider is explicitly switched on, and the WhatsApp number is
+// read from the same env var so it cannot drift between the two screens.
+const ONLINE_PAYMENT_LIVE = !!import.meta.env.VITE_STRIPE_PUBLIC_KEY
+  || import.meta.env.VITE_KASHIER_ENABLED === "true";
+const SALES_WHATSAPP = (import.meta.env.VITE_SALES_WHATSAPP || "201210271841").replace(/\D/g, "");
+const SALES_WHATSAPP_DISPLAY = import.meta.env.VITE_SALES_WHATSAPP_DISPLAY || "01210271841";
+
 // ═══════════════════════════════════════════════════════════════════
 // PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C + B2B pricing
 // B2C: basic/professional/elite (199/399/699 EGP | $9.99/$19.99/$39.99)
@@ -332,6 +340,30 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
           />
         ))}
       </div>
+
+      {/* Online payment is not live yet, and it is better to say so here than
+          to let someone pick a plan, press the button and find out. The
+          activation route with the plan carried in the message lives in
+          BillingModal, which this page's button opens. */}
+      {!ONLINE_PAYMENT_LIVE && (
+        <div style={{ maxWidth: 640, margin: "28px auto 0", padding: "14px 18px", borderRadius: 12,
+          background: "rgba(37,211,102,.06)", border: "1px solid rgba(37,211,102,.22)",
+          textAlign: "center", fontSize: 12.5, color: cs.text, lineHeight: 1.8 }}>
+          <div style={{ fontWeight: 700 }}>
+            {isAr
+              ? "الدفع الإلكتروني قريباً — للتفعيل دلوقتي ابعتلنا الباقة اللي عايزها على واتساب"
+              : "Online payment is coming soon — to start now, send us the plan you want on WhatsApp"}
+          </div>
+          <a href={`https://wa.me/${SALES_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
+             style={{ color: "#25D366", fontWeight: 800, fontSize: 16, textDecoration: "none",
+               direction: "ltr", display: "inline-block", marginTop: 4 }}>
+            {SALES_WHATSAPP_DISPLAY}
+          </a>
+          <div style={{ color: cs.muted, marginTop: 3, fontSize: 11.5 }}>
+            {isAr ? "التفعيل خلال 30 دقيقة من إرسال الرسالة." : "Activated within 30 minutes of your message."}
+          </div>
+        </div>
+      )}
 
       {/* Footer note */}
       <div style={{ textAlign: "center", marginTop: 32, fontSize: 11, color: cs.muted }}>
