@@ -220,7 +220,7 @@ function FloatInput({ id, label, type="text", value, onChange, autoComplete,
 // ══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════════
-export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth, initialView }) {
+export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth, initialView, planLabel }) {
   const isAr = lang === "ar";
   const dark = darkMode;
 
@@ -249,7 +249,14 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   const [dob,         setDob]        = useState("");
   const [legalOpen, setLegalOpen] = useState(null); // "tos" | "privacy" | null
   const [contactOpen, setContactOpen] = useState(false);
-  const [newsletter,  setNewsletter] = useState(true);
+  // Unticked by default. A pre-ticked marketing box is not consent: under
+  // GDPR it is explicitly invalid (CJEU C-673/17, Planet49 — a pre-checked
+  // box does not amount to a freely given, unambiguous indication of
+  // agreement), and it is one of the first things a university ethics
+  // committee looks for. The product consent the user must actively give is
+  // the Terms/Privacy checkbox below; this one is optional marketing and has
+  // to be opted into.
+  const [newsletter,  setNewsletter] = useState(false);
   const [showPass,    setShowPass]   = useState(false);
   const [showPass2,   setShowPass2]  = useState(false);
   const [showP,       setShowP]      = useState(false);
@@ -742,27 +749,30 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
               </div>
             )}
 
-            {/* Progress indicator — signup only */}
-            {view==="signup" && (
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
-                {[
-                  {n:1,label:isAr?"الحساب":"Account"},
-                  {n:2,label:isAr?"بيانات":"Details"},
-                ].map((step,i)=>(
-                  <div key={step.n} style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:5}}>
-                      <div style={{
-                        width:20,height:20,borderRadius:"50%",flexShrink:0,
-                        display:"flex",alignItems:"center",justifyContent:"center",
-                        fontSize:10,fontWeight:700,
-                        background:"rgba(26,86,219,.9)",
-                        color:"#fff",
-                      }}>{step.n}</div>
-                      <span style={{fontSize:11,color:t.textSub,fontWeight:500}}>{step.label}</span>
-                    </div>
-                    {i===0&&<div style={{flex:1,height:1.5,background:"rgba(26,86,219,.25)",borderRadius:2,margin:"0 4px"}}/>}
-                  </div>
-                ))}
+            {/* The "1 Account -- 2 Details" progress indicator that used to
+                sit here was decorative: there was no step state anywhere in
+                this component, both circles were hard-coded to the active
+                colour, and every field renders on one screen. It told the
+                visitor there were two stages and that they were somehow on
+                both. A single-screen form does not need a progress bar, and
+                an invented one is worse than none. */}
+
+            {/* The plan chosen on the pricing page. Its buttons link to
+                /auth?mode=signup&plan=professional&billing=yearly, and App
+                does honour that after signup (it routes to pricing with the
+                plan pre-selected) — but the form said nothing about it, so
+                the visitor had no reason to believe their choice survived
+                the click. */}
+            {view==="signup" && planLabel && (
+              <div style={{
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                marginBottom:12,padding:"9px 12px",borderRadius:9,
+                background:"rgba(26,86,219,.06)",
+                border:`1px solid rgba(26,86,219,.18)`,
+                fontSize:12,color:t.textSub,textAlign:"center",
+              }}>
+                <span>{isAr?"الباقة المختارة:":"Selected plan:"}</span>
+                <strong style={{color:t.text,fontWeight:700}}>{planLabel}</strong>
               </div>
             )}
 
