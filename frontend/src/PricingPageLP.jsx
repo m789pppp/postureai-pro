@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { tr } from "./lib/marketingCopy.js";
 import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY,
          whatsappActivationLink, activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
 
@@ -204,13 +205,13 @@ const COMPARE = [
   ]},
 ];
 
-function Check({ val, color }) {
+function Check({ val, color, ar = false }) {
   if (val === true)  return <span style={{ color:"#10d9a0", fontWeight:700, fontSize:16 }}>✓</span>;
   if (val === false) return <span style={{ color:"#8896ac", fontSize:15 }}>—</span>;
-  return <span style={{ color:T.text, fontFamily:FM, fontSize:13 }}>{val}</span>;
+  return <span style={{ color:T.text, fontFamily:FM, fontSize:13 }}>{tr(val, ar)}</span>;
 }
 
-function PlanCard({ plan, isEgypt, billing }) {
+function PlanCard({ plan, isEgypt, billing, ar = false }) {
   const rawPrice = plan.price ? (isEgypt ? plan.price.egp : plan.price.usd) : null;
   // Was a flat *.8 (a hardcoded, wrong "20% off everything" assumption) —
   // the real annual total (plan.priceYearly) isn't a fixed 20% off monthly
@@ -244,7 +245,7 @@ function PlanCard({ plan, isEgypt, billing }) {
           color:"#fff", fontSize:11, fontWeight:700, letterSpacing:".07em",
           textTransform:"uppercase", padding:"5px 16px", borderRadius:99,
           fontFamily:FM, whiteSpace:"nowrap", boxShadow:`0 4px 16px ${plan.color}55`,
-        }}>✦ Most Popular</div>
+        }}>✦ {tr("Most Popular", ar)}</div>
       )}
 
       {/* Plan name + desc */}
@@ -257,9 +258,9 @@ function PlanCard({ plan, isEgypt, billing }) {
           }}>
             <div style={{ width:10, height:10, borderRadius:"50%", background:plan.color }}/>
           </div>
-          <span style={{ fontSize:17, fontWeight:800, color:T.text, fontFamily:FD }}>{plan.name}</span>
+          <span style={{ fontSize:17, fontWeight:800, color:T.text, fontFamily:FD }}>{tr(plan.name, ar)}</span>
         </div>
-        <p style={{ fontSize:13.5, color:T.muted, lineHeight:1.55, margin:0 }}>{plan.desc}</p>
+        <p style={{ fontSize:13.5, color:T.muted, lineHeight:1.55, margin:0 }}>{tr(plan.desc, ar)}</p>
       </div>
 
       {/* Price */}
@@ -271,8 +272,8 @@ function PlanCard({ plan, isEgypt, billing }) {
           </div>
         ) : rawPrice === 0 ? (
           <div>
-            <div style={{ fontSize:34, fontWeight:800, color:T.text, fontFamily:FM }}>Free</div>
-            <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>No credit card needed</div>
+            <div style={{ fontSize:34, fontWeight:800, color:T.text, fontFamily:FM }}>{tr("Free", ar)}</div>
+            <div style={{ fontSize:13, color:T.muted, marginTop:4 }}>{tr("No credit card needed", ar)}</div>
           </div>
         ) : (
           <div>
@@ -287,7 +288,7 @@ function PlanCard({ plan, isEgypt, billing }) {
             </div>
             {billing==="yearly" && discountPct != null && (
               <div style={{ fontSize:12, color:T.green, fontWeight:700, marginTop:5, fontFamily:FM }}>
-                ↓ Save {discountPct}% with annual billing
+                {ar ? `↓ وفّر ${discountPct}% مع الاشتراك السنوي` : `↓ Save ${discountPct}% with annual billing`}
               </div>
             )}
             {plan.min && <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>Min. {plan.min} users</div>}
@@ -299,8 +300,8 @@ function PlanCard({ plan, isEgypt, billing }) {
       <ul style={{ listStyle:"none", padding:0, margin:"0 0 28px", display:"flex", flexDirection:"column", gap:12, flex:1 }}>
         {plan.features.map(({ t, v }) => (
           <li key={t} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-            <span style={{ fontSize:13.5, color:T.sub }}>{t}</span>
-            <Check val={v} color={plan.color}/>
+            <span style={{ fontSize:13.5, color:T.sub }}>{tr(t, ar)}</span>
+            <Check val={v} color={plan.color} ar={ar}/>
           </li>
         ))}
       </ul>
@@ -321,7 +322,7 @@ function PlanCard({ plan, isEgypt, billing }) {
       }}
       onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.opacity=".9"; }}
       onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.opacity="1"; }}>
-        {plan.cta}
+        {tr(plan.cta, ar)}
       </a>
 
       {/* Paid plans get a second, quieter button that opens WhatsApp with THIS
@@ -348,7 +349,7 @@ function PlanCard({ plan, isEgypt, billing }) {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}>
             <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.02h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.22-8.24 8.22z"/>
           </svg>
-          Pay for {plan.name} on WhatsApp
+          {ar ? `فعّل ${tr(plan.name, ar)} على واتساب` : `Pay for ${plan.name} on WhatsApp`}
         </a>
       )}
     </div>
@@ -357,6 +358,7 @@ function PlanCard({ plan, isEgypt, billing }) {
 
 export default function PricingPageStandalone() {
   const [lang, setLang] = useState(() => { try { return localStorage.getItem("lp_lang")||"en"; } catch { return "en"; } });
+  const ar = lang === "ar";
   const [mode, setMode] = useState("individual");
   const [billing, setBilling] = useState("yearly");
   const [isEgypt, setIsEgypt] = useState(false);
@@ -421,14 +423,14 @@ export default function PricingPageStandalone() {
           <Reveal delay={.07}>
             <h1 style={{ fontSize:"clamp(40px,5.5vw,68px)", fontWeight:800, color:T.text,
               margin:"0 0 20px", letterSpacing:"-.035em", lineHeight:1.05, fontFamily:FD }}>
-              Simple, transparent{" "}
-              <span style={{ background:T.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>pricing</span>
+              {tr("Simple, transparent", ar)}{" "}
+              <span style={{ background:T.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{tr("pricing", ar)}</span>
             </h1>
           </Reveal>
           <Reveal delay={.13}>
             <p style={{ fontSize:18.5, color:T.sub, maxWidth:520, margin:"0 auto 44px", lineHeight:1.75 }}>
-              Start free. Scale when you're ready.
-              {isEgypt ? " Prices shown in Egyptian Pounds." : " No hidden fees, no lock-in."}
+              {tr("Start free. Scale when you're ready.", ar)}{" "}
+              {isEgypt ? tr("Prices shown in Egyptian Pounds.", ar) : tr("No hidden fees, no lock-in.", ar)}
             </p>
           </Reveal>
 
@@ -439,7 +441,7 @@ export default function PricingPageStandalone() {
               {/* Mode toggle */}
               <div style={{ display:"inline-flex", background:"rgba(255,255,255,.04)",
                 border:"1px solid rgba(255,255,255,.09)", borderRadius:14, padding:5, gap:4 }}>
-                {[["individual","👤 Individual"],["company","🏢 For Teams"]].map(([val,label])=>(
+                {[["individual",`👤 ${tr("Individual", ar)}`],["company",`🏢 ${tr("For Teams", ar)}`]].map(([val,label])=>(
                   <button key={val} onClick={()=>setMode(val)} style={{
                     padding:"10px 24px", borderRadius:10, fontSize:14.5, fontWeight:600,
                     background: mode===val ? "rgba(79,124,249,.18)" : "transparent",
@@ -462,13 +464,13 @@ export default function PricingPageStandalone() {
                       color: billing===b ? T.text : T.muted, fontFamily:FD,
                       background: billing===b ? "rgba(255,255,255,.07)" : "transparent",
                       transition:"all .18s",
-                    }}>{b.charAt(0).toUpperCase()+b.slice(1)}</button>
+                    }}>{tr(b.charAt(0).toUpperCase()+b.slice(1), ar)}</button>
                   ))}
                   {billing==="yearly" && (
                     <span style={{ fontSize:11.5, fontWeight:700, color:T.green,
                       background:"rgba(16,217,160,.1)", border:"1px solid rgba(16,217,160,.25)",
                       borderRadius:99, padding:"3px 10px", fontFamily:FM, marginLeft:4 }}>
-                      Save {badgeDiscountPct}%
+                      {tr("Save", ar)} {badgeDiscountPct}%
                     </span>
                   )}
                 </div>
@@ -495,7 +497,7 @@ export default function PricingPageStandalone() {
             initial={{ opacity:0, y:16 }} animate={{ opacity:1, y:0 }}
             exit={{ opacity:0, y:-8 }} transition={{ duration:.3 }}>
             {plans.map(plan=>(
-              <PlanCard key={plan.name} plan={plan} isEgypt={isEgypt} billing={billing}/>
+              <PlanCard key={plan.name} plan={plan} isEgypt={isEgypt} billing={billing} ar={ar}/>
             ))}
           </motion.div>
         </AnimatePresence>
@@ -510,7 +512,7 @@ export default function PricingPageStandalone() {
               is configured, so it advertised something that does not work —
               the same reassurance strip that is meant to remove doubt was
               creating a promise the checkout could not keep. */}
-          {["✓ 7-day free trial","✓ No credit card","✓ Cancel anytime","✓ Free plan forever"].map(t=>(
+          {["7-day free trial","No credit card","Cancel anytime","Free plan forever"].map(t=>`✓ ${tr(t, ar)}`).map(t=>(
             <span key={t} style={{ fontSize:13, color:T.muted }}>{t}</span>
           ))}
         </div>
@@ -525,9 +527,9 @@ export default function PricingPageStandalone() {
               background:"rgba(37,211,102,.06)", border:"1px solid rgba(37,211,102,.22)",
               textAlign:"center", lineHeight:1.8 }}>
               <div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>
-                Online payment is coming soon — to start a paid plan now, send us the plan you want on WhatsApp
+                {tr("Online payment is coming soon — to start a paid plan now, send us the plan you want on WhatsApp", ar)}
               </div>
-              <a href={whatsappActivationLink({ isAr: false })} target="_blank" rel="noopener noreferrer"
+              <a href={whatsappActivationLink({ isAr: ar })} target="_blank" rel="noopener noreferrer"
                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:9,
                    width:"100%", maxWidth:340, margin:"10px auto 0", boxSizing:"border-box",
                    background:"#25D366", border:"none", borderRadius:12,
@@ -537,11 +539,11 @@ export default function PricingPageStandalone() {
                  onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 22px rgba(37,211,102,.36)"; }}
                  onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="0 4px 16px rgba(37,211,102,.28)"; }}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.470 0 1.46 1.06 2.87 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.28.17-1.41-.07-.13-.27-.2-.57-.35z"/><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.02h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.22-8.24 8.22z"/></svg>
-                <span>{activateLabel(false)}</span>
+                <span>{activateLabel(ar)}</span>
                 <span style={{ opacity:.72, fontWeight:700 }}>· {SALES_WHATSAPP_DISPLAY}</span>
               </a>
               <div style={{ fontSize:12, color:T.muted, marginTop:8 }}>
-                {activationPromise(false)}
+                {activationPromise(ar)}
               </div>
             </div>
           </div>
@@ -555,7 +557,7 @@ export default function PricingPageStandalone() {
             <Reveal>
               <h2 style={{ fontSize:"clamp(24px,3vw,38px)", fontWeight:800, color:T.text,
                 margin:"0 0 48px", fontFamily:FD, letterSpacing:"-.025em", textAlign:"center" }}>
-                Compare all features
+                {tr("Compare all features", ar)}
               </h2>
             </Reveal>
             <div style={{ background:T.card, borderRadius:20, overflow:"hidden",
@@ -564,8 +566,8 @@ export default function PricingPageStandalone() {
               <div className="pr-compare-grid" style={{
                 background:"rgba(255,255,255,.025)", borderBottom:"1px solid rgba(148,163,184,.07)" }}>
                 <div style={{ padding:"18px 28px", fontSize:11.5, color:T.muted,
-                  fontWeight:700, fontFamily:FM, textTransform:"uppercase", letterSpacing:".1em" }}>Feature</div>
-                {["Free","Basic","Pro","Elite"].map((p,i)=>(
+                  fontWeight:700, fontFamily:FM, textTransform:"uppercase", letterSpacing:".1em" }}>{tr("Feature", ar)}</div>
+                {["Free","Basic","Pro","Elite"].map(n=>tr(n, ar)).map((p,i)=>(
                   <div key={p} style={{ padding:"18px 16px", textAlign:"center",
                     fontSize:14, fontWeight:800, color:_txtSafe(IND_PLANS[i].color), fontFamily:FD }}>
                     {p}
@@ -579,7 +581,7 @@ export default function PricingPageStandalone() {
                     borderBottom:"1px solid rgba(148,163,184,.05)",
                     fontSize:11, fontWeight:700, color:T.muted,
                     textTransform:"uppercase", letterSpacing:".1em", fontFamily:FM }}>
-                    {cat}
+                    {tr(cat, ar)}
                   </div>
                   {rows.map(([label,...vals],ri)=>(
                     <div key={label} className="pr-compare-grid" style={{
@@ -588,10 +590,10 @@ export default function PricingPageStandalone() {
                     }}
                     onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.015)"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                      <div style={{ padding:"15px 28px", fontSize:14, color:T.sub }}>{label}</div>
+                      <div style={{ padding:"15px 28px", fontSize:14, color:T.sub }}>{tr(label, ar)}</div>
                       {vals.map((v,vi)=>(
                         <div key={vi} style={{ padding:"15px 16px", textAlign:"center" }}>
-                          <Check val={v} color={IND_PLANS[vi].color}/>
+                          <Check val={v} color={IND_PLANS[vi].color} ar={ar}/>
                         </div>
                       ))}
                     </div>
@@ -608,13 +610,13 @@ export default function PricingPageStandalone() {
         <Reveal>
           <h2 style={{ fontSize:"clamp(22px,2.8vw,34px)", fontWeight:800, color:T.text,
             margin:"0 0 36px", fontFamily:FD, letterSpacing:"-.02em" }}>
-            Pricing FAQ
+            {tr("Pricing FAQ", ar)}
           </h2>
         </Reveal>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 64px" }}>
           {[
             ["Can I switch plans anytime?","Yes. Upgrades are instant and pro-rated. Downgrades take effect at end of billing period. No penalties."],
-            ["What payment methods?","Credit/debit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. EGP accepted via Kashier."],
+            ["What payment methods?","Online payment is coming soon. For now we activate subscriptions manually over WhatsApp — send us the plan you want and it is active within 30 minutes."],
             ["What happens after the trial?","You choose a paid plan or move to Free automatically. All your data and history is preserved either way."],
             ["Discounts for NGOs or universities?","Yes — 50% off for verified educational institutions and NGOs. Contact us with your organisation details."],
             ["Is the company plan per active user?","No — company plans are flat-rate: one fixed monthly price covers your whole team up to that plan's employee cap (30 for Starter, 100 for Growth), regardless of how many are actively using it."],
@@ -622,8 +624,8 @@ export default function PricingPageStandalone() {
           ].map(([q,a],i)=>(
             <Reveal key={q} delay={i*.04}>
               <div style={{ padding:"24px 0", borderTop:"1px solid rgba(148,163,184,.07)" }}>
-                <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:10, lineHeight:1.4 }}>{q}</div>
-                <p style={{ fontSize:14, color:T.muted, margin:0, lineHeight:1.75 }}>{a}</p>
+                <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:10, lineHeight:1.4 }}>{tr(q, ar)}</div>
+                <p style={{ fontSize:14, color:T.muted, margin:0, lineHeight:1.75 }}>{tr(a, ar)}</p>
               </div>
             </Reveal>
           ))}
@@ -631,7 +633,7 @@ export default function PricingPageStandalone() {
         <div style={{ marginTop:20 }}>
           <a href="/faq" style={{ fontSize:14, color:T.blue, textDecoration:"none", fontWeight:600,
             display:"inline-flex", alignItems:"center", gap:6 }}>
-            See all FAQ →
+            {ar ? "شوف كل الأسئلة ←" : "See all FAQ →"}
           </a>
         </div>
       </div>
@@ -648,10 +650,10 @@ export default function PricingPageStandalone() {
             </div>
             <h2 style={{ fontSize:"clamp(28px,3.5vw,48px)", fontWeight:800, color:T.text,
               margin:"0 0 18px", fontFamily:FD, letterSpacing:"-.025em" }}>
-              Start for free today
+              {tr("Start for free today", ar)}
             </h2>
             <p style={{ fontSize:17.5, color:T.sub, margin:"0 auto 40px", maxWidth:480, lineHeight:1.75 }}>
-              Join teams across Egypt and MENA cutting sick leave with AI posture coaching.
+              {tr("Join teams across Egypt and MENA cutting sick leave with AI posture coaching.", ar)}
             </p>
             <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
               <a href="/auth?mode=signup" style={{
