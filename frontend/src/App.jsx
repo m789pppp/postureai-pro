@@ -1923,6 +1923,89 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
   </div>;
 }
 
+// ── Validation readout ────────────────────────────────────────────────
+//
+// Every accuracy figure this engine reports was measured against a synthetic
+// subject — a rigid-body model with known joint angles, written in this repo.
+// That model has been wrong five separate times, and every time it flattered
+// the engine: the z sign was inverted, the nose sat in the wrong plane,
+// distance was measured from the shoulders instead of the eyes, the arms were
+// posed straight instead of typing, and jitter() left the depth channel
+// noise-free. Each was found by checking the instrument rather than the
+// result.
+//
+// The one check that has never been run is the obvious one: point a real
+// camera at a real person holding a known pose and see whether the number
+// matches. This panel exists so that takes twenty minutes instead of a
+// research project. It is off unless explicitly asked for — ?validate=1, or
+// localStorage corvus_validate=1 — and it renders nothing otherwise, so it
+// cannot appear in front of a participant by accident.
+function ValidationReadout({ analysis, isAr }) {
+  const [copied, setCopied] = useState(false);
+  const rows = [
+    ["head_yaw",           "Head yaw",        "°"],
+    ["fhp_index",          "Forward head",    "cm"],
+    ["rounded_shoulders",  "Rounded (protraction)", "cm"],
+    ["screen_distance",    "Screen distance", "cm"],
+    ["neck_lean",          "Neck lean",       "°"],
+    ["spine_lean",         "Lateral lean",    "°"],
+    ["trunk_rotation",     "Trunk rotation",  "°"],
+    ["torso_flexion",      "Forward slouch",  "%"],
+    ["shoulder_elevation", "Shoulder shrug",  "%"],
+    ["elbow_angle",        "Elbow angle",     "°"],
+  ];
+  const m = analysis?.metrics || {};
+  const dump = () => {
+    const lines = rows.map(([k, label, unit]) => {
+      const v = m[k];
+      return `${label.padEnd(24)} ${v?.value ?? "—"}${unit}  reliable=${v?.reliable}`;
+    });
+    lines.push(`overall score            ${analysis?.overall ?? "—"}`);
+    return lines.join("\n");
+  };
+  return (
+    <div style={{
+      position: "fixed", bottom: 12, insetInlineStart: 12, zIndex: 9999,
+      background: "rgba(8,14,12,.93)", border: "1px solid rgba(120,200,175,.35)",
+      borderRadius: 10, padding: "10px 12px", minWidth: 268, maxWidth: 320,
+      fontFamily: "'IBM Plex Mono',ui-monospace,monospace", fontSize: 11,
+      color: "#d6efe6", direction: "ltr", textAlign: "left",
+      boxShadow: "0 8px 30px rgba(0,0,0,.5)", backdropFilter: "blur(6px)",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+        marginBottom: 7, paddingBottom: 6, borderBottom: "1px solid rgba(120,200,175,.18)" }}>
+        <strong style={{ fontSize: 10.5, letterSpacing: ".08em", color: "#7fd6bb" }}>VALIDATION READOUT</strong>
+        <button onClick={() => { try { navigator.clipboard.writeText(dump()); setCopied(true); setTimeout(() => setCopied(false), 1400); } catch {} }}
+          style={{ background: "none", border: "1px solid rgba(120,200,175,.35)", borderRadius: 5,
+            color: "#7fd6bb", fontSize: 9.5, padding: "2px 7px", cursor: "pointer", fontFamily: "inherit" }}>
+          {copied ? "copied" : "copy"}
+        </button>
+      </div>
+      {rows.map(([k, label, unit]) => {
+        const v = m[k];
+        const ok = v?.reliable;
+        return (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", gap: 8, lineHeight: 1.75 }}>
+            <span style={{ color: ok ? "#9fb8ae" : "#6a7f77" }}>{label}</span>
+            <span style={{ color: ok ? "#eaf6f1" : "#6a7f77", fontVariantNumeric: "tabular-nums" }}>
+              {v?.value ?? "—"}{v?.value != null ? unit : ""}
+              <span style={{ color: ok ? "#4FAE8E" : "#8a5f52", marginInlineStart: 6 }}>{ok ? "ok" : "n/a"}</span>
+            </span>
+          </div>
+        );
+      })}
+      <div style={{ marginTop: 7, paddingTop: 6, borderTop: "1px solid rgba(120,200,175,.18)",
+        display: "flex", justifyContent: "space-between" }}>
+        <span style={{ color: "#9fb8ae" }}>overall</span>
+        <span style={{ color: "#eaf6f1", fontVariantNumeric: "tabular-nums" }}>{analysis?.overall ?? "—"}</span>
+      </div>
+      <div style={{ marginTop: 6, fontSize: 9.5, color: "#6a7f77", lineHeight: 1.5 }}>
+        {isAr ? "لوحة تحقق — مش ظاهرة للمشاركين" : "validation only — not shown to participants"}
+      </div>
+    </div>
+  );
+}
+
 // ── Upgrade Prompt ────────────────────────────────────────────────
 // ── Nav Avatar Dropdown — replaces 10-button header overload ─────
 function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfile,onLeaderboard,onHR,onAdmin,onSetup,onOnboarding,onTour,onSignOut}){
@@ -6010,7 +6093,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
     </ErrorBoundary>);
   const TN = T_norm;
 
+  // Opt-in only: ?validate=1 or localStorage corvus_validate=1.
+  const _showValidation = (() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("validate") === "1") return true;
+      return localStorage.getItem("corvus_validate") === "1";
+    } catch { return false; }
+  })();
+
   return(<ErrorBoundary><>
+    {_showValidation && <ValidationReadout analysis={analysis} isAr={isAr}/>}
     <style>{`
       @keyframes livePulse{0%,100%{opacity:1}50%{opacity:.4}}
       @keyframes countdownPop{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}100%{opacity:.85;transform:scale(1)}}
