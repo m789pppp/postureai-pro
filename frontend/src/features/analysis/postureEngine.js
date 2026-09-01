@@ -606,9 +606,70 @@ let _headShBase = _makeBaseline(40, 60);
 // "sample" is three frames: (40, 60) would need 300 frames — ten seconds — and
 // the metric would sit unreliable through most of a short session. (12, 25)
 // settles in about 120 frames, four seconds.
+// ── Is the depth channel usable at all? ─────────────────────────────────
+//
+// Two metrics now read z: head yaw and shoulder protraction. MediaPipe does
+// not measure depth, it regresses it, and how well it does that varies by
+// device, lighting and model build. On a camera where it fails, z arrives as
+// noise or as a column of zeros — and the engine must not go on reporting
+// confident numbers derived from it.
+//
+// Measured without this gate: at 12x the x/y noise, head yaw read 37 deg for a
+// true 30 and still said reliable; with z dead it read 38. Worse, protraction
+// read 0.0cm — "no rounding" — with reliable=true, for a subject rounded 6cm.
+// Silently telling someone their posture is fine is the worst direction to
+// fail in, and it is exactly what an unvalidated depth channel produces.
+//
+// The check uses an anatomical fact that holds in every posture: the nose is
+// in front of the ears. Always, by roughly 8-11cm, whichever way the head is
+// turned or tilted. If the measured nose-ahead-of-ears distance is not a
+// plausible positive number of centimetres, depth is not carrying depth.
+const _DEPTH_MIN_CM = 3;    // below this, z is flat or inverted
+const _DEPTH_MAX_CM = 30;   // above this, z is not in the units we think
+// Measured on the harness, the frame-to-frame spread of the nose-ahead
+// distance is 0.47cm at 3x the x/y landmark noise, 0.94cm at 6x, 1.87cm at
+// 12x and 4.68cm at 30x. Head yaw survives 6x (a true 30 deg still reads 30
+// after the rolling median) and breaks at 12x, where it reads 37 — atan2
+// stops behaving symmetrically once the noise approaches the signal. 1.2cm
+// admits everything up to about 8x and rejects the rest.
+const _DEPTH_MAX_NOISE_CM = 1.2;
+let _depthNoiseCm = 0;
+let _depthWin = [];
+let _depthOK  = false;
+
+function _updateDepthUsable(g, vis, W) {
+  if (!(vis(PL.NOSE) && vis(PL.L_EAR) && vis(PL.R_EAR)) || !(_lastDistCm > 0)) return;
+  const earZ = (g(PL.L_EAR).z + g(PL.R_EAR).z) / 2;
+  const noseZ = g(PL.NOSE).z;
+  const focalPx = (FOCAL_PX_1280 * W) / 1280;
+  const frameWidthCm = (_lastDistCm * W) / focalPx;
+  const aheadCm = (earZ - noseZ) * frameWidthCm;
+  if (!Number.isFinite(aheadCm)) return;
+  _depthWin.push(aheadCm);
+  if (_depthWin.length > 30) _depthWin.shift();
+  if (_depthWin.length >= 12) {
+    const sorted = [..._depthWin].sort((a, b) => a - b);
+    const med = sorted[_depthWin.length >> 1];
+    const mean = _depthWin.reduce((a, b) => a + b, 0) / _depthWin.length;
+    const sd = Math.sqrt(_depthWin.reduce((a, b) => a + (b - mean) ** 2, 0) / _depthWin.length);
+    // Two separate questions. Is z pointing the right way and roughly the
+    // right size (the median) — and is it steady enough to measure a few
+    // centimetres of posture with (the spread)? A camera can pass the first
+    // and fail the second badly: under heavy noise the median of a symmetric
+    // error is still correct while any single reading is not.
+    //
+    // The smallest thing these metrics claim to resolve is about 3cm of
+    // shoulder protraction, so depth noise of that order makes the reading
+    // meaningless however sensible its average looks.
+    _depthNoiseCm = sd;
+    _depthOK = med >= _DEPTH_MIN_CM && med <= _DEPTH_MAX_CM && sd <= _DEPTH_MAX_NOISE_CM;
+  }
+}
+
 let _protractBase = _makeBaseline(12, 25);
 
 let _yawWin      = [];
+let _yawUsedZ    = false;  // which estimator produced the last reading
 let _yawLastLms  = null;   // per-frame memo — two call sites, one computation
 let _yawLastVal  = 0;
 let _lastDistCm  = null;   // previous frame's distance, for the perspective term
@@ -776,7 +837,11 @@ export function resetProportions() {
   _earShBase  = _makeBaseline(40, 60);
   _headShBase = _makeBaseline(40, 60);
   _protractBase = _makeBaseline(12, 25);
+  _depthWin = [];
+  _depthOK = false;
+  _depthNoiseCm = 0;
   _yawWin     = [];
+  _yawUsedZ   = false;
   _yawLastLms = null;
   _yawLastVal = 0;
   _lastDistCm = null;
@@ -896,7 +961,7 @@ function estimateHeadYaw(lms, W, H) {
     // has to degrade rather than produce confident nonsense.
     let yawDeg = noseYaw;
     let usedZ  = false;
-    if (useEdge) {
+    if (useEdge && _depthOK) {
       const dxNorm = Math.abs(g(PL.R_EYE_OUTER).x - g(PL.L_EYE_OUTER).x);
       // Sign, spelled out because it is easy to get backwards and the
       // agreement gate below hides the mistake by silently falling back to
@@ -933,6 +998,7 @@ function estimateHeadYaw(lms, W, H) {
       _yawWin = [];
     }
 
+    _yawUsedZ = usedZ;
     const yaw = Math.max(-45, Math.min(45, Math.round(yawDeg)));
 
     // The ear cross-check that used to live here has been REMOVED, not
@@ -1531,7 +1597,7 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null, trunkFlexDeg = 0) {
   const shZ  = (g(PL.L_SHOULDER).z + g(PL.R_SHOULDER).z) / 2;
   const hipsVisible = vis(PL.L_HIP) && vis(PL.R_HIP);
 
-  if (hipsVisible && _lastDistCm > 0) {
+  if (hipsVisible && _lastDistCm > 0 && _depthOK) {
     const hipZ  = (g(PL.L_HIP).z + g(PL.R_HIP).z) / 2;
     const midShYn = prop.midSh.y / Math.max(H, 1);
     const hipYn = (g(PL.L_HIP).y + g(PL.R_HIP).y) / 2;
@@ -1569,55 +1635,18 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null, trunkFlexDeg = 0) {
     }
   }
 
-  // No hips in frame, no distance yet, or the geometry degenerate. The old
-  // ratio path is kept only for an explicitly calibrated user; without that it
-  // reports unreliable, contributing nothing and firing no alert, which is the
-  // safe direction to fail in.
-  const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
-
-  // Secondary Z signal, blended in cautiously. The elevation-ratio method
-  // above catches shoulders creeping UP toward the ears (shrug/rounding-up)
-  // but front-facing 2D geometry is structurally blind to shoulders moving
-  // FORWARD (protraction) — the actual "rounded shoulders" posture — since
-  // that motion is mostly along the camera's Z axis, not the image plane.
-  // MediaPipe Z is too noisy to trust alone (hence it was previously only
-  // used as a last-resort fallback when ears weren't visible at all), but
-  // when both shoulders are visible and their Z readings agree with each
-  // other (low left/right asymmetry = a stable, non-jittery frame), a
-  // small weighted contribution improves sensitivity to true protraction
-  // without letting a noisy reading swing the score on its own.
-  const shVisOK = vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER);
-  let finalDeviation = deviation;
-  let zBlended = false;
-  if (shVisOK) {
-    const lShZ  = g(PL.L_SHOULDER)?.z ?? 0;
-    const rShZ  = g(PL.R_SHOULDER)?.z ?? 0;
-    const avgZ  = (lShZ + rShZ) / 2;
-    const asymZ = Math.abs(lShZ - rShZ);
-    if (asymZ <= 0.04) {
-      const zDepth = Math.max(0, -avgZ * 100);
-      finalDeviation = deviation * 0.8 + zDepth * 0.2;
-      zBlended = true;
-    }
-  }
-
-  const score    = scoreMetric(finalDeviation, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
-  const severity = classify(finalDeviation, SEV.ROUNDED);
-  // Front-mode rounded-shoulders is inherently the weakest metric here —
-  // it's a 2D elevation proxy blended with noisy Z depth, not a direct
-  // sagittal-protraction measurement. This used to nudge users toward a
-  // "Side mode" for a more precise reading — that mode was removed
-  // app-wide (see MODES below, and every "Side mode removed" comment in
-  // this file/App.jsx), so that tip pointed at a UI that no longer
-  // exists. The other real lever this engine has for precision here is
-  // calibration (calib.rounded_neutral) — surface that instead, only
-  // when the user hasn't already calibrated (personalised===false),
-  // since re-suggesting it to someone who already has is pointless.
-  return {
-    depth: Math.round(finalDeviation * 10) / 10, asymmetry: 0, score, severity,
-    confidence: zBlended ? 85 : 80, reliable: true, personalised, zBlended,
-    calibrationRecommended: (severity === "mild" || severity === "moderate") && !personalised,
-  };
+  // Anything else — no hips in frame, no distance yet, the geometry
+  // degenerate, or this camera's depth channel not carrying depth — reports
+  // unreliable. confWeight then drops the metric from the score entirely.
+  //
+  // That is deliberately the only remaining outcome. What used to live here
+  // was the old ear-to-shoulder ratio path, which measured neck length rather
+  // than posture and needed a calibration almost nobody ran; keeping it as a
+  // fallback would mean a user on a device with poor depth silently gets
+  // scored by the method that was switched off for being wrong. Better to
+  // measure nothing than to measure the wrong thing quietly.
+  return { depth: 0, score: 90, severity: "normal", confidence: 0,
+           reliable: false, needsDepth: true };
 }
 
 /**
@@ -1834,7 +1863,13 @@ function analyzeHeadYawModule(lms, W, H) {
   const absYaw   = Math.abs(yaw);
   const score    = scoreMetric(absYaw, 0, THR.HEAD_YAW.ok, THR.HEAD_YAW.bad);
   const severity = classify(absYaw, SEV.YAW);
-  return { angle: Math.round(yaw), absAngle: Math.round(absYaw), score, severity, confidence: 75, reliable };
+  // Confidence follows which estimator actually ran. With a usable depth
+  // channel this is exact on the harness; without one it falls back to the
+  // nose-offset method, which reads about 25% high — the direction is still
+  // right and the alert still points the correct way, but it should not carry
+  // the same weight in the score as a measurement that is not guessing.
+  return { angle: Math.round(yaw), absAngle: Math.round(absYaw), score, severity,
+           confidence: _yawUsedZ ? 85 : 45, usedDepth: _yawUsedZ, reliable };
 }
 
 function analyzeElbow(lms, W, H) {
@@ -2193,6 +2228,9 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // between frames for the lag to matter. On the very first frame it is null
   // and the correction is simply skipped.
   if (Number.isFinite(distCm) && distCm > 0) _lastDistCm = distCm;
+  // Re-check whether z is carrying real depth on this device, now that a
+  // distance exists to convert it with.
+  _updateDepthUsable(i => lms[i], i => (lms[i]?.visibility ?? 0) >= VIS_MIN, W);
   let   distSc  = distanceScore(distCm, lo, hi);
 
   // Reconcile the two independent distance signals.

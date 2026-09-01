@@ -72,6 +72,29 @@ function read(pose = {}, { body = {}, camera = {}, settle = 120, hold = 40, nois
   return r;
 }
 
+/** Like read(), but lets a test corrupt the landmarks before the engine sees them. */
+function readRaw(pose = {}, corrupt = (l) => l, { settle = 130, hold = 50 } = {}) {
+  resetProportions();
+  let r = null;
+  const frame = (p) => { r = analyzeMP(corrupt(renderSubject(p, {}, {})), W, H, "front"); };
+  for (let i = 0; i < settle; i++) frame({});
+  for (let i = 0; i < hold; i++) frame(pose);
+  return r;
+}
+
+/** Like read(), but with a chosen depth-noise multiplier. */
+function readNoisy(pose = {}, zSigmaMult = 3, { settle = 130, hold = 50, seed = 5 } = {}) {
+  resetProportions();
+  const rng = mulberry32(seed);
+  let r = null;
+  const frame = (p) => {
+    r = analyzeMP(jitter(renderSubject(p, {}, {}), 1.5, {}, rng, { zSigmaMult }), W, H, "front");
+  };
+  for (let i = 0; i < settle; i++) frame({});
+  for (let i = 0; i < hold; i++) frame(pose);
+  return r;
+}
+
 const val = (r, k) => r?.metrics?.[k]?.value;
 const stats = (xs) => {
   const c = xs.filter(Number.isFinite);
@@ -428,6 +451,33 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
 }
 
 // ═══════════════════════════════════════════════════════════════════
+{
+  // Degrading safely is a separate property from being accurate, and the only
+  // one that matters on a device this was never tested on.
+  //
+  // Two metrics now read MediaPipe's z, which is regressed rather than
+  // measured and varies by device. Before this gate existed, a camera with a
+  // poor depth channel produced CONFIDENT WRONG numbers: at 12x the x/y noise
+  // head yaw read 37 deg for a true 30 and still said reliable, and shoulder
+  // protraction read 8.3cm for a true 6cm. With z dead — a flat column of
+  // zeros, which some builds produce — protraction read 0.0cm, "no rounding",
+  // reliable, for a subject rounded 6cm. Silently telling someone their
+  // posture is fine is the worst available failure.
+  const killZ = (lms) => lms.map(l => ({ ...l, z: 0 }));
+  const deadZ = readRaw({ roundShoulderCm: 6 }, killZ);
+  const rs = deadZ?.metrics?.rounded_shoulders;
+  if (VERBOSE) console.log(`\n  Depth channel dead: rounded reads ${fmt(rs?.value)} reliable=${rs?.reliable}`);
+  check("Dead depth channel: protraction reports unreliable rather than zero",
+        rs && rs.reliable === false, `reliable=${rs?.reliable}, value ${fmt(rs?.value)}`);
+
+  const noisyZ = (lms, rng) => lms;  // noise applied via noisePx below
+  const heavy = readNoisy({ roundShoulderCm: 6 }, 12);
+  const rs2 = heavy?.metrics?.rounded_shoulders;
+  if (VERBOSE) console.log(`  Depth 12x noisy:    rounded reads ${fmt(rs2?.value)} reliable=${rs2?.reliable}`);
+  check("Noisy depth channel: protraction reports unreliable rather than wrong",
+        rs2 && rs2.reliable === false, `reliable=${rs2?.reliable}, value ${fmt(rs2?.value)}`);
+}
+
 console.log("\nINVARIANCE — same posture, irrelevant variable changed");
 
 {
