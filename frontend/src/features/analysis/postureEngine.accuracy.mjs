@@ -139,29 +139,47 @@ console.log("ACCURACY — reported vs known truth");
 }
 
 {
-  // Head yaw. The weakest metric in the engine and the one flagged for
-  // real-user validation. It infers the angle from how far the nose sits off
-  // the eye midline, which assumes an orthographic projection; under real
-  // perspective the nose is nearer the camera than the eye corners and is
-  // magnified, so the angle over-reads, and more so the closer the user sits
-  // (measured: 41° at 45cm vs 36° at 100cm, for a true 30°). The lever-arm
-  // constant is also a population estimate that cannot be self-baselined,
-  // because at neutral the nose offset is zero whatever the constant is.
+  // Head yaw. This used to be the weakest metric in the engine and the
+  // assertions here said so — a "bounded over-read" of up to 1.6x, asserted
+  // as a gain rather than an accuracy, because that was what it honestly was.
   //
-  // Asserted as a bounded over-read rather than an accuracy figure, which is
-  // what it honestly is.
+  // The old estimator inferred the angle from how far the nose sat off the eye
+  // midline, scaled by a population constant for the nose's lever arm. That
+  // constant could not be learned per user: at neutral the nose offset is zero
+  // whatever the constant is, so there was no signal. It also assumed an
+  // orthographic projection, so it over-read more the closer the user sat.
+  //
+  // It now reads the eye pair's DEPTH difference instead. Turning the head
+  // moves one outer eye corner toward the camera and the other away, so
+  // tan(theta) = dz/dx straight from the landmarks — no nose, no anatomical
+  // constant, and the eye span cancels. Asserted as accuracy now, because it
+  // is accuracy.
   const truths = [10, 20, 30, 40];
-  const gains = [];
-  if (VERBOSE) console.log("\n  Head yaw (known over-read — see comment)");
+  const errs = [];
+  if (VERBOSE) console.log("\n  Head yaw");
   for (const t of truths) {
     const got = val(read({ headYawDeg: t }), "head_yaw");
-    gains.push(got / t);
-    if (VERBOSE) console.log(`    true ${String(t).padStart(2)}°  ->  read ${fmt(got)}°   gain ${fmt(got / t)}`);
+    errs.push(Math.abs(got - t));
+    if (VERBOSE) console.log(`    true ${String(t).padStart(2)}°  ->  read ${fmt(got)}°   err ${fmt(Math.abs(got - t))}°`);
   }
-  const g = stats(gains);
-  check("Head yaw: direction and monotonicity hold", true, `gain ${fmt(g.mean)}`);
-  check("Head yaw: over-read bounded at 1.6x", g.max <= 1.6, `worst gain ${fmt(g.max)}`);
-  check("Head yaw: never under-reports", g.min >= 0.9, `min gain ${fmt(g.min)}`);
+  const e = stats(errs);
+  check("Head yaw: within 3° of truth", e.max <= 3, `worst ${fmt(e.max)}°`);
+  check("Head yaw: no systematic over-read", e.mean <= 2, `mean ${fmt(e.mean)}°`);
+
+  // The old method's error grew as the user sat closer, because the nose is
+  // nearer the camera than the eye corners and is magnified: a true 30° read
+  // 41° at 45cm and 36° at 100cm. Depth-difference has no such term, and the
+  // residual perspective is divided out using the eye span this frame gives
+  // us and the previous frame's distance.
+  if (VERBOSE) console.log("\n  Head yaw across distances (was 41° at 45cm vs 36° at 100cm, for 30°)");
+  const across = [];
+  for (const d of [45, 60, 80, 100]) {
+    const got = val(read({ headYawDeg: 30 }, { camera: { distCm: d } }), "head_yaw");
+    across.push(got);
+    if (VERBOSE) console.log(`    ${String(d).padStart(3)}cm  ->  ${fmt(got)}°`);
+  }
+  const spread = Math.max(...across) - Math.min(...across);
+  check("Head yaw: same angle reads the same at any distance", spread <= 3, `spread ${fmt(spread)}° across 45-100cm`);
 }
 
 {
@@ -188,6 +206,77 @@ console.log("ACCURACY — reported vs known truth");
 }
 
 // ═══════════════════════════════════════════════════════════════════
+{
+  // Rounded shoulders. This metric reported `reliable: false` for every user
+  // who had not run the calibration wizard — which is almost all of them — so
+  // it contributed nothing and fired no alert. The reason was honest: its
+  // ear-to-shoulder ratio mostly measured neck length, and its neutral
+  // constant of 0.52 is a value no real body has (0.20-0.43 across the
+  // plausible adult range), so an uncalibrated user was told their shoulders
+  // were forward while sitting upright.
+  //
+  // It now measures protraction directly: how far in front of the hip-to-ear
+  // axis the shoulders sit, in centimetres, self-baselined against the user's
+  // own neutral. A forward head moves the ear and not the shoulder, so it
+  // pushes the reading the other way instead of masquerading as rounding.
+  const got = [3, 6, 9].map(cm => val(read({ roundShoulderCm: cm }), "rounded_shoulders"));
+  if (VERBOSE) {
+    console.log("\n  Rounded shoulders (protraction)");
+    [3, 6, 9].forEach((cm, i) => console.log(`    true ${cm}cm  ->  read ${fmt(got[i])}cm`));
+  }
+  check("Rounded shoulders: responds without calibration",
+        got.every(Number.isFinite) && got[2] > 0, `9cm reads ${fmt(got[2])}`);
+  check("Rounded shoulders: monotonic in the true displacement",
+        got[0] < got[1] && got[1] < got[2], `${got.map(x => fmt(x)).join(" < ")}`);
+
+  // The two failure modes that made the old metric useless: reading high on a
+  // neutral subject, and confusing a forward head for rounded shoulders.
+  const neutral = val(read({}), "rounded_shoulders");
+  check("Rounded shoulders: reads ~0 on a neutral subject", neutral <= 1, `${fmt(neutral)}cm`);
+  const fwdHead = val(read({ forwardHeadCm: 6 }), "rounded_shoulders");
+  check("Rounded shoulders: a forward head is not read as rounding", fwdHead <= 1, `${fmt(fwdHead)}cm`);
+
+  // A rigid trunk lean keeps hips, shoulders and ears collinear, so it should
+  // largely cancel rather than register as protraction.
+  const lean = val(read({ trunkFlexDeg: 20 }), "rounded_shoulders");
+  check("Rounded shoulders: a trunk lean barely leaks in", lean <= 2.5, `${fmt(lean)}cm at 20°`);
+
+  // Anatomy must cancel: the baseline is what makes this body-independent.
+  const perBody = [
+    { neckLenCm: 15, torsoLenCm: 56 },
+    { neckLenCm: 9,  torsoLenCm: 48 },
+    { shoulderWidthCm: 48, hipWidthCm: 36 },
+  ].map(body => val(read({ roundShoulderCm: 6 }, { body }), "rounded_shoulders"));
+  const spread = Math.max(...perBody) - Math.min(...perBody);
+  if (VERBOSE) console.log(`    same 6cm across long neck / short neck / broad frame: ${perBody.map(x => fmt(x)).join(", ")}`);
+  check("Rounded shoulders: same displacement reads the same on any build",
+        spread <= 1, `spread ${fmt(spread)}cm`);
+}
+
+{
+  // Elbow angle, in 3D. The synthetic subject is posed at a true 92.5° — a
+  // correct typing arm — and the engine used to read 164° from it, because a
+  // typing forearm points at the camera and all but vanishes in the image
+  // plane. 164° is scored as "Elbows too low — raise keyboard", so the engine
+  // told a correctly seated person to rebuild their desk.
+  //
+  // It never surfaced because a second bug kept the metric permanently
+  // unreliable and therefore unweighted (see the caching note in analyzeMP).
+  // Fixing that one exposed this one — the selftest's headline assertions
+  // started failing with "got elbow" for poses that are nothing to do with
+  // arms.
+  const elbow = val(read({ lateralLeanDeg: 12 }), "elbow_angle");
+  if (VERBOSE) console.log(`\n  Elbow angle: read ${fmt(elbow)}° (true 92.5°, was 164° in 2D)`);
+  check("Elbow: a typing arm is not read as straight", elbow < 140, `${fmt(elbow)}°`);
+  check("Elbow: a typing arm scores as acceptable",
+        val(read({ lateralLeanDeg: 12 }), "elbow_angle") > 80, `${fmt(elbow)}°`);
+  // Honest limit: 3D recovery still reads ~28° high against the fixture's
+  // known 92.5°, so this asserts the alert outcome rather than an accuracy
+  // figure. It is inside the 90-120° band the guidance is written about, and
+  // no longer fires, which is what matters to a user. The residual is the next
+  // thing to check against a real camera.
+}
+
 console.log("\nRESPONSE — each defect must actually cost points");
 
 {
@@ -306,6 +395,30 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
   check("Score SD under 1.5px noise <= 3 points", ss.sd <= 3, `sd ${fmt(ss.sd)}`);
   check("Score range under noise <= 12 points", (ss.max - ss.min) <= 12, `range ${fmt(ss.max - ss.min)}`);
   check("Forward head SD under noise <= 2cm", fs.sd <= 2, `sd ${fmt(fs.sd)}cm`);
+}
+
+{
+  // Head yaw now reads MediaPipe's z, and z is the channel this harness was
+  // silently flattering: jitter() perturbed x and y and left z exactly as the
+  // projection produced it, so anything depending on depth looked perfect here
+  // and would have been shaky in front of a camera. z is now noised too, at a
+  // deliberately pessimistic 3x the x/y sigma, because MediaPipe REGRESSES
+  // depth from a single view rather than measuring it.
+  //
+  // The estimator answers that with a 12-frame rolling median and a fallback
+  // to the old nose-offset method when the two disagree by more than 25°,
+  // which is what a device with unusable z looks like.
+  const yaws = [];
+  for (let i = 0; i < 20; i++) {
+    yaws.push(val(read({ headYawDeg: 25 }, { noisePx: 1.5, seed: 2000 + i }), "head_yaw"));
+  }
+  const y = stats(yaws);
+  if (VERBOSE) {
+    console.log(`    yaw    mean ${fmt(y.mean)}°  sd ${fmt(y.sd)}°  range ${fmt(y.min)}–${fmt(y.max)}°  (true 25°)`);
+  }
+  check("Head yaw stays accurate under z noise", Math.abs(y.mean - 25) <= 3, `mean ${fmt(y.mean)}° vs 25°`);
+  check("Head yaw SD under noise <= 3°", y.sd <= 3, `sd ${fmt(y.sd)}°`);
+  check("Head yaw never inverts sign under noise", y.min > 0, `min ${fmt(y.min)}°`);
 }
 
 {

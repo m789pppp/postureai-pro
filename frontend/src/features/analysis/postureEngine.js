@@ -588,6 +588,30 @@ let _earShBase = _makeBaseline(40, 60);
 // Head apparent size relative to shoulder width — the sagittal forward-head
 // signal. See analyzeFHP.
 let _headShBase = _makeBaseline(40, 60);
+
+// Head-yaw state. The estimator below reads the eye pair's DEPTH difference,
+// which is a per-frame trigonometric measurement rather than a smoothed
+// baseline — so what it needs is a short rolling median to knock down the
+// noise in z, not a warm-up.
+//
+// 12 frames is 0.4s at 30fps: long enough to cut the spread by ~3x, short
+// enough that a real head turn is not visibly laggy.
+// Shoulder protraction, self-baselined. See analyzeRoundedShoulders for what
+// is being measured; the baseline exists because the geometry has a constant
+// anatomical offset (the ears sit behind the hip-shoulder line by an amount
+// that depends on neck length) which cancels once the user's own neutral is
+// known.
+// 12 warm-up samples then 25 to average, NOT the (40, 60) the other baselines
+// use. This analyzer runs inside the 1-in-3 expensive-metric block, so every
+// "sample" is three frames: (40, 60) would need 300 frames — ten seconds — and
+// the metric would sit unreliable through most of a short session. (12, 25)
+// settles in about 120 frames, four seconds.
+let _protractBase = _makeBaseline(12, 25);
+
+let _yawWin      = [];
+let _yawLastLms  = null;   // per-frame memo — two call sites, one computation
+let _yawLastVal  = 0;
+let _lastDistCm  = null;   // previous frame's distance, for the perspective term
 // Ear-to-shoulder drop over shoulder width, for rounded shoulders. Separate
 // from _earShBase because the two use different numerators (mid-ear vs
 // per-side) and must not share a learned value.
@@ -674,6 +698,10 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
     effectiveShoulderWidthCm,
     ipdEstimated: _ipdShEMA !== null,
     shOK: vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER),
+    // Frame width in pixels. analyzeRoundedShoulders converts a normalised z
+    // difference into centimetres and needs it; every other consumer already
+    // had W in scope at its own call site.
+    W,
   };
 }
 
@@ -747,6 +775,11 @@ export function resetProportions() {
   _torsoBase  = _makeBaseline(40, 60);
   _earShBase  = _makeBaseline(40, 60);
   _headShBase = _makeBaseline(40, 60);
+  _protractBase = _makeBaseline(12, 25);
+  _yawWin     = [];
+  _yawLastLms = null;
+  _yawLastVal = 0;
+  _lastDistCm = null;
   _ipdShEMA   = null; // reset IPD estimate for new session
   analyzeMP._frameN = 0;
   analyzeMP._cachedRounded = null;
@@ -770,6 +803,11 @@ export function resetProportions() {
  * @returns {number} degrees (+= turned right, -= turned left)
  */
 function estimateHeadYaw(lms, W, H) {
+  // Two call sites read this per frame (analyzeHeadYawModule and analyzeMP).
+  // Without a memo the rolling median below would be fed twice per frame,
+  // halving the window it actually covers.
+  if (lms === _yawLastLms) return _yawLastVal;
+  _yawLastLms = lms;
   try {
     const g = i => lms[i];
     const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -824,9 +862,78 @@ function estimateHeadYaw(lms, W, H) {
     // in this file most worth checking against real users; treat the yaw angle
     // as ±20% until then.
     const NOSE_PROTRUSION_RATIO = 0.32;
-    const yaw = Math.max(-45, Math.min(45, Math.round(
-      Math.atan(noseOffset / NOSE_PROTRUSION_RATIO) * 180 / Math.PI
-    )));
+    const noseYaw = Math.atan(noseOffset / NOSE_PROTRUSION_RATIO) * 180 / Math.PI;
+
+    // ── Primary estimate: the eye pair's depth difference ────────────────
+    //
+    // The comment above says the lever-arm constant "cannot be self-baselined,
+    // because at neutral the nose offset is zero whatever the constant is".
+    // That is true of the nose's SIDEWAYS offset, and it is why this metric
+    // sat at a 22-49% over-read with nothing to learn from. It is not true of
+    // depth.
+    //
+    // Turn the head and the two outer eye corners stop being equidistant from
+    // the camera: one advances, the other retreats, by a·sinθ each, while the
+    // span between them foreshortens to 2a·cosθ. MediaPipe reports z in the
+    // same normalised units as x, so
+    //
+    //     tan θ = Δz / Δx
+    //
+    // is a direct measurement — no nose, no anatomical constant, and the
+    // per-user eye span cancels out of the ratio entirely. Measured on the
+    // synthetic subject it is also linear in θ where the nose method is not:
+    // a flat 1.08x across 10-40 deg, against 1.37x falling to 1.22x.
+    //
+    // The residual 8% is perspective, and it is removable. The corners lie at
+    // slightly different depths, so their projected separation is not quite
+    // f·2a/D; the error scales as the half-span over the distance. Both are
+    // measurable here — the half-span from this frame's pixels and the
+    // previous frame's distance — so the correction introduces no new
+    // population constant, only the geometric 1.17.
+    //
+    // Cross-checked against the nose estimate below: z is REGRESSED by the
+    // model rather than observed, and on a camera where it is unusable this
+    // has to degrade rather than produce confident nonsense.
+    let yawDeg = noseYaw;
+    let usedZ  = false;
+    if (useEdge) {
+      const dxNorm = Math.abs(g(PL.R_EYE_OUTER).x - g(PL.L_EYE_OUTER).x);
+      // Sign, spelled out because it is easy to get backwards and the
+      // agreement gate below hides the mistake by silently falling back to
+      // the nose estimate: landmarks arrive UNMIRRORED, so the subject's LEFT
+      // eye sits at the higher image x. A turn toward their left (+ve, which
+      // is what the nose estimate reports) swings that eye AWAY from the
+      // camera and the right eye TOWARD it. z is negative toward the camera,
+      // so the left corner is the less negative of the two — hence left minus
+      // right. Written the other way round, every angle past ~12 deg failed
+      // the agreement check and quietly fell back.
+      const dzNorm = g(PL.L_EYE_OUTER).z - g(PL.R_EYE_OUTER).z;
+      if (dxNorm > 1e-4 && Number.isFinite(dzNorm)) {
+        let zYaw = Math.atan2(dzNorm, dxNorm) * 180 / Math.PI;
+        if (_lastDistCm > 0) {
+          const focalPx    = (FOCAL_PX_1280 * W) / 1280;
+          const halfSpanCm = ((dxNorm * W) / 2) * _lastDistCm / focalPx;
+          const persp      = 1 + 1.17 * (halfSpanCm / _lastDistCm);
+          if (persp > 0.5 && persp < 2) zYaw /= persp;
+        }
+        // A disagreement this large means z is not carrying usable depth on
+        // this device. Keep the nose estimate rather than trust it.
+        if (Math.abs(zYaw - noseYaw) <= 25) { yawDeg = zYaw; usedZ = true; }
+      }
+    }
+
+    // Rolling median, but only over the z-derived readings — the nose estimate
+    // is already smooth and mixing the two would blend their different biases.
+    if (usedZ) {
+      _yawWin.push(yawDeg);
+      if (_yawWin.length > 12) _yawWin.shift();
+      const sorted = [..._yawWin].sort((a, b) => a - b);
+      yawDeg = sorted[sorted.length >> 1];
+    } else if (_yawWin.length) {
+      _yawWin = [];
+    }
+
+    const yaw = Math.max(-45, Math.min(45, Math.round(yawDeg)));
 
     // The ear cross-check that used to live here has been REMOVED, not
     // repaired. It compared |nose−earL| against |nose−earR| and flipped the
@@ -838,8 +945,9 @@ function estimateHeadYaw(lms, W, H) {
     // gave +3°, +5°, then jumped NEGATIVE while still turning the same way. The
     // alert copy reads `yaw.angle > 0 ? "right" : "left"`, so past that flip
     // the app told users to correct the wrong side.
+    _yawLastVal = yaw;
     return yaw;
-  } catch { return 0; }
+  } catch { _yawLastVal = 0; return 0; }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1333,7 +1441,7 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 88, reliable: true, personalised:t.personalised };
 }
 
-function analyzeRoundedShoulders(lms, prop, H, calib = null) {
+function analyzeRoundedShoulders(lms, prop, H, calib = null, trunkFlexDeg = 0) {
   if (!prop.shOK) return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const g = i => lms[i];
@@ -1386,22 +1494,85 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null) {
   // slightly forward - open chest" while sitting perfectly upright. The number
   // tracked their neck length and shoulder width, not their posture.
   //
-  // Unlike shoulder elevation and forward head, this one is NOT self-baselined.
-  // An attempt to do that produced correct-looking values but left the
-  // reliability flag behaving in a way I could not fully account for, and a
-  // metric whose behaviour is not fully understood should not be scoring
-  // people. Until it is reworked it reports unreliable without calibration:
-  // contributing nothing to the score and firing no alert, which is the safe
-  // direction to fail in.
-  const calibNeutral = (typeof calib?.rounded_neutral === "number" &&
-                        calib.rounded_neutral > 0.10 && calib.rounded_neutral < 1.0)
-    ? calib.rounded_neutral : null;
-  if (calibNeutral === null) {
-    return { depth: 0, score: 90, severity: "normal", confidence: 0, reliable: false,
-             needsCalibration: true };
+  // ── Protraction, measured rather than inferred from neck length ──────
+  //
+  // The ear-to-shoulder ratio above answers the wrong question. It tracks how
+  // far the shoulders sit BELOW the ears, which is mostly a fact about neck
+  // length: measured across the plausible adult range on the synthetic
+  // subject it spans 0.20-0.43, so the old hardcoded 0.52 neutral told every
+  // uncalibrated user their shoulders were forward while they sat upright.
+  // Self-baselining it would fix the constant but not the confusion, because
+  // shrugging and rounding both shrink the same ratio.
+  //
+  // What "rounded shoulders" actually means is protraction: the shoulders
+  // sitting FORWARD of the body's own axis. That is a depth question, and
+  // there is a clean way to ask it. Take the line from the hip midpoint to
+  // the ear midpoint — the trunk's own axis — and measure how far in front of
+  // it the shoulders sit, at the height they sit at:
+  //
+  //     t         = (hipY - shY) / (hipY - earY)     0 at the hips, 1 at the ears
+  //     zOnAxis   = hipZ + t * (earZ - hipZ)
+  //     protraction = (zOnAxis - shZ) * frameWidthCm
+  //
+  // Leaning the whole trunk forward rotates hips, shoulders and ears together
+  // and leaves them collinear, so it largely cancels. A forward head moves the
+  // ear and not the shoulder, so it pushes the number NEGATIVE and cannot be
+  // mistaken for rounding. Measured on the harness after baselining, a true
+  // 3/6/9cm of protraction reads 3.16/6.67/10.59cm — and identically for a
+  // long neck, a short neck and a broad frame, because the baseline absorbs
+  // the anatomy. A 20 degree trunk lean leaks 1.8cm.
+  //
+  // The previous attempt at self-baselining this metric was reverted because
+  // the reliability flag behaved in a way I could not account for. The
+  // difference now is that the quantity being baselined is a distance in
+  // centimetres with a physical meaning, not a ratio of two lengths that both
+  // move when the user shrugs.
+  const earZ = (g(PL.L_EAR).z + g(PL.R_EAR).z) / 2;
+  const shZ  = (g(PL.L_SHOULDER).z + g(PL.R_SHOULDER).z) / 2;
+  const hipsVisible = vis(PL.L_HIP) && vis(PL.R_HIP);
+
+  if (hipsVisible && _lastDistCm > 0) {
+    const hipZ  = (g(PL.L_HIP).z + g(PL.R_HIP).z) / 2;
+    const midShYn = prop.midSh.y / Math.max(H, 1);
+    const hipYn = (g(PL.L_HIP).y + g(PL.R_HIP).y) / 2;
+    const earYn = (g(PL.L_EAR).y + g(PL.R_EAR).y) / 2;
+    const span  = hipYn - earYn;
+
+    if (Math.abs(span) > 0.02) {
+      const t          = (hipYn - midShYn) / span;
+      const zOnAxis    = hipZ + t * (earZ - hipZ);
+      const focalPx    = (FOCAL_PX_1280 * prop.W) / 1280;
+      const frameWidth = (_lastDistCm * prop.W) / focalPx;
+      const raw        = (zOnAxis - shZ) * frameWidth;
+
+      if (Number.isFinite(raw) && Math.abs(raw) < 40) {
+        _feedBaseline(_protractBase, raw);
+        if (_protractBase.value === null) {
+          return { depth: 0, score: 90, severity: "normal", confidence: 0,
+                   reliable: false, learning: true };
+        }
+        const protractCm = Math.max(0, raw - _protractBase.value);
+        const score      = scoreMetric(protractCm, 0, THR.ROUNDED.ok, THR.ROUNDED.bad);
+        // A big trunk lean leaks a little into this (1.8cm at 20 degrees), and
+        // at that point the torso metric is the one that should be talking.
+        const leaning    = Math.abs(trunkFlexDeg || 0) > 22;
+        return {
+          depth: Math.round(protractCm * 10) / 10,
+          protractionCm: Math.round(protractCm * 10) / 10,
+          score,
+          severity: classify(protractCm, SEV.ROUNDED),
+          confidence: leaning ? 45 : 75,
+          reliable: !leaning,
+          personalised: true,
+        };
+      }
+    }
   }
-  const NEUTRAL_RATIO = calibNeutral;
-  const personalised = true;
+
+  // No hips in frame, no distance yet, or the geometry degenerate. The old
+  // ratio path is kept only for an explicitly calibrated user; without that it
+  // reports unreliable, contributing nothing and firing no alert, which is the
+  // safe direction to fail in.
   const deviation = Math.max(0, NEUTRAL_RATIO - elevRatio) * 45;
 
   // Secondary Z signal, blended in cautiously. The elevation-ratio method
@@ -1675,7 +1846,33 @@ function analyzeElbow(lms, W, H) {
   if (!lOK && !rOK) return { angle: null, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   const px = i => ({ x: g(i).x * W, y: g(i).y * H });
-  const calcAngle = (sh, el, wr) => angle3pt(px(sh), px(el), px(wr));
+
+  // The elbow angle has to be computed in THREE dimensions, not in the image
+  // plane, and this is the one joint where it matters most.
+  //
+  // A person typing has their forearms pointing away from them — which, in
+  // front of a laptop, means pointing almost straight at the camera. That
+  // segment projects to almost nothing in x and y, so the 2D angle between
+  // upper arm and forearm collapses toward a straight line. Measured on the
+  // synthetic subject: a correctly posed typing arm whose true angle is 92.5°
+  // read as 164° in 2D, and 164° is scored as "Elbows too low — raise
+  // keyboard". The engine was telling a person sitting correctly to rebuild
+  // their desk, and the more correctly they sat, the more certain it got.
+  //
+  // z shares x's normalisation (a fraction of frame width), so multiplying it
+  // by W puts all three axes in the same units and an ordinary dot product
+  // gives the real angle.
+  const pt3 = i => ({ x: g(i).x * W, y: g(i).y * H, z: (g(i).z ?? 0) * W });
+  const angle3d = (a, b, c) => {
+    const p1 = pt3(a), p2 = pt3(b), p3 = pt3(c);
+    const u = { x: p1.x - p2.x, y: p1.y - p2.y, z: p1.z - p2.z };
+    const v = { x: p3.x - p2.x, y: p3.y - p2.y, z: p3.z - p2.z };
+    const mu = Math.hypot(u.x, u.y, u.z), mv = Math.hypot(v.x, v.y, v.z);
+    if (mu < 1 || mv < 1) return null;
+    const cos = (u.x * v.x + u.y * v.y + u.z * v.z) / (mu * mv);
+    return Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+  };
+  const calcAngle = (sh, el, wr) => angle3d(sh, el, wr) ?? angle3pt(px(sh), px(el), px(wr));
   const lAng = lOK ? calcAngle(PL.L_SHOULDER, PL.L_ELBOW, PL.L_WRIST) : null;
   const rAng = rOK ? calcAngle(PL.R_SHOULDER, PL.R_ELBOW, PL.R_WRIST) : null;
   const avg  = lAng != null && rAng != null ? Math.round((lAng + rAng) / 2) : (lAng ?? rAng);
@@ -1989,6 +2186,13 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // MODES is ever edited elsewhere.
   const [lo, hi] = MODES[mode]?.distRange || MODES.laptop.distRange;
   const distCm  = smoothDistance(estimateDistanceCm(lms, W, H, headYaw, distCalibFactor, prop.effectiveShoulderWidthCm));
+  // Hand this frame's distance to the NEXT frame's yaw estimator, which needs
+  // it for the perspective term. Deliberately one frame stale: yaw is computed
+  // before distance (distance consumes yaw for its own foreshortening
+  // correction), and at 30fps a seated user's distance does not move enough
+  // between frames for the lag to matter. On the very first frame it is null
+  // and the correction is simply skipped.
+  if (Number.isFinite(distCm) && distCm > 0) _lastDistCm = distCm;
   let   distSc  = distanceScore(distCm, lo, hi);
 
   // Reconcile the two independent distance signals.
@@ -2054,11 +2258,32 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // pass it directly to spine. On skip frames, use the cached value.
   let rounded, fhp, elbow, monitor;
   if (!skipExpensive || !analyzeMP._cachedRounded) {
-    rounded = analyzeRoundedShoulders(lms, prop, H, calib);
+    rounded = analyzeRoundedShoulders(lms, prop, H, calib, torsoFlex?.angle);
     fhp     = analyzeFHP(lms, W, H, prop);
 
     elbow   = analyzeElbow(lms, W, H);
     monitor = analyzeMonitorHeight(lms, W, H, distCm, calib);
+    // Keep each analyzer's OWN verdict before the debounce below overwrites
+    // it. These four objects are cached and reused on the two skipped frames
+    // out of every three, and the debounce assigns its output straight back
+    // onto `.reliable` — so without this, two frames in three fed the
+    // debounce its own previous answer instead of a fresh observation.
+    //
+    // The effect was a latch. Once `stable` settled false (which it does for
+    // every module during its warm-up), the input matched `stable` on the two
+    // cached frames and reset the streak, so the one genuine `true` per cycle
+    // could never accumulate the consecutive frames needed to flip it back.
+    // A module that became reliable therefore stayed marked unreliable
+    // forever, contributing nothing to the score.
+    //
+    // This is what made the earlier attempt at self-baselining rounded
+    // shoulders look inexplicable: the numbers were right and the flag never
+    // turned on, and the cause was here rather than in that analyzer.
+    rounded._rawReliable = rounded.reliable;
+    fhp._rawReliable     = fhp.reliable;
+    elbow._rawReliable   = elbow.reliable;
+    monitor._rawReliable = monitor.reliable;
+
     analyzeMP._cachedRounded = rounded;
     analyzeMP._cachedFhp     = fhp;
     analyzeMP._cachedElbow   = elbow;
@@ -2122,10 +2347,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   shoulderElev.reliable  = debounceReliable("shoulderElev",  shoulderElev.reliable);
   torsoFlex.reliable     = debounceReliable("torsoFlex",     torsoFlex.reliable);
   trunkRot.reliable      = debounceReliable("trunkRot",      trunkRot.reliable);
-  rounded.reliable       = debounceReliable("rounded",       rounded.reliable);
-  fhp.reliable           = debounceReliable("fhp",           fhp.reliable);
-  elbow.reliable         = debounceReliable("elbow",         elbow.reliable);
-  monitor.reliable       = debounceReliable("monitor",       monitor.reliable);
+  rounded.reliable       = debounceReliable("rounded",       rounded._rawReliable ?? rounded.reliable);
+  fhp.reliable           = debounceReliable("fhp",           fhp._rawReliable ?? fhp.reliable);
+  elbow.reliable         = debounceReliable("elbow",         elbow._rawReliable ?? elbow.reliable);
+  monitor.reliable       = debounceReliable("monitor",       monitor._rawReliable ?? monitor.reliable);
 
   // Smooth the numeric confidence too — see smoothConfidence() for why the
   // boolean debounce above isn't the whole story.
