@@ -1,4 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
+
+// Kept in step with src/Billing.jsx and src/PricingPage.jsx. Online payment
+// shows as "coming soon" until a provider is explicitly switched on, and the
+// WhatsApp number comes from the same env var in all three places.
+const ONLINE_PAYMENT_LIVE = !!import.meta.env.VITE_STRIPE_PUBLIC_KEY
+  || import.meta.env.VITE_KASHIER_ENABLED === "true";
+const SALES_WHATSAPP = (import.meta.env.VITE_SALES_WHATSAPP || "201210271841").replace(/\D/g, "");
+const SALES_WHATSAPP_DISPLAY = import.meta.env.VITE_SALES_WHATSAPP_DISPLAY || "01210271841";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";
 
@@ -475,10 +483,38 @@ export default function PricingPageStandalone() {
           {/* BUG FIX: said 14 days here but "7-day trial" everywhere else
               on this same page (and across the rest of the app) — fixed to
               match the real trial length. */}
-          {["✓ 7-day free trial","✓ No credit card","✓ Cancel anytime","✓ Egyptian payment methods"].map(t=>(
+          {/* "Egyptian payment methods" was in this list. No payment provider
+              is configured, so it advertised something that does not work —
+              the same reassurance strip that is meant to remove doubt was
+              creating a promise the checkout could not keep. */}
+          {["✓ 7-day free trial","✓ No credit card","✓ Cancel anytime","✓ Free plan forever"].map(t=>(
             <span key={t} style={{ fontSize:13, color:T.muted }}>{t}</span>
           ))}
         </div>
+
+        {/* Online payment is not live yet. Better said here, next to the
+            prices, than discovered at the checkout. Same number and same
+            30-minute commitment as the in-app billing screen — both read
+            VITE_SALES_WHATSAPP so they cannot drift apart. */}
+        {!ONLINE_PAYMENT_LIVE && (
+          <div className="pr-wrap" style={{ marginTop:36 }}>
+            <div style={{ maxWidth:620, margin:"0 auto", padding:"16px 20px", borderRadius:14,
+              background:"rgba(37,211,102,.06)", border:"1px solid rgba(37,211,102,.22)",
+              textAlign:"center", lineHeight:1.8 }}>
+              <div style={{ fontSize:13.5, fontWeight:700, color:T.text }}>
+                Online payment is coming soon — to start a paid plan now, send us the plan you want on WhatsApp
+              </div>
+              <a href={`https://wa.me/${SALES_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
+                 style={{ color:"#25D366", fontWeight:800, fontSize:17, textDecoration:"none",
+                   direction:"ltr", display:"inline-block", marginTop:6 }}>
+                {SALES_WHATSAPP_DISPLAY}
+              </a>
+              <div style={{ fontSize:12, color:T.muted, marginTop:4 }}>
+                Activated within 30 minutes of your message.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Compare table (Individual only) ── */}

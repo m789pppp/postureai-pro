@@ -75,6 +75,13 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      # No install needed — the helper is extracted from Billing.jsx and
+      # evaluated without React. It guards the only payment route that works
+      # today, so a broken message means a sale arrives with no plan in it.
+      - name: WhatsApp activation link
+        working-directory: frontend
+        run: node src/features/billing/whatsappLink.test.mjs
+
       - name: Build
         working-directory: frontend
         run: npx vite build
