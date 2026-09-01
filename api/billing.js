@@ -3,6 +3,9 @@
 // These 6 landed as separate top-level files and pushed the function count
 // back over the Hobby-plan's 12-function limit (again) — same fix as
 // api/kashier.js, api/session.js, etc.: move to _handlers/, dispatch here.
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import billingAnalyticsHandler from "./_handlers/billing-analytics.js";
 import billingPaymentsHandler from "./_handlers/billing-payments.js";
 import billingProrateHandler from "./_handlers/billing-prorate.js";

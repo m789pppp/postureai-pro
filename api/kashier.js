@@ -1,4 +1,7 @@
 // Router: /api/kashier/* → 2 handlers
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import createOrder from "./_handlers/kashier/create-order.js";
 import webhook     from "./_handlers/kashier/webhook.js";
 import { withConfigGuard } from "./_lib/routerGuard.js";

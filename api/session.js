@@ -1,4 +1,7 @@
 // Router: /api/session/* → 3 handlers
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import start    from "./_handlers/session/start.js";
 import health   from "./_handlers/session/health.js";
 import snapshot from "./_handlers/session/snapshot.js";

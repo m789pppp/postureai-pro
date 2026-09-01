@@ -1,4 +1,7 @@
 // Router: /api/referral/* → 2 handlers
+// Must be the first import: fills the Firebase vars from the service-account
+// JSON before any handler module is evaluated. See api/_lib/env.js.
+import "./_lib/env.js";
 import stats from "./_handlers/referral/stats.js";
 import track from "./_handlers/referral/track.js";
 import { withConfigGuard } from "./_lib/routerGuard.js";
