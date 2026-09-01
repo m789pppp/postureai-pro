@@ -1714,7 +1714,15 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
       sessionStorage.setItem("kashier_pending_step","kashier");
       setKashierUrl(result.url);setStep("kashier");
     }else{
-      addToast(isAr?"تأكد من ضبط Kashier في Vercel":"Kashier not configured — check Vercel env vars","error");
+      // This is what a customer sees when the payment provider is not
+      // reachable, so it says something a customer can act on. The previous
+      // text — "Kashier not configured — check Vercel env vars" — was an
+      // instruction to the developer, shown to the person trying to pay.
+      // The diagnostic detail is still logged in initKashier above.
+      addToast(isAr
+        ? "تعذّر بدء عملية الدفع دلوقتي. لسه محدش اتخصم منه حاجة — جرّب تاني، ولو فضلت المشكلة كلّمنا."
+        : "We couldn't start the payment right now. Nothing has been charged — please try again, or contact us if it keeps happening.",
+        "error");
     }
     setProc(false);
   }
@@ -2213,9 +2221,13 @@ export default function App(){
   const[startupError,setStartupError]=useState(null);
 
   // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
+  // Calls goLandingUnlessDeepLinked, which is declared further down. That is
+  // fine and not a temporal-dead-zone hazard: the reference lives inside a
+  // setTimeout callback, which cannot run until the whole component body has
+  // finished evaluating.
   useEffect(()=>{
     const t = setTimeout(()=>{
-      setAuthChecked(c=>{ if(!c && !_oauthInProgress.current){ console.warn("[App] Auth never resolved — forcing landing"); setPageRaw("landing"); return true; } return c; });
+      setAuthChecked(c=>{ if(!c && !_oauthInProgress.current){ console.warn("[App] Auth never resolved — forcing landing"); goLandingUnlessDeepLinked(setPageRaw); return true; } return c; });
     }, 6000);
     return ()=>clearTimeout(t);
   },[]);
@@ -2247,6 +2259,32 @@ export default function App(){
     const LANDING_SECTIONS = new Set(["features","casestudies","how","faq"]);
     if (LANDING_SECTIONS.has(p)) return "landing";
     return ALIAS[p] || (VALID_PAGES.has(p) ? p : "home");
+  };
+  // Pages a signed-out visitor can legitimately be looking at, so that
+  // "auth resolved and there is no user" does not throw them off one.
+  //
+  // The useState initializer below already recognises /auth and normalises it
+  // to #auth. That fix worked — and was then undone a few hundred
+  // milliseconds later by onAuthStateChanged, which called setPage("landing")
+  // unconditionally for every signed-out visitor. Traced in a browser:
+  //
+  //   0. START pathname=/auth hash=
+  //   1. replaceState("#auth")     <- the initializer, correct
+  //   2. pushState("#landing")     <- the auth listener, overriding it
+  //
+  // So every conversion link on the marketing site — the pricing page's
+  // "Start 7-day trial" buttons are href="/auth?mode=signup&plan=..." —
+  // dropped the visitor back on the homepage with the chosen plan silently
+  // discarded, and invite links did the same. Signing out from a signed-in
+  // page still lands on the landing page, because those pages are not in
+  // this set.
+  const SIGNED_OUT_PAGES = new Set(["auth","landing","pricing","invite","demo","report","embed","leaderboard"]);
+  const goLandingUnlessDeepLinked = (set) => {
+    let current = "landing";
+    // Read the hash rather than the `page` state: this runs from inside
+    // long-lived callbacks whose closure over `page` is stale by then.
+    try { current = hashToPage(window.location.hash); } catch {}
+    if (!SIGNED_OUT_PAGES.has(current)) set("landing");
   };
   const [page, setPageRaw] = useState(() => {
     const h = window.location.hash;
@@ -3183,7 +3221,7 @@ export default function App(){
     const authTimeout=setTimeout(()=>{
       // Don't redirect to landing if we know we're processing an OAuth redirect
       if (_oauthRedirect.current || _oauthInProgress.current) return;
-      setAuthChecked(c=>{ if(!c){ setPage("landing"); return true; } return c; });
+      setAuthChecked(c=>{ if(!c){ goLandingUnlessDeepLinked(setPage); return true; } return c; });
     }, 8000);
 
     const unsub=onAuthStateChanged(async u=>{
@@ -3409,7 +3447,7 @@ export default function App(){
           setProfile(null);
           setUserSessions([]);
           setMfaChallengePending(false);
-          setPage("landing");
+          goLandingUnlessDeepLinked(setPage);
         }
       } catch(e) {
         console.error("[Auth] fatal:", e);
