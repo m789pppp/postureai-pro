@@ -52,7 +52,11 @@ const INDUSTRIES = [
     problem:"Clinicians and admin staff experience some of the highest rates of work-related musculoskeletal disorders globally.",
     solution:"Corvus tracks posture during documentation sessions and flags dangerous patterns. Integrates with occupational health protocols.",
     results:[["On-device","AI — no video upload"],["90-day","Activity and trend history"],["Audit","Full activity log per user"]],
-    clients:"Currently running a pilot with Coventry University Egypt",
+    // Was "Currently running a pilot with Coventry University Egypt". The
+    // pilot has not started and has not been approved by an ethics
+    // committee, so this asserted an active study at a named institution
+    // that does not exist yet. Same correction as the landing page.
+    clients:"Preparing a pilot with a university team in Egypt",
   },
 ];
 

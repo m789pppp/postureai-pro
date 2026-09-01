@@ -2607,6 +2607,25 @@ export default function App(){
   });
   const[authMode,setAuthMode]=useState(()=>new URLSearchParams(window.location.search).get("mode")==="signup"?"signup":"login");
   const[deepBilling,setDeepBilling]=useState("monthly");
+  // Human-readable name for a plan deep-linked from the marketing site, so
+  // the signup form can show the visitor that their choice came with them.
+  // Built here rather than in AuthPage because the tier maps live in this
+  // module and cover both the B2C and B2B id spaces.
+  const deepPlanLabel = (()=>{
+    const tier = deepPlan && (TIERS[deepPlan] || B2B_TIERS[deepPlan]);
+    if(!tier) return null;
+    // lang, not isAr: `const isAr` is declared ~170 lines below this point
+    // inside the same component body, and this runs during render, so
+    // referencing it here throws "Cannot access 'isAr' before
+    // initialization" — a white screen on every page load. eslint does not
+    // flag it (the name IS in scope, just later; that is no-use-before-define,
+    // which is off in this config), and the build succeeds. Only loading the
+    // page catches it.
+    const billLabel = deepBilling==="yearly"
+      ? (lang==="ar"?"سنوي":"yearly")
+      : (lang==="ar"?"شهري":"monthly");
+    return tier.price_egp_monthly===0 ? tier.name : `${tier.name} · ${billLabel}`;
+  })();
   const[companyId,setCompanyId]=useState(null);
   const[showUpgrade,setShowUpgrade]=useState(false);
   const[upgradeReason,setUpgradeReason]=useState("");
@@ -5306,6 +5325,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
         initialView={authMode}
+        planLabel={deepPlanLabel}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew) {
@@ -5408,6 +5428,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         darkMode={darkMode} setDarkMode={setDarkMode}
         lang={lang} setLang={setLang}
         initialView={authMode}
+        planLabel={deepPlanLabel}
         onAuth={(u,isNew)=>{
           setUser(u);
           if(isNew){ /* onAuthStateChanged will route to setup */ return;}

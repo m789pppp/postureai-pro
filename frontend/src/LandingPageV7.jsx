@@ -847,11 +847,18 @@ function Hero({ lang, onCTA, mode, setMode }) {
               borderRadius:16, overflow:"hidden", marginTop:20,
             }}>
               {(ar
-                // "4.9 stars" and "2 wks to improve" were removed: there is no
-                // review platform behind the rating and no measured cohort
-                // behind the improvement time. The remaining three are true.
-                ? [["50+","مستخدم بيتا","👥"],["عربي/EN","ثنائي اللغة","🌐"],["0","فيديو محفوظ","🛡"]]
-                : [["50+","beta users","👥"],["AR/EN","fully bilingual","🌐"],["0","video stored","🛡"]]
+                // "4.9 stars" and "2 wks to improve" were removed earlier:
+                // there is no review platform behind the rating and no
+                // measured cohort behind the improvement time.
+                //
+                // "50+ beta users" has now gone the same way. Nothing
+                // supports it — the software has not yet been run by a
+                // measured group of users — and an invented user count on
+                // the page a university pilot is about to be judged on is
+                // the worst possible place for one. Replaced with a fact
+                // about the engine that is true and checkable in the code.
+                ? [["478","نقطة تتبّع","🎯"],["عربي/EN","ثنائي اللغة","🌐"],["0","فيديو محفوظ","🛡"]]
+                : [["478","tracked landmarks","🎯"],["AR/EN","fully bilingual","🌐"],["0","video stored","🛡"]]
               ).map(([val,label,icon],i)=>(
                 <div key={label} style={{
                   flex:1, textAlign:"center", padding:"14px 8px",
@@ -1092,11 +1099,13 @@ function SocialProof({ lang }) {
         <div className="lp-wrap">
           {/* 4 stat cards */}
           <div className="lp-sp-stats" style={{ marginBottom:20 }}>
+            {/* Same removal as the stat strip above: "50+ active beta users"
+                was not measured and is not true. */}
             {(ar ? [
-              ["50+","مستخدم بيتا نشط","👥"],["عربي/EN","واجهة ثنائية اللغة","🌐"],
+              ["478","نقطة تتبّع للوضعية","🎯"],["عربي/EN","واجهة ثنائية اللغة","🌐"],
               ["على جهازك","تتم المعالجة","⚙"],["0","لا نحفظ فيديو","🛡"],
             ] : [
-              ["50+","active beta users","👥"],["AR/EN","fully bilingual","🌐"],
+              ["478","posture landmarks","🎯"],["AR/EN","fully bilingual","🌐"],
               ["On-device","processing","⚙"],["0","video data stored","🛡"],
             ]).map(([num, label, icon]) => (
               <div key={label} style={{
@@ -1115,7 +1124,7 @@ function SocialProof({ lang }) {
               {/* "Currently used at" overstated it — this is a pilot, not a
                   deployment, so the label now says what it actually is. */}
               <span style={{ fontSize:11, color:LPV7_TOKENS.muted, fontWeight:600, letterSpacing:".06em", textTransform:"uppercase" }}>
-                {ar ? "تجربة ميدانية مع" : "Pilot with"}
+                {ar ? "تجربة ميدانية مخطط لها مع" : "Pilot planned with"}
               </span>
               {/* Reverted to Coventry. An earlier edit replaced the real
                   institution with "Cairo University" to resolve a naming
@@ -1128,7 +1137,7 @@ function SocialProof({ lang }) {
                 {ar ? "جامعة كوفنتري" : "Coventry University"}
               </div>
               <span style={{ fontSize:12, color:LPV7_TOKENS.muted }}>
-                {ar ? "مرحلة مبكرة · 50+ مستخدم بيتا" : "Early stage · 50+ beta users"}
+                {ar ? "مرحلة مبكرة · قبل الإطلاق" : "Early stage · pre-launch"}
               </span>
             </div>
             <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
@@ -1700,12 +1709,20 @@ function CaseStudies({ lang }) {
   return (
     <section id="casestudies" className="lp-section">
       <div className="lp-wrap">
+        {/* This said "Our first field pilot is running now" and "Corvus is
+            currently in a field pilot with Coventry University". Neither is
+            true yet: the pilot has not started, ethics approval has not been
+            granted, and the software has not been run by a participant. A
+            public claim of an active study at a named university, made before
+            that university has approved it, is the kind of thing an ethics
+            committee is entitled to be unhappy about — and it is also simply
+            false. Rewritten to describe the actual state. */}
         <SectionHead eyebrow={ar ? "أين نحن الآن" : "Where we are"}
           eyebrowColor={LPV7_TOKENS.green} eyebrowBg="rgba(16,217,160,.08)" eyebrowBorder="rgba(16,217,160,.2)"
-          title={ar ? "أول تجربة ميدانية جارية الآن" : "Our first field pilot is running now"}
+          title={ar ? "بنجهّز أول تجربة ميدانية" : "We're preparing our first field pilot"}
           sub={ar
-            ? "إحنا في مرحلة مبكرة وبنقولها بصراحة: Corvus حالياً في تجربة ميدانية مع جامعة كوفنتري. لسه منشرناش أرقام نتائج لأن التجربة لسه شغالة — وأول ما تخلص هننشر الأرقام الحقيقية هنا، مش تقديرات."
-            : "We're early, and we'd rather say so. Corvus is currently in a field pilot with Coventry University. We haven't published outcome numbers because the pilot is still running — when it concludes, the measured results will appear here, not estimates."}/>
+            ? "إحنا في مرحلة مبكرة وبنقولها بصراحة: Corvus لسه ما بدأش تجربة ميدانية. بنجهّز حالياً لتجربة مع فريق في جامعة كوفنتري، وهتبدأ بعد موافقة لجنة أخلاقيات البحث. مفيش أرقام نتائج هنا لأننا لسه ما قِسناش حاجة — وأول ما نقيس، الأرقام الحقيقية هي اللي هتتنشر، مش تقديرات."
+            : "We're early, and we'd rather say so. Corvus has not run a field pilot yet. We're preparing one with a team at Coventry University, to begin once research-ethics approval is in place. There are no outcome numbers here because we haven't measured anything yet — when we do, the measured results will appear here, not estimates."}/>
 
         <div style={{ maxWidth:720, margin:"0 auto" }}>
           <div className="lp-lift" style={{ ...card(), padding:"28px 30px" }}>
@@ -1713,7 +1730,7 @@ function CaseStudies({ lang }) {
               <span style={{ width:8, height:8, borderRadius:"50%", background:LPV7_TOKENS.green, flexShrink:0,
                 boxShadow:`0 0 0 4px ${LPV7_TOKENS.green}22` }}/>
               <span style={{ fontSize:13, fontWeight:700, color:LPV7_TOKENS.green, letterSpacing:".03em" }}>
-                {ar ? "تجربة جارية" : "Pilot in progress"}
+                {ar ? "قيد التجهيز" : "In preparation"}
               </span>
             </div>
             <h3 style={{ fontSize:20, fontWeight:700, color:LPV7_TOKENS.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
@@ -1721,8 +1738,8 @@ function CaseStudies({ lang }) {
             </h3>
             <p style={{ ...TYPE.bodySm, color:LPV7_TOKENS.sub, margin:"0 0 20px", lineHeight:1.7 }}>
               {ar
-                ? "بنشتغل مع فريق هناك على تجربة ميدانية لتحليل الوضعية أثناء العمل المكتبي. الهدف إننا نقيس فرق حقيقي قبل وبعد — مش نطلع برقم من أبحاث غيرنا."
-                : "We're working with a team there on a field pilot of workplace posture analysis. The goal is a measured before/after from our own deployment — not a figure borrowed from someone else's research."}
+                ? "بنجهّز مع فريق هناك لتجربة ميدانية لتحليل الوضعية أثناء العمل المكتبي. لسه ما بدأتش — هتبدأ بعد موافقة لجنة الأخلاقيات. الهدف إننا نقيس فرق حقيقي قبل وبعد، مش نطلع برقم من أبحاث غيرنا."
+                : "We're preparing a field pilot of workplace posture analysis with a team there. It hasn't started — it begins once the ethics committee approves it. The goal is a measured before/after of our own, not a figure borrowed from someone else's research."}
             </p>
             <div style={{ borderTop:`1px solid ${LPV7_TOKENS.border}`, paddingTop:18,
               display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
@@ -2463,8 +2480,8 @@ function MidCTA({ lang, onCTA, variant="features" }) {
       // "50+ teams" contradicted the same 50+ figure used everywhere else on
       // this page, where it means 50+ beta *users* (see SocialProof and Stats).
       // One page cannot claim both; users is what the rest of the copy supports.
-      en: { h:"Join 50+ people improving their posture with AI.", sub:"7-day free trial, full access, no commitment.", cta:"Try Corvus Free →" },
-      ar: { h:"انضم لـ 50+ شخص بيحسّنوا وضعيتهم بالـ AI.", sub:"تجربة مجانية 7 أيام، وصول كامل، بدون التزام.", cta:"جرّب Corvus مجاناً ←" },
+      en: { h:"Be one of the first to try it.", sub:"7-day free trial, full access, no commitment.", cta:"Try Corvus Free →" },
+      ar: { h:"كن من أوائل اللي يجرّبوه.", sub:"تجربة مجانية 7 أيام، وصول كامل، بدون التزام.", cta:"جرّب Corvus مجاناً ←" },
     },
   };
   const m = (msgs[variant]||msgs.features)[ar?"ar":"en"];
@@ -2838,7 +2855,13 @@ export default function LandingPage({ onNavigate, lang: langProp, setLang: setLa
   // Individual vs Company — drives Hero copy + Pricing plan set across the whole page.
   // Defaults to "company" since this is primarily a B2B workforce intelligence product,
   // but individuals get an equally first-class path via the toggle.
-  const [mode, setMode] = useState("company"); // "individual" | "company"
+  // Opens on the individual pitch, not the company one. The page used to
+  // default to "company", so the first thing a visitor saw was a B2B offer
+  // and a primary CTA reading "Free 7-Day Trial — For My Team", while the
+  // organisation signup flow is deliberately disabled and the pilot is
+  // individual accounts. The toggle is still there for anyone who wants the
+  // team pitch.
+  const [mode, setMode] = useState("individual"); // "individual" | "company"
 
   // Real country detection (IP-based) decides which currency is primary
   // in Pricing — independent of UI language. Falls back to the language
