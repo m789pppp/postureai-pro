@@ -1,4 +1,6 @@
 import { API_BASE_URL } from "./config/api.js";
+import { SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY, whatsappActivationLink,
+         activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch, getAuthToken } from "./services/api.js";
@@ -16,34 +18,6 @@ const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 // same, and both are opt-in rather than opt-out.
 const KASHIER_LIVE = import.meta.env.VITE_KASHIER_ENABLED === "true";
 const ANY_ONLINE_PAYMENT = !!STRIPE_KEY || KASHIER_LIVE;
-
-// Manual activation while online payment is being set up. Digits only —
-// wa.me rejects "+" and spaces.
-const SALES_WHATSAPP = (import.meta.env.VITE_SALES_WHATSAPP || "201210271841").replace(/\D/g, "");
-const SALES_WHATSAPP_DISPLAY = import.meta.env.VITE_SALES_WHATSAPP_DISPLAY || "01210271841";
-
-/**
- * A wa.me link carrying which plan the person wants, so the conversation
- * starts with the answer rather than a round trip asking for it.
- */
-export function whatsappActivationLink({ planName, billing, price, currency, email, isAr }) {
-  const period = billing === "yearly" ? (isAr ? "سنوي" : "yearly") : (isAr ? "شهري" : "monthly");
-  const amount = price != null ? `${price.toLocaleString()} ${currency}` : "";
-  const msg = isAr
-    ? [
-        "السلام عليكم، عايز أفعّل اشتراك Corvus.",
-        `الباقة: ${planName}`,
-        `الاشتراك: ${period}${amount ? ` — ${amount}` : ""}`,
-        email ? `بريد الحساب: ${email}` : "",
-      ].filter(Boolean).join("\n")
-    : [
-        "Hi, I'd like to activate a Corvus subscription.",
-        `Plan: ${planName}`,
-        `Billing: ${period}${amount ? ` — ${amount}` : ""}`,
-        email ? `Account email: ${email}` : "",
-      ].filter(Boolean).join("\n");
-  return `https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(msg)}`;
-}
 
 // ── Stripe loader ─────────────────────────────────────────────────
 let stripeInstance = null;
@@ -559,12 +533,20 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
             background: "rgba(37,211,102,.06)", border: "1px solid rgba(37,211,102,.22)",
             fontSize: 12, color: DARK.text, lineHeight: 1.75 }}>
             <div style={{ fontWeight: 700, marginBottom: 4 }}>{t.waNote}</div>
-            <a href={`https://wa.me/${SALES_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
-               style={{ color: "#25D366", fontWeight: 700, textDecoration: "none",
-                 fontSize: 15, letterSpacing: ".02em", direction: "ltr", display: "inline-block" }}>
-              {SALES_WHATSAPP_DISPLAY}
-            </a>
-            <div style={{ color: DARK.muted, marginTop: 4 }}>{t.waPromise}</div>
+            <a href={whatsappActivationLink({ isAr })} target="_blank" rel="noopener noreferrer"
+                 style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:9,
+                   width:"100%", maxWidth:340, margin:"10px auto 0", boxSizing:"border-box",
+                   background:"#25D366", border:"none", borderRadius:12,
+                   padding:"13px 18px", fontSize:14.5, fontWeight:800, color:"#06281a",
+                   textDecoration:"none", direction:"ltr", cursor:"pointer",
+                   boxShadow:"0 4px 16px rgba(37,211,102,.28)", transition:"transform .18s, box-shadow .18s" }}
+                 onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 22px rgba(37,211,102,.36)"; }}
+                 onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="0 4px 16px rgba(37,211,102,.28)"; }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.470 0 1.46 1.06 2.87 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.28.17-1.41-.07-.13-.27-.2-.57-.35z"/><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.02h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.22-8.24 8.22z"/></svg>
+                <span>{activateLabel(isAr)}</span>
+                <span style={{ opacity:.72, fontWeight:700 }}>· {SALES_WHATSAPP_DISPLAY}</span>
+              </a>
+            <div style={{ color: DARK.muted, marginTop: 8, textAlign: "center" }}>{t.waPromise}</div>
           </div>
         )}
 

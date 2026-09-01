@@ -1,12 +1,7 @@
 import React, { useState } from "react";
+import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY,
+         whatsappActivationLink, activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
 
-// Kept in step with src/Billing.jsx: online payment shows as "coming soon"
-// until a provider is explicitly switched on, and the WhatsApp number is
-// read from the same env var so it cannot drift between the two screens.
-const ONLINE_PAYMENT_LIVE = !!import.meta.env.VITE_STRIPE_PUBLIC_KEY
-  || import.meta.env.VITE_KASHIER_ENABLED === "true";
-const SALES_WHATSAPP = (import.meta.env.VITE_SALES_WHATSAPP || "201210271841").replace(/\D/g, "");
-const SALES_WHATSAPP_DISPLAY = import.meta.env.VITE_SALES_WHATSAPP_DISPLAY || "01210271841";
 
 // ═══════════════════════════════════════════════════════════════════
 // PricingPage.jsx — SINGLE SOURCE OF TRUTH for B2C + B2B pricing
@@ -225,6 +220,37 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, l
           ? (isAr ? "تواصل مع المبيعات" : "Contact Sales")
           : (isAr ? "اشترك الآن" : "Get Started")}
       </button>
+
+      {/* Opens WhatsApp with THIS plan already in the message. The button
+          above opens the billing modal, which offers the same thing — but
+          while online checkout is off, making someone go through a checkout
+          screen to reach a WhatsApp link is a step that buys them nothing. */}
+      {!ONLINE_PAYMENT_LIVE && !isCurr && price != null && price > 0 && (
+        <a href={whatsappActivationLink({
+             // plan.name here is { en, ar } — this file's shape, unlike
+             // Billing.jsx's flat name/nameAr. Reading it as a string
+             // rendered "[object Object]" into the WhatsApp message and the
+             // button label; caught by loading the page, not by lint or the
+             // build, both of which were perfectly happy.
+             planName: isAr ? plan.name.ar : plan.name.en,
+             billing, price, currency: isEGP ? "EGP" : "USD", isAr,
+           })}
+           target="_blank" rel="noopener noreferrer"
+           style={{
+             display:"flex", alignItems:"center", justifyContent:"center", gap:7,
+             marginTop:9, padding:"10px 14px", borderRadius:10,
+             fontSize:12.5, fontWeight:700, color:"#25D366",
+             background:"rgba(37,211,102,.07)", border:"1px solid rgba(37,211,102,.28)",
+             textDecoration:"none", transition:"background .18s",
+           }}
+           onMouseEnter={e=>{ e.currentTarget.style.background="rgba(37,211,102,.14)"; }}
+           onMouseLeave={e=>{ e.currentTarget.style.background="rgba(37,211,102,.07)"; }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}>
+            <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.02h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.22-8.24 8.22z"/>
+          </svg>
+          {isAr ? `فعّل ${plan.name.ar} على واتساب` : `Pay for ${plan.name.en} on WhatsApp`}
+        </a>
+      )}
     </div>
   );
 }
@@ -354,13 +380,21 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
               ? "الدفع الإلكتروني قريباً — للتفعيل دلوقتي ابعتلنا الباقة اللي عايزها على واتساب"
               : "Online payment is coming soon — to start now, send us the plan you want on WhatsApp"}
           </div>
-          <a href={`https://wa.me/${SALES_WHATSAPP}`} target="_blank" rel="noopener noreferrer"
-             style={{ color: "#25D366", fontWeight: 800, fontSize: 16, textDecoration: "none",
-               direction: "ltr", display: "inline-block", marginTop: 4 }}>
-            {SALES_WHATSAPP_DISPLAY}
-          </a>
-          <div style={{ color: cs.muted, marginTop: 3, fontSize: 11.5 }}>
-            {isAr ? "التفعيل خلال 30 دقيقة من إرسال الرسالة." : "Activated within 30 minutes of your message."}
+          <a href={whatsappActivationLink({ isAr })} target="_blank" rel="noopener noreferrer"
+                 style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:9,
+                   width:"100%", maxWidth:340, margin:"10px auto 0", boxSizing:"border-box",
+                   background:"#25D366", border:"none", borderRadius:12,
+                   padding:"13px 18px", fontSize:14.5, fontWeight:800, color:"#06281a",
+                   textDecoration:"none", direction:"ltr", cursor:"pointer",
+                   boxShadow:"0 4px 16px rgba(37,211,102,.28)", transition:"transform .18s, box-shadow .18s" }}
+                 onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 8px 22px rgba(37,211,102,.36)"; }}
+                 onMouseLeave={e=>{ e.currentTarget.style.transform="none"; e.currentTarget.style.boxShadow="0 4px 16px rgba(37,211,102,.28)"; }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ flexShrink:0 }}><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.67.15-.2.3-.77.96-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.92-2.2-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.470 0 1.46 1.06 2.87 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.75-.72 2-1.41.25-.69.25-1.28.17-1.41-.07-.13-.27-.2-.57-.35z"/><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.87 9.87 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 18.02h-.01a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.19 8.19 0 0 1-1.26-4.37c0-4.54 3.7-8.23 8.25-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.7 8.22-8.24 8.22z"/></svg>
+                <span>{activateLabel(isAr)}</span>
+                <span style={{ opacity:.72, fontWeight:700 }}>· {SALES_WHATSAPP_DISPLAY}</span>
+              </a>
+          <div style={{ color: cs.muted, marginTop: 8, fontSize: 11.5 }}>
+            {activationPromise(isAr)}
           </div>
         </div>
       )}
