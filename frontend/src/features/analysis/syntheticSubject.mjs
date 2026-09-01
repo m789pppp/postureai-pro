@@ -324,8 +324,26 @@ export function renderSubject(pose = {}, body = {}, camera = {}) {
  * measurements — accuracy and precision are different properties and a system
  * can be excellent at one and useless at the other.
  */
-export function jitter(lms, pxSigma = 1.5, camera = {}, rng = Math.random) {
+export function jitter(lms, pxSigma = 1.5, camera = {}, rng = Math.random, opts = {}) {
   const C = { ...DEFAULT_CAMERA, ...camera };
+
+  // z gets its own, larger sigma. This function used to perturb x and y and
+  // leave z EXACTLY as the projection produced it — so every precision result
+  // measured against a depth channel that was noise-free, which no real
+  // MediaPipe output ever is. Any analyzer reading z would have looked
+  // flawlessly stable here and shaky in front of a camera.
+  //
+  // MediaPipe's pose z is not observed, it is regressed: the model infers
+  // depth from a single view rather than measuring it, and its documentation
+  // notes the z magnitude is "roughly the same scale as x" without claiming
+  // comparable accuracy. Face landmarks in the POSE graph (not Face Mesh) are
+  // the weakest case — a small cluster of points spanning a few centimetres
+  // in depth. A 3x multiplier is a deliberately pessimistic default: the point
+  // is that a method leaning on z must survive noise, not that 3x is the
+  // measured truth. Sweep it with zSigmaMult before trusting any z-based
+  // metric, and treat the honest answer as "unknown until real users".
+  const zSigmaMult = opts.zSigmaMult ?? 3;
+
   const gauss = () => {
     // Box-Muller, so the noise is actually Gaussian rather than uniform.
     let u = 0, w = 0;
@@ -337,6 +355,9 @@ export function jitter(lms, pxSigma = 1.5, camera = {}, rng = Math.random) {
     ...p,
     x: p.x + (gauss() * pxSigma) / C.W,
     y: p.y + (gauss() * pxSigma) / C.H,
+    // z shares x's normalisation (fraction of frame width at that depth), so
+    // the same pxSigma/W scale applies before the multiplier.
+    z: p.z + (gauss() * pxSigma * zSigmaMult) / C.W,
   }));
 }
 
