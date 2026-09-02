@@ -2524,9 +2524,38 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Both argue for a visible, explainable deduction rather than a silent one.
   // Scaled by the same geometric severity, capped at 18 points so a marginal
   // over-step is a nudge, not a cliff.
-  const positionPenalty = (!quality.ok && (quality.reason === "too_close" || quality.reason === "too_far"))
-    ? Math.round(6 + 12 * (typeof quality.severity === "number" ? quality.severity : 1))
+  //
+  // It fired off the QUALITY GATE only — a geometric crop check — and not off
+  // the distance the app measures, displays and colours. Those are different
+  // criteria and they disagree over most of the range. Measured on the rig: a
+  // subject at 45cm from the lens reads 39cm, which is 11cm inside the "too
+  // close" line the chip paints red, while checkFrameQuality() still returns
+  // ok because the shoulders are all in frame — so positionPenalty is 0 and
+  // the composite comes out 93. On camera that produced "32cm" in red beside
+  // "76 · Excellent" in the same frame, and both numbers were following their
+  // own rule correctly.
+  //
+  // The distance channel alone cannot carry this: distanceScore() floors at 30
+  // and the weight is 0.079, so the entire range from ideal to sitting on the
+  // lens is worth about 5.5 points of the weighted mean. Sitting a foot from a
+  // screen is not a 5-point ergonomic detail.
+  //
+  // So the penalty now also follows how far outside [lo, hi] the reading is,
+  // using the same numbers the chip uses. Same 18-point cap, and the two
+  // sources are maxed rather than summed so a frame that trips both is charged
+  // once.
+  const _distOver = distCm > 0 ? Math.max(0, distCm < lo ? lo - distCm : distCm - hi) : 0;
+  // Ramps to the cap over 25cm of overshoot. A 3cm overstep is a nudge (about
+  // 2 points), 10cm costs 7, 25cm or more costs the full 18.
+  const _distPenalty = _distOver <= 2 ? 0
+    : Math.round(Math.min(18, 18 * ((_distOver - 2) / 25)));
+  // The 18-point cap this branch's comment has always claimed was never
+  // actually applied: quality.severity is not bounded at 1, so 6 + 12·severity
+  // ran past 18 at the extreme (measured: 19). Clamped where it is described.
+  const _cropPenalty = (!quality.ok && (quality.reason === "too_close" || quality.reason === "too_far"))
+    ? Math.min(18, Math.round(6 + 12 * (typeof quality.severity === "number" ? quality.severity : 1)))
     : 0;
+  const positionPenalty = Math.min(18, Math.max(_cropPenalty, _distPenalty));
 
   // ── Occlusion penalty ──────────────────────────────────────────────
   // Resting your chin on your hand hides one ear, which makes neck lean,

@@ -3228,6 +3228,50 @@ export default function App(){
   // Cleared only after the posture has been good for a sustained stretch, so
   // a single lucky frame in the middle of a genuine slump does not blink the
   // warning away and back.
+  // The correction cue had no persistence requirement at all.
+  //
+  // postureCue() re-derives from `analysis` on every render and surfaces
+  // whichever metric is worst AT THAT INSTANT, with no minimum duration and no
+  // clearing delay — while the alert box beside it demands 15 seconds of
+  // sustained bad posture plus a per-cause cooldown before it says anything.
+  // Two systems, opposite standards, and the cue is the one that owns the
+  // biggest red element on the screen.
+  //
+  // That is how a single noisy frame put "Drop your shoulders" over a user who
+  // was sitting straight. The metric itself is not the problem: on the rig,
+  // shoulder elevation on a subject who never shrugs stays under 2.4% even at
+  // 6px of landmark noise, against the 6.1% that fires the red cue. But real
+  // ear landmarks on a real head — hair over the ears, a hand near the face,
+  // the head tilted — jump in a way no synthetic subject reproduces, and one
+  // such frame was enough. Raising the threshold would blind the metric to
+  // genuine shrugging; requiring the fault to persist does not.
+  //
+  // ~2s to appear and ~2s to clear, counted in UI pushes (4Hz, see
+  // lastUiPushRef). Asymmetric on purpose: a cue that flickers off while you
+  // are still doing the thing is as useless as one that flickers on.
+  const cueStateRef = useRef({ key:null, on:0, off:0, shown:null, seen:null });
+  const CUE_ON_PUSHES = 8, CUE_OFF_PUSHES = 8;
+  // Counts ANALYSIS pushes, not renders. This runs during render, and the live
+  // page re-renders for reasons that have nothing to do with the camera — the
+  // one-second session clock, a hover, a settings toggle — so counting renders
+  // would let a cue age without a single new measurement behind it. Keyed on
+  // the analysis object's identity, which changes only when the loop pushes a
+  // new reading (and which makes a StrictMode double-render a no-op).
+  const stabilizeCue = useCallback((cue, analysisObj)=>{
+    const st = cueStateRef.current;
+    if (st.seen === analysisObj) return st.shown;
+    st.seen = analysisObj;
+    const key = cue?.text ?? null;
+    if (key && key === st.key) { st.on++; st.off = 0; }
+    else if (key)              { st.key = key; st.on = 1; st.off = 0; }
+    else                       { st.off++; }
+    if (key && st.on >= CUE_ON_PUSHES) st.shown = cue;
+    if (!key && st.off >= CUE_OFF_PUSHES) { st.shown = null; st.key = null; }
+    // A different fault taking over replaces the old one only once it has
+    // earned its own hold, so the two cannot alternate frame to frame.
+    if (key && st.shown && st.shown.text !== key && st.on < CUE_ON_PUSHES) return st.shown;
+    return st.shown;
+  },[]);
   const goodSinceRef = useRef(0);
   const ALERT_CLEAR_MS = 4000;
   const clearStaleAlert = useCallback((now)=>{
@@ -4636,6 +4680,7 @@ export default function App(){
     // the "another person detected" banner doesn't linger on the idle
     // "Start Analysis" screen with the camera off — see the matching reset
     // in beginScoring() for the full bug explanation.
+    cueStateRef.current={ key:null, on:0, off:0, shown:null };
     subjectRejectStreakRef.current=0;
     multiPersonShownRef.current=false;
     setMultiPersonWarning(false);
@@ -7547,7 +7592,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               without this the last cue stayed rendered — a second, stale
               message layered right alongside the "Session paused" overlay. */}
           {camActive && !previewPhase && !isPaused && (()=>{
-            const cue=postureCue(analysis,isAr);
+            const cue=stabilizeCue(postureCue(analysis,isAr), analysis);
             if(!cue) return null;
             return (
               // bottom:8 put this right underneath the fullscreen Pause/Stop

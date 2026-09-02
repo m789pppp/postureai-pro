@@ -596,6 +596,46 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
         `${cov?.weightPct}% at 60cm → ${wcov?.weightPct}% at 140cm`);
 }
 
+{
+  // POSITIONING. Sitting a foot from the screen used to cost about five points
+  // and was reported as "Excellent" while the distance chip beside it was red,
+  // because the chip follows the measured distance and the penalty followed a
+  // separate frame-crop check. These assert that one instruction and one
+  // number now move together.
+  const at = (d) => {
+    resetProportions();
+    let r = null;
+    for (let i = 0; i < 170; i++) r = analyzeMP(renderSubject({}, {}, { distCm: d }), W, H, "front");
+    return r;
+  };
+  const ideal = at(65), close = at(40), veryClose = at(33), far = at(105);
+  if (VERBOSE) {
+    console.log("\n  Seating distance (rig cm = lens to mid-shoulder; the engine reads the EYE plane, ~6cm nearer)");
+    for (const [n, r] of [["65", ideal], ["40", close], ["33", veryClose], ["105", far]])
+      console.log(`    ${n.padStart(3)}cm rig → reads ${r.distCm}cm  score ${r.score}  penalty ${r.positionPenalty}`);
+  }
+  check("Sitting at the recommended distance costs nothing",
+        ideal.positionPenalty === 0 && ideal.score >= 95,
+        `reads ${ideal.distCm}cm · score ${ideal.score}`);
+  check("Sitting too close is charged, not just coloured",
+        close.positionPenalty >= 6, `penalty ${close.positionPenalty} at a reading of ${close.distCm}cm`);
+  check("Closer costs more than close",
+        veryClose.positionPenalty > close.positionPenalty,
+        `${close.positionPenalty} at ${close.distCm}cm → ${veryClose.positionPenalty} at ${veryClose.distCm}cm`);
+  check("A foot from the screen can no longer read as excellent",
+        veryClose.score < 85, `score ${veryClose.score}`);
+  check("Too far is charged the same way",
+        far.positionPenalty >= 6, `penalty ${far.positionPenalty} at a reading of ${far.distCm}cm`);
+  // The reported figure is positionPenaltyTotal — the ergonomic charge (capped
+  // at 18) PLUS what capping the distance metric itself cost the weighted mean,
+  // because the UI labels the score drop with this number and it has to be the
+  // whole drop. So the bound here is on the total, not on the 18.
+  const extreme = at(25);
+  check("Even sitting on the lens is a slope, not a cliff",
+        extreme.positionPenalty <= 26 && extreme.score > 40,
+        `total ${extreme.positionPenalty}, score ${extreme.score} at a reading of ${extreme.distCm}cm`);
+}
+
 console.log("\nINVARIANCE — same posture, irrelevant variable changed");
 
 {
