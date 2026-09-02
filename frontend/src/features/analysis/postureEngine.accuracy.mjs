@@ -114,6 +114,7 @@ function readNoisy(pose = {}, zSigmaMult = 3, { settle = 130, hold = 50, seed = 
 const HIPS_IN_SHOT = { camera: { distCm: 140 } };
 
 const val = (r, k) => r?.metrics?.[k]?.value;
+const THR_SHRUG_OK = 3;   // THR.SHOULDER_ELEV.ok in postureEngine.js
 const stats = (xs) => {
   const c = xs.filter(Number.isFinite);
   if (!c.length) return { n: 0, mean: NaN, sd: NaN, min: NaN, max: NaN };
@@ -433,6 +434,26 @@ console.log("\nALERTS — the right instruction, and only the right one");
     if (VERBOSE) console.log(`    live headline, ${label}: ${got ?? "(none)"}`);
     check(`Live headline for ${label} is ${want ?? "nothing"}`, got === want, `got ${got ?? "(none)"}`);
   }
+
+  // Per-side shoulder elevation must not read a rigid lean as a shrug.
+  // Scoring each side against its own baseline made this possible for the
+  // first time: a lateral lean rotates the shoulder-ear frame, so measured
+  // along the image vertical one side's gap closes and the other opens, and
+  // the larger of the two wins. These pin down that a lean is a lean, a shrug
+  // is a shrug, and a one-sided shrug is still caught at full severity.
+  const shrugOf = (pose) => {
+    const m = read(pose)?.metrics?.shoulder_elevation;
+    return { pct: m?.value ?? 0, side: read(pose)?.bodyModules?.shoulderElev?.asymmetric ?? null };
+  };
+  const leanShrug  = shrugOf({ lateralLeanDeg: 18 });
+  const bothShrug  = shrugOf({ shoulderElevCm: 4 });
+  if (VERBOSE) console.log(`\n  shrug reading: 18° lean → ${fmt(leanShrug.pct)}%, real 4cm shrug → ${fmt(bothShrug.pct)}%`);
+  check("An 18° lateral lean is not read as a shrug",
+        leanShrug.pct < THR_SHRUG_OK, `${fmt(leanShrug.pct)}% (ok threshold ${THR_SHRUG_OK}%)`);
+  check("A lateral lean is not blamed on one shoulder",
+        leanShrug.side === null, `side: ${leanShrug.side}`);
+  check("A real shrug still registers",
+        bothShrug.pct > THR_SHRUG_OK, `${fmt(bothShrug.pct)}%`);
 
   // Severity levels of one metric are mutually exclusive.
   const slouch = alertsFor({ trunkFlexDeg: 20 });

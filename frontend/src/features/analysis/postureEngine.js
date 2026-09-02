@@ -1695,10 +1695,31 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
   const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
   if (!prop.shOK || !earOK) return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
-  const lEarYpx = g(PL.L_EAR).y * H;
-  const rEarYpx = g(PL.R_EAR).y * H;
-  const lGap = (prop.lSh.y - lEarYpx) / Math.max(prop.shWidthPx, 1);
-  const rGap = (prop.rSh.y - rEarYpx) / Math.max(prop.shWidthPx, 1);
+  // Each ear-to-shoulder gap is measured PERPENDICULAR TO THE SHOULDER LINE,
+  // not along the image vertical.
+  //
+  // Along the image vertical it was measuring the trunk's roll as well as the
+  // shoulders. That did not matter while the two sides were averaged — a rigid
+  // lean raises one gap by as much as it lowers the other and the mean is
+  // unchanged — but it matters completely once each side is scored on its own
+  // baseline: an 18° lateral lean then reads as one shoulder shrugged hard,
+  // and the live headline became "drop that shoulder" for a user whose actual
+  // fault was leaning sideways. Caught by the alert-headline assertion, which
+  // expects `spine` for a lateral lean and was getting `shrug`.
+  //
+  // n is the shoulder line's own downward normal, so a rigid roll of the torso
+  // cancels out of both gaps and only a real shoulder-toward-ear movement
+  // survives. With level shoulders n is (0, 1) and this reduces exactly to the
+  // previous (shoulderY - earY).
+  const _ux = prop.lSh.x - prop.rSh.x, _uy = prop.lSh.y - prop.rSh.y;
+  const _ul = Math.hypot(_ux, _uy) || 1;
+  const _nx = -(_uy / _ul), _ny = _ux / _ul;   // unit normal, down when upright
+  const lEarPx = { x: g(PL.L_EAR).x * W, y: g(PL.L_EAR).y * H };
+  const rEarPx = { x: g(PL.R_EAR).x * W, y: g(PL.R_EAR).y * H };
+  const _proj = (sh, ear) =>
+    ((sh.x - ear.x) * _nx + (sh.y - ear.y) * _ny) / Math.max(prop.shWidthPx, 1);
+  const lGap = _proj(prop.lSh, lEarPx);
+  const rGap = _proj(prop.rSh, rEarPx);
   const elevRatio = (lGap + rGap) / 2;
 
   // NEUTRAL used to be the hardcoded constant 0.52, and no real body has that
@@ -1745,7 +1766,14 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
   const elevPct  = Math.max(lElevPct, rElevPct);
 
   // Flag when one side is clearly worse — lets the UI give a side-specific cue.
-  const asymmetric = Math.abs(lElevPct - rElevPct) > 7
+  // 7 points of spread needed roughly 20° of one-sided shrug before the
+  // side-specific copy could ever appear, so in practice it did not. Measured
+  // on a subject who never shrugs at 4px of landmark noise, the spread's worst
+  // case is 1.2 points and its mean 0.5 — so 4 sits well clear of the noise
+  // while a visibly raised shoulder (16°, spread 5.5) now gets named. Safe to
+  // lower only because the gaps are now measured in the shoulder line's own
+  // frame; against the image vertical, any lean produced a large spread.
+  const asymmetric = Math.abs(lElevPct - rElevPct) > 4
     ? (lElevPct > rElevPct ? "left" : "right")
     : null;
 
