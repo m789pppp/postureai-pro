@@ -558,6 +558,42 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
   check("Forward slouch never renders as undefined",
         laptop?.metrics?.torso_flexion?.value === 0,
         `value ${laptop?.metrics?.torso_flexion?.value}`);
+
+  // The engine has to HAND that fact to the UI, not merely act on it
+  // internally. Everything above was already true before coverageDetail
+  // existed — and the page still displayed a single unqualified score,
+  // because nothing downstream had any way to know what had been dropped.
+  const cov = laptop?.coverageDetail;
+  check("The engine reports which metrics it could not measure",
+        !!cov && Array.isArray(cov.missing) && cov.missing.length > 0,
+        cov ? `missing: ${cov.missing.join(", ")}` : "coverageDetail absent");
+  check("It reports the hips as out of frame at laptop distance",
+        cov?.hipsInFrame === false, `hipsInFrame=${cov?.hipsInFrame}`);
+  check("The counts add up and are not the full set",
+        cov?.measured > 0 && cov?.measured < cov?.total,
+        `${cov?.measured} of ${cov?.total}`);
+  // The number the banner shows. If this ever reads ~100 at laptop framing,
+  // the UI has gone back to claiming a complete reading.
+  check("Less than 80% of the weight table survives laptop framing",
+        cov?.weightPct > 0 && cov?.weightPct < 80, `${cov?.weightPct}%`);
+
+  // The converse, so a broken reliability flag cannot make every session look
+  // partial: with the hips genuinely in shot, nothing should be reported
+  // missing on account of framing.
+  const wide = read({ forwardHeadCm: 8, trunkFlexDeg: 20, roundShoulderCm: 6 }, HIPS_IN_SHOT);
+  const wcov = wide?.coverageDetail;
+  const wideMissing = new Set(wcov?.missing || []);
+  check("With the hips in shot, nothing is reported missing on their account",
+        wcov?.hipsInFrame === true
+          && !wideMissing.has("spine_lean") && !wideMissing.has("rounded_shoulders")
+          && !wideMissing.has("torso_flexion") && !wideMissing.has("trunk_rotation"),
+        `hipsInFrame=${wcov?.hipsInFrame} · missing: ${(wcov?.missing||[]).join(", ")||"none"}`);
+  // Coverage has to actually MOVE with framing, or the banner is decoration.
+  // Elbow stays out of shot at 140cm, so this is not 100 — it is "much more
+  // of the body than the laptop case", which is the claim being made.
+  check("Backing off the camera recovers most of the weight table",
+        wcov?.weightPct - cov?.weightPct >= 20,
+        `${cov?.weightPct}% at 60cm → ${wcov?.weightPct}% at 140cm`);
 }
 
 console.log("\nINVARIANCE — same posture, irrelevant variable changed");

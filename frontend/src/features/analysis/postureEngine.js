@@ -2524,6 +2524,59 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     (vis(PL.R_EAR) ? 3 : 0)
   );
 
+  // ── What the score could not see ───────────────────────────────────
+  // `coverage` above is a single number. It records that part of the
+  // reading was missing, but not WHICH part, so nothing downstream could
+  // tell the user anything about it — and the score was presented as a
+  // complete posture reading either way.
+  //
+  // That matters more than it sounds. On a laptop, at the 50-80cm this app
+  // itself asks for, the hips sit below the bottom edge of the frame:
+  // measured on the synthetic rig, the hip midpoint lands at y=1.46 of frame
+  // height at 60cm, 1.22 at 80cm, and only enters shot at about 130cm. Every
+  // module derived from the hips — spine lean, rounded shoulders, forward
+  // slouch, trunk rotation — is therefore unreliable for the entire session,
+  // and those are precisely the modules that measure leaning and slumping
+  // FORWARD. A user slouching hard at 30cm from the lens gets a score built
+  // from the seven upper-body modules that still resolve, which is an honest
+  // measurement of a smaller thing wearing the name of a bigger one.
+  //
+  // This list is what lets the UI say which metrics it is not measuring and
+  // why, instead of quietly averaging over the gap.
+  const _covModules = [
+    ["neck_lean",          neck,         WEIGHTS_FRONT.neck],
+    ["head_tilt",          headTilt,     WEIGHTS_FRONT.tilt],
+    ["shoulder_level",     shoulder,     WEIGHTS_FRONT.shoulder],
+    ["spine_lean",         spine,        WEIGHTS_FRONT.spine],
+    ["head_yaw",           yaw,          WEIGHTS_FRONT.yaw],
+    ["rounded_shoulders",  rounded,      WEIGHTS_FRONT.rounded],
+    ["fhp_index",          fhp,          WEIGHTS_FRONT.fhp],
+    ["monitor_height",     monitor,      WEIGHTS_FRONT.monitor],
+    ["shoulder_elevation", shoulderElev, WEIGHTS_FRONT.shoulderElev],
+    ["elbow_angle",        elbow,        WEIGHTS_FRONT.elbow],
+    ["torso_flexion",      torsoFlex,    WEIGHTS_FRONT.torsoFlex],
+    ["trunk_rotation",     trunkRot,     WEIGHTS_FRONT.trunkRot],
+  ];
+  const _covMissing = _covModules.filter(([, m]) => m.reliable === false);
+  // Weight lost, not confidence-scaled weight lost: confWeight() also scales
+  // every surviving module by its own confidence (0.72-0.94), so W_ACTUAL
+  // reads ~0.85 even when nothing at all is missing. What the user needs to
+  // know is how much of the weight TABLE was measurable, which is this.
+  const _covWeightMissing = _covMissing.reduce((a, [, , w]) => a + w, 0);
+  // The hips are the single most common reason for a low reading, and the
+  // only one the user can act on directly (sit back, or lower the laptop),
+  // so it is reported separately from the module list.
+  const hipsInFrame = vis(PL.L_HIP) && vis(PL.R_HIP);
+  const coverageDetail = {
+    // +1 on both counts: the distance channel is always measured.
+    measured: _covModules.length - _covMissing.length + 1,
+    total:    _covModules.length + 1,
+    // WEIGHTS_FRONT sums to exactly 1.0 — asserted by the self-test.
+    weightPct: Math.max(0, Math.min(100, Math.round((1 - _covWeightMissing) * 100))),
+    missing:  _covMissing.map(([k]) => k),
+    hipsInFrame,
+  };
+
   // ── Posture-drift penalty (replaces time-based fatigue) ───────────
   // Old model penalised users purely for working long hours — someone
   // with perfect posture at 3 hours got the same hit as someone slumping.
@@ -2595,6 +2648,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     // < 1 means part of the body wasn't visible and the score is a partial
     // reading — worth surfacing rather than presenting it as a full one.
     coverage: Math.round(coverage * 100) / 100,
+    // Which modules were unmeasurable, and how much of the weight table
+    // survived — see the block that builds this for why one number was not
+    // enough.
+    coverageDetail,
     confidence:  detectionConfidence,
 
     bodyModules: {

@@ -947,7 +947,37 @@ export function Ring({ score, size = 78, strokeWidth = 6 }) {
 // ─────────────────────────────────────────────────────────────────
 // METRIC ROW
 // ─────────────────────────────────────────────────────────────────
-export function MetRow({ label, value, unit, score: s, cs }) {
+export function MetRow({ label, value, unit, score: s, cs, dim = false, dimNote }) {
+  // `dim` means this metric was NOT measured this frame — the module reported
+  // reliable:false because the landmarks it needs were out of frame, occluded
+  // or too noisy to trust. The Live page has always passed this prop; this
+  // component simply ignored it, so an unmeasured metric rendered with its
+  // module's default score, a green check and a full progress bar,
+  // indistinguishable from a real reading. On a laptop that is not an edge
+  // case: the hip-derived modules (spine lean, rounded shoulders, forward
+  // slouch, trunk rotation) are unmeasurable for the whole session, and all
+  // four were being drawn as healthy green rows.
+  //
+  // An unmeasured row now says so, in grey, with an empty track — and the
+  // caller can pass dimNote to explain why.
+  if (dim) {
+    const muted = cs?.muted || UI_TOKENS.muted;
+    return (
+      <div style={{ padding:"8px 0", borderBottom:`1px solid ${cs?.border || UI_TOKENS.border}`, opacity:.72 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+            <span style={{ fontSize:11 }} aria-hidden="true">○</span>
+            <span style={{ fontSize:12, color:muted, fontWeight:400, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</span>
+          </div>
+          <span style={{ fontSize:11, fontWeight:600, color:muted, flexShrink:0 }}>
+            {dimNote || "not measurable"}
+          </span>
+        </div>
+        <div style={{ height:4, borderRadius:99, marginTop:4,
+          background:`repeating-linear-gradient(90deg, ${muted}33 0 4px, transparent 4px 8px)` }}/>
+      </div>
+    );
+  }
   // Thresholds/colors intentionally match LiveUI.jsx's scoreTierColor()
   // (70/55, #4FAE8E/#D6A24C/#C6604F) rather than this file's own
   // UI_TOKENS.green/amber/red (75/50, brighter hex) — this row renders the
