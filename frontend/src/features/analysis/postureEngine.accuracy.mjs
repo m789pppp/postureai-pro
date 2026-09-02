@@ -95,6 +95,24 @@ function readNoisy(pose = {}, zSigmaMult = 3, { settle = 130, hold = 50, seed = 
   return r;
 }
 
+/**
+ * Four analyzers need the hip landmarks: torso flexion, trunk rotation, spine
+ * lean, and shoulder protraction. At the 50-80cm the app asks users to sit at,
+ * the hips sit a full frame-height below the bottom edge and MediaPipe cannot
+ * see them — measured in this fixture, they do not enter frame until ~130cm.
+ *
+ * That splits every question about those metrics in two, and the two need
+ * different cameras:
+ *
+ *   HIPS_IN_SHOT   does the maths work, given the landmarks it needs
+ *   the default    does the metric work for someone sitting at a laptop
+ *
+ * Tests using HIPS_IN_SHOT answer the first. The framing group at the end of
+ * this file answers the second, and the answer there is currently no — which
+ * is a finding about the product, not a test to be made green.
+ */
+const HIPS_IN_SHOT = { camera: { distCm: 140 } };
+
 const val = (r, k) => r?.metrics?.[k]?.value;
 const stats = (xs) => {
   const c = xs.filter(Number.isFinite);
@@ -137,7 +155,7 @@ console.log("ACCURACY — reported vs known truth");
   const errs = [];
   if (VERBOSE) console.log("\n  Lateral lean");
   for (const t of truths) {
-    const got = val(read({ lateralLeanDeg: t }), "spine_lean");
+    const got = val(read({ lateralLeanDeg: t }, HIPS_IN_SHOT), "spine_lean");
     errs.push(got - t);
     if (VERBOSE) console.log(`    true ${String(t).padStart(2)}°  ->  read ${fmt(got)}°   err ${fmt(got - t)}°`);
   }
@@ -153,7 +171,7 @@ console.log("ACCURACY — reported vs known truth");
   const errs = [];
   if (VERBOSE) console.log("\n  Trunk rotation");
   for (const t of truths) {
-    const got = val(read({ trunkRotDeg: t }), "trunk_rotation");
+    const got = val(read({ trunkRotDeg: t }, HIPS_IN_SHOT), "trunk_rotation");
     errs.push(got - t);
     if (VERBOSE) console.log(`    true ${String(t).padStart(2)}°  ->  read ${fmt(got)}°   err ${fmt(got - t)}°`);
   }
@@ -242,7 +260,7 @@ console.log("ACCURACY — reported vs known truth");
   // axis the shoulders sit, in centimetres, self-baselined against the user's
   // own neutral. A forward head moves the ear and not the shoulder, so it
   // pushes the reading the other way instead of masquerading as rounding.
-  const got = [3, 6, 9].map(cm => val(read({ roundShoulderCm: cm }), "rounded_shoulders"));
+  const got = [3, 6, 9].map(cm => val(read({ roundShoulderCm: cm }, HIPS_IN_SHOT), "rounded_shoulders"));
   if (VERBOSE) {
     console.log("\n  Rounded shoulders (protraction)");
     [3, 6, 9].forEach((cm, i) => console.log(`    true ${cm}cm  ->  read ${fmt(got[i])}cm`));
@@ -254,14 +272,14 @@ console.log("ACCURACY — reported vs known truth");
 
   // The two failure modes that made the old metric useless: reading high on a
   // neutral subject, and confusing a forward head for rounded shoulders.
-  const neutral = val(read({}), "rounded_shoulders");
+  const neutral = val(read({}, HIPS_IN_SHOT), "rounded_shoulders");
   check("Rounded shoulders: reads ~0 on a neutral subject", neutral <= 1, `${fmt(neutral)}cm`);
-  const fwdHead = val(read({ forwardHeadCm: 6 }), "rounded_shoulders");
+  const fwdHead = val(read({ forwardHeadCm: 6 }, HIPS_IN_SHOT), "rounded_shoulders");
   check("Rounded shoulders: a forward head is not read as rounding", fwdHead <= 1, `${fmt(fwdHead)}cm`);
 
   // A rigid trunk lean keeps hips, shoulders and ears collinear, so it should
   // largely cancel rather than register as protraction.
-  const lean = val(read({ trunkFlexDeg: 20 }), "rounded_shoulders");
+  const lean = val(read({ trunkFlexDeg: 20 }, HIPS_IN_SHOT), "rounded_shoulders");
   check("Rounded shoulders: a trunk lean barely leaks in", lean <= 2.5, `${fmt(lean)}cm at 20°`);
 
   // Anatomy must cancel: the baseline is what makes this body-independent.
@@ -269,7 +287,7 @@ console.log("ACCURACY — reported vs known truth");
     { neckLenCm: 15, torsoLenCm: 56 },
     { neckLenCm: 9,  torsoLenCm: 48 },
     { shoulderWidthCm: 48, hipWidthCm: 36 },
-  ].map(body => val(read({ roundShoulderCm: 6 }, { body }), "rounded_shoulders"));
+  ].map(body => val(read({ roundShoulderCm: 6 }, { body, ...HIPS_IN_SHOT }), "rounded_shoulders"));
   const spread = Math.max(...perBody) - Math.min(...perBody);
   if (VERBOSE) console.log(`    same 6cm across long neck / short neck / broad frame: ${perBody.map(x => fmt(x)).join(", ")}`);
   check("Rounded shoulders: same displacement reads the same on any build",
@@ -288,11 +306,11 @@ console.log("ACCURACY — reported vs known truth");
   // Fixing that one exposed this one — the selftest's headline assertions
   // started failing with "got elbow" for poses that are nothing to do with
   // arms.
-  const elbow = val(read({ lateralLeanDeg: 12 }), "elbow_angle");
+  const elbow = val(read({ lateralLeanDeg: 12 }, HIPS_IN_SHOT), "elbow_angle");
   if (VERBOSE) console.log(`\n  Elbow angle: read ${fmt(elbow)}° (true 92.5°, was 164° in 2D)`);
   check("Elbow: a typing arm is not read as straight", elbow < 140, `${fmt(elbow)}°`);
   check("Elbow: a typing arm scores as acceptable",
-        val(read({ lateralLeanDeg: 12 }), "elbow_angle") > 80, `${fmt(elbow)}°`);
+        val(read({ lateralLeanDeg: 12 }, HIPS_IN_SHOT), "elbow_angle") > 80, `${fmt(elbow)}°`);
   // Honest limit: 3D recovery still reads ~28° high against the fixture's
   // known 92.5°, so this asserts the alert outcome rather than an accuracy
   // figure. It is inside the 90-120° band the guidance is written about, and
@@ -309,20 +327,21 @@ console.log("\nRESPONSE — each defect must actually cost points");
     ["Neck flexion 25°",      { neckFlexDeg: 25 },      4],
     ["Forward head 8cm",      { forwardHeadCm: 8 },     5],
     ["Trunk flexion 20°",     { trunkFlexDeg: 20 },     8],
-    // KNOWN WEAKNESS, asserted at its true value rather than an aspirational
-    // one. analyzeRoundedShoulders now reports unreliable without calibration,
-    // because its population constant (0.52) is anatomically wrong for
-    // everyone and produced a permanent false "shoulders slightly forward"
-    // alert. So an uncalibrated user gets almost no protraction detection —
-    // 6cm costs 3 points, coming mostly from other metrics. This is the next
-    // thing to rework in the engine; the assertion is here to make the gap
-    // visible rather than to pretend it is closed.
-    ["Rounded shoulders 6cm", { roundShoulderCm: 6 },   2],
+    // Protraction now measures properly (see the accuracy group above), but it
+    // needs the hips, and at the default camera here — the 50-80cm the app
+    // asks users to sit at — the hips are below the bottom edge. So this
+    // costs exactly zero points for a real laptop user, and the assertion
+    // says so rather than being quietly moved to a camera where it passes.
+    // The framing group asserts the same fact directly.
+    ["Rounded shoulders 6cm", { roundShoulderCm: 6 },   0],
     ["Lateral lean 15°",      { lateralLeanDeg: 15 },  10],
     ["Trunk rotation 30°",    { trunkRotDeg: 30 },      8],
     ["Shoulder shrug 4cm",    { shoulderElevCm: 4 },    2],
   ];
   for (const [label, pose, minDrop] of cases) {
+    // Deliberately the DEFAULT camera for every case here: this section is
+    // about what a defect actually costs a user sitting where the app tells
+    // them to sit, which for the hip-dependent metrics is nothing at all.
     const s = read(pose)?.score;
     const drop = neutral - s;
     if (VERBOSE) console.log(`    ${label.padEnd(24)} ${neutral} -> ${s}  (−${fmt(drop)})`);
@@ -341,7 +360,26 @@ console.log("\nALERTS — the right instruction, and only the right one");
 {
   // alerts[0] is what App.jsx shows the user AND what it stores as the
   // session's alert cause, so its correctness matters twice.
-  const alertsFor = (pose) => (read(pose)?.alerts || []).filter(Boolean);
+  // Poses involving the hips (lean, twist, slouch, rounding) are read with a
+  // camera that can see them — otherwise this would be testing the framing
+  // limitation rather than the alert logic, which the framing group covers.
+  const needsHips = (pose) => ["lateralLeanDeg","trunkRotDeg","trunkFlexDeg","roundShoulderCm"]
+    .some(k => pose[k]);
+  // The distance alert is filtered out for hip poses, and the reason is the
+  // uncomfortable part: there is no camera distance that satisfies both
+  // conditions. The hips need ~130cm to enter frame; the app tells users to
+  // sit at 50-80cm. Those ranges do not overlap, so a fixture posed far
+  // enough back to exercise these analyzers is, correctly, told it is too far
+  // away. Dropping that one alert keeps these tests about the alert logic.
+  // The fact that the ranges do not overlap is the product finding, and it is
+  // asserted directly in the framing group rather than left implied here.
+  const TOO_FAR = /Too far|Very close|ideal 50/i;
+  const alertsFor = (pose) => {
+    const hips = needsHips(pose);
+    return (read(pose, hips ? HIPS_IN_SHOT : {})?.alerts || [])
+      .filter(Boolean)
+      .filter(a => !(hips && TOO_FAR.test(a)));
+  };
 
   const quiet = alertsFor({});
   if (VERBOSE && quiet.length) quiet.forEach(a => console.log(`    (neutral) ${a}`));
@@ -376,7 +414,11 @@ console.log("\nALERTS — the right instruction, and only the right one");
   // wired to this list the live loop ran its own hardcoded neck/yaw/distance
   // chain that knew nothing about forward head, slouching, twist or shrug.
   const headlineKey = (pose) => {
-    const d = read(pose)?.alerts?.detailed?.[0];
+    // Same reasoning as alertsFor above.
+    const hips = needsHips(pose);
+    const det = (read(pose, hips ? HIPS_IN_SHOT : {})?.alerts?.detailed || [])
+      .filter(x => !(hips && TOO_FAR.test(x?.text || "")));
+    const d = det[0];
     return d ? String(d.key).replace(/_(sev|mid|cl|c|f|hi|lo|calib_tip)$/, "") : null;
   };
   const headlines = [
@@ -471,11 +513,51 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
         rs && rs.reliable === false, `reliable=${rs?.reliable}, value ${fmt(rs?.value)}`);
 
   const noisyZ = (lms, rng) => lms;  // noise applied via noisePx below
-  const heavy = readNoisy({ roundShoulderCm: 6 }, 12);
+  const heavy = readNoisy({ roundShoulderCm: 6 }, 12, HIPS_IN_SHOT);
   const rs2 = heavy?.metrics?.rounded_shoulders;
   if (VERBOSE) console.log(`  Depth 12x noisy:    rounded reads ${fmt(rs2?.value)} reliable=${rs2?.reliable}`);
   check("Noisy depth channel: protraction reports unreliable rather than wrong",
         rs2 && rs2.reliable === false, `reliable=${rs2?.reliable}, value ${fmt(rs2?.value)}`);
+}
+
+{
+  // FRAMING. The finding a real camera produced, asserted directly so it
+  // cannot quietly stop being true — in either direction.
+  //
+  // Four analyzers need the hip landmarks. A laptop webcam at the distance
+  // this app asks for cannot see them, and the two ranges do not overlap:
+  // hips enter frame at roughly 130cm, the app asks for 50-80cm. Whatever is
+  // eventually done about that — a wider-angle assumption, a sagittal method
+  // that does not need hips, or telling the user plainly — these assertions
+  // are what changes when it is.
+  const hipY = (d) => renderSubject({}, {}, { distCm: d })[23];
+  check("Hips are out of frame at the distance the app asks for",
+        hipY(60).visibility < 0.55 && hipY(80).visibility < 0.55,
+        `vis ${fmt(hipY(60).visibility)} at 60cm, ${fmt(hipY(80).visibility)} at 80cm`);
+  check("Hips only become visible far outside that range",
+        hipY(130).visibility >= 0.55, `vis ${fmt(hipY(130).visibility)} at 130cm`);
+
+  // What that costs, metric by metric, for someone sitting where they are told.
+  const laptop = read({ forwardHeadCm: 8, trunkFlexDeg: 20, roundShoulderCm: 6 });
+  const counted = (k) => laptop?.metrics?.[k]?.reliable === true;
+  if (VERBOSE) {
+    console.log("\n  At 60cm, holding forward head 8cm + trunk lean 20° + rounding 6cm:");
+    for (const [k, v] of Object.entries(laptop?.metrics || {}))
+      if (v && typeof v === "object" && "reliable" in v)
+        console.log(`    ${k.padEnd(20)} ${String(v.value).padStart(6)} ${v.reliable ? "counted" : "NOT COUNTED"}`);
+  }
+  check("Forward head still works at laptop framing", counted("fhp_index"),
+        `${fmt(val(laptop, "fhp_index"))}cm`);
+  check("Head yaw, tilt and shoulder level still work at laptop framing",
+        counted("head_yaw") && counted("head_tilt") && counted("shoulder_level"), "");
+  check("The hip-dependent metrics are excluded, not guessed",
+        !counted("torso_flexion") && !counted("trunk_rotation") && !counted("rounded_shoulders"),
+        "torso/twist/rounding all report unreliable");
+
+  // And the thing that must never regress: no number is invented in their place.
+  check("Forward slouch never renders as undefined",
+        laptop?.metrics?.torso_flexion?.value === 0,
+        `value ${laptop?.metrics?.torso_flexion?.value}`);
 }
 
 console.log("\nINVARIANCE — same posture, irrelevant variable changed");
