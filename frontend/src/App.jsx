@@ -3272,6 +3272,9 @@ export default function App(){
     if (key && st.shown && st.shown.text !== key && st.on < CUE_ON_PUSHES) return st.shown;
     return st.shown;
   },[]);
+  // Consecutive frames on which face blur was requested and could not be
+  // applied. See the call site in runLoop.
+  const blurMissRef = useRef(0);
   const goodSinceRef = useRef(0);
   const ALERT_CLEAR_MS = 4000;
   const clearStaleAlert = useCallback((now)=>{
@@ -3973,7 +3976,24 @@ export default function App(){
               startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(finalResult); });
             }
             // Privacy: pixelate the face first so the skeleton draws on top of it.
-            if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
+            //
+            // The return value was thrown away, and drawFaceBlur() returns
+            // false on five separate paths — no ear visible, too few head
+            // landmarks, a degenerate box, a canvas exception. On every one of
+            // them nothing was drawn, the toggle stayed lit, and the user went
+            // on believing their face was hidden. A privacy control must not
+            // fail by staying quiet, so a frame it could not cover is counted
+            // and surfaced.
+            if(faceBlur){
+              const _blurred = drawFaceBlur(ctx,vid,lms,W,H);
+              if(_blurred) blurMissRef.current = 0;
+              else if(++blurMissRef.current === 30) {   // ~1s of uncovered frames
+                addToast(isAr
+                  ? "إخفاء الوجه مش شغال دلوقتي — الكاميرا مش شايفة وشك كفاية. اقعد مواجه الكاميرا أو اقفل الخاصية."
+                  : "Face blur can't cover your face right now — your head isn't fully visible. Face the camera, or turn the setting off.",
+                  "warn");
+              }
+            }
             const _drawOpts={skeleton:showSkeleton,angles:showAngles};
             drawFront(ctx,finalResult,W,H,isAr,_drawOpts); // Side mode removed app-wide
             const now=Date.now();
@@ -4680,7 +4700,8 @@ export default function App(){
     // the "another person detected" banner doesn't linger on the idle
     // "Start Analysis" screen with the camera off — see the matching reset
     // in beginScoring() for the full bug explanation.
-    cueStateRef.current={ key:null, on:0, off:0, shown:null };
+    cueStateRef.current={ key:null, on:0, off:0, shown:null, seen:null };
+    blurMissRef.current=0;
     subjectRejectStreakRef.current=0;
     multiPersonShownRef.current=false;
     setMultiPersonWarning(false);
@@ -7432,6 +7453,27 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   color:scoreTierColor(score)}}>
                   {isAr?gradeScoreAr(score):gradeScore(score)}
                 </div>
+                {/* Which of the thirteen is actually costing the points.
+                    The five rows below are the five the panel has room for,
+                    and they cannot account for the number above them: on
+                    camera, one frame read 91 with all four rows Low and a
+                    later frame read 71 with all four rows Low — the twenty
+                    points were in metrics this panel does not show, and a user
+                    looking for the reason had nowhere to find it. */}
+                {(()=>{
+                  const HIDE = new Set(["session_fatigue","confidence_val"]);
+                  const worst = Object.entries(analysis?.metrics||{})
+                    .filter(([k,v])=>!HIDE.has(k) && v && v.reliable!==false && typeof v.score==="number")
+                    .sort(([,a],[,b])=>a.score-b.score)[0];
+                  if(!worst || worst[1].score >= 80) return null;
+                  const label = isAr ? (METRIC_LABEL_AR[worst[0]]||worst[1].label) : worst[1].label;
+                  return (
+                    <div style={{fontSize:9,color:"#94a3b8",marginTop:2,whiteSpace:"nowrap"}}>
+                      {isAr?"أكبر خصم: ":"biggest drop: "}
+                      <span style={{color:scoreTierColor(worst[1].score),fontWeight:600}}>{label}</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -7548,10 +7590,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* Session baseline comparison — "better/worse than your first sessions" */}
             {(()=>{
+              // The comparison was backwards, and said so out loud on every
+              // frame of every session.
+              //
+              // userSessions is sorted NEWEST FIRST — both getUserSessions()
+              // and onUserSessions() query orderBy("created_at","desc") and
+              // then sort by (tb - ta) again on top. So slice(0,3) is the three
+              // most RECENT sessions and slice(-3) the three OLDEST, while the
+              // names here said the opposite and diff was computed as
+              // oldest − newest. A user who had improved by 51 points was told,
+              // continuously, in amber, that he was "51 pts worse than your
+              // first sessions".
               const sess = userSessions;
               if(sess.length < 4) return null;
-              const firstAvg = Math.round(sess.slice(0,3).reduce((a,s)=>a+(s.avg_score||0),0)/3);
-              const lastAvg  = Math.round(sess.slice(-3).reduce((a,s)=>a+(s.avg_score||0),0)/3);
+              const recent3 = sess.slice(0, 3);   // newest
+              const first3  = sess.slice(-3);     // oldest
+              const firstAvg = Math.round(first3.reduce((a,s)=>a+(s.avg_score||0),0)/first3.length);
+              const lastAvg  = Math.round(recent3.reduce((a,s)=>a+(s.avg_score||0),0)/recent3.length);
               const diff = lastAvg - firstAvg;
               if(Math.abs(diff) < 2) return null; // noise threshold
               const up = diff > 0;
