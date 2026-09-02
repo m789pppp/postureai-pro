@@ -7412,6 +7412,25 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 "Shoulder — Low" while instructing the user to drop their
                 shoulders. Both are now named for what they measure, and the
                 shrug has its own row. */}
+
+            {/* When the user is too close the engine keeps scoring (soft-block)
+                but depth-dependent metrics (FHP, rounded shoulders) are less
+                accurate. Say so rather than showing confident-looking numbers. */}
+            {analysis?.qualityReason === "too_close" && (
+              <div style={{
+                display:"flex", alignItems:"center", gap:5,
+                padding:"4px 8px", borderRadius:6, marginBottom:6,
+                background:"rgba(245,158,11,.1)", border:"1px solid rgba(245,158,11,.25)",
+              }}>
+                <span style={{fontSize:10}}>⚠️</span>
+                <span style={{fontSize:9, color:"#fbbf24", lineHeight:1.3}}>
+                  {isAr
+                    ? "أنت قريب جداً — الأرقام دي تقريبية. ابعد عن الكاميرا للحصول على قراءة دقيقة."
+                    : "Too close — readings are approximate. Back up for accurate measurements."}
+                </span>
+              </div>
+            )}
+
             {[
               {
                 label:    isAr?"ميل الرقبة":"Neck tilt",
@@ -7442,23 +7461,37 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // persistent chip pinned on the video (see above) plus the
               // detailed bar further down the page.
             ].map(({label,m,unit},i)=>{
-              const unseen = !m || m.reliable === false;
+              const unseen   = !m || m.reliable === false;
+              // learning:true means the engine is accumulating its per-person
+              // baseline and has not yet produced a reading — distinct from
+              // "no view" where landmarks are simply not visible.
+              const learning = unseen && m?.learning === true;
               const s = unseen ? null : m.score;
               // Same scoreTierColor() thresholds (70/55) as the badge above and
               // ScoreGauge — these bars used to use their own 80/60 split, a
               // third disagreeing color scheme on the same screen.
-              const col = unseen?"#64748b":scoreTierColor(s);
-              const risk= unseen?(isAr?"مش ظاهر":"no view")
-                        : s>=70?(isAr?"منخفض":"Low"):s>=55?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
+              const col = learning ? "#818cf8"            // indigo — "in progress"
+                        : unseen   ? "#64748b"            // slate  — "no data"
+                        : scoreTierColor(s);
+              const risk= learning ? (isAr?"يتعلم":"Settling")
+                        : unseen   ? (isAr?"مش ظاهر":"no view")
+                        : s>=70    ? (isAr?"منخفض":"Low")
+                        : s>=55    ? (isAr?"متوسط":"Med")
+                        :            (isAr?"مرتفع":"High");
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",
                   justifyContent:"space-between",marginBottom:5,opacity:unseen?.6:1}}>
                   <div style={{fontSize:10,color:"#94a3b8",width:64}}>{label}</div>
                   <div style={{flex:1,height:4,borderRadius:8,margin:"0 6px",overflow:"hidden",
-                    background: unseen
+                    background: learning
+                      ? "rgba(129,140,248,.18)"     // soft indigo fill while settling
+                      : unseen
                       ? "repeating-linear-gradient(90deg,rgba(255,255,255,.14) 0 3px,transparent 3px 6px)"
                       : "rgba(255,255,255,.06)"}}>
-                    {!unseen && <div style={{height:"100%",width:`${s??0}%`,
+                    {learning && <div style={{height:"100%",width:"40%",
+                      background:"rgba(129,140,248,.5)",borderRadius:8,
+                      animation:"pulse 1.6s ease-in-out infinite"}}/>}
+                    {!unseen && !learning && <div style={{height:"100%",width:`${s??0}%`,
                       background:col,borderRadius:8,transition:"width .4s ease"}}/>}
                   </div>
                   <div style={{fontSize:9,fontWeight:700,color:col,width:44,textAlign:"right"}}>
