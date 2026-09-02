@@ -303,11 +303,33 @@ export function projectToLandmarks(pts3d, camera = {}, body = {}) {
     const frameWidthCm = (depth * C.W) / f;
     const zNorm = -(p.z - hipMid.z) / frameWidthCm;
 
+    // Visibility has to fall off outside the frame, and this fixture used to
+    // report a flat 0.95 for every modelled joint no matter where it landed.
+    //
+    // That is not a detail. A user sitting 30cm from a laptop has their hips
+    // roughly two frame-heights below the bottom edge — MediaPipe reports
+    // those as barely visible, and several analyzers correctly refuse to run
+    // without them. Against this fixture they ran anyway, on coordinates
+    // extrapolated far outside the image, and produced confident nonsense:
+    // forward-head read 118cm for a true 8cm at that distance. The close-up
+    // framing that a real person actually uses was the one case the harness
+    // could not represent.
+    //
+    // Real MediaPipe does not hard-cut at the edge either — it degrades, and
+    // still emits a guess slightly outside — so this ramps rather than steps.
+    const xN = xPx / C.W, yN = yPx / C.H;
+    const outX = Math.max(0, Math.abs(xN - 0.5) - 0.5);
+    const outY = Math.max(0, Math.abs(yN - 0.5) - 0.5);
+    const out  = Math.max(outX, outY);
+    // Fully visible inside the frame; ~0.5 just past the edge; near zero once
+    // a landmark is a quarter of a frame outside it.
+    const visibility = out === 0 ? 0.95 : Math.max(0.02, 0.95 * Math.exp(-out * 14));
+
     lms[idx] = {
-      x: xPx / C.W,
-      y: yPx / C.H,
+      x: xN,
+      y: yN,
       z: zNorm,
-      visibility: 0.95,
+      visibility,
     };
   }
   return lms;
