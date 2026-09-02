@@ -72,20 +72,57 @@ export function useBackendHealth() {
 // ── useToasts ─────────────────────────────────────────────────────
 export function useToasts() {
   const [toasts, setToasts] = useState([]);
+  // The same sentence, twice, one above the other.
+  //
+  // Error toasts are permanent (dur=0 below), so any message raised from two
+  // places — or from one place that ran twice before its guard flag settled —
+  // stacked as two identical rows that each had to be dismissed by hand. It
+  // reads as two separate faults when there is only one. Reported live for
+  // "Can't reach the analysis server", which the Live page also renders as a
+  // full-screen overlay AND in its alert box, so one outage could say the same
+  // thing four times at once.
+  //
+  // A toast whose text and type are already on screen refreshes that toast
+  // instead of adding another. Nothing is lost, and a repeat of a message the
+  // user is already reading costs nothing.
+  //
+  // The visible list is mirrored in a ref because the de-duplication decision
+  // has to be made synchronously, at call time: reading it inside a setToasts
+  // updater would run after this function returned (and after two calls in the
+  // same tick had both already decided they were unique).
+  const listRef   = useRef([]);
+  const timersRef = useRef(new Map());
+  const commit = useCallback(next => { listRef.current = next; setToasts(next); }, []);
 
   const addToast = useCallback((text, type = "info", duration) => {
     // Arabic text needs more reading time — auto-detect RTL characters
     const isArabic = /[؀-ۿ]/.test(text);
     const dur = duration ?? (type === "error" ? 0 : isArabic ? 5500 : 3500);
+    const dupe = listRef.current.find(t => t.text === text && t.type === type);
+    const id = dupe ? dupe.id : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    if (!dupe) commit([...listRef.current.slice(-5), { id, text, type }]); // max 6 toasts
+    // Re-arm rather than leaving the first copy to expire on its old schedule.
+    const prev = timersRef.current.get(id);
+    if (prev) { clearTimeout(prev); timersRef.current.delete(id); }
     // Error toasts stay until dismissed (dur=0 means permanent)
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setToasts(prev => [...prev.slice(-5), { id, text, type }]); // max 6 toasts
-    if (dur > 0) setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), dur);
+    if (dur > 0) {
+      timersRef.current.set(id, setTimeout(() => {
+        timersRef.current.delete(id);
+        commit(listRef.current.filter(t => t.id !== id));
+      }, dur));
+    }
     return id;
-  }, []);
+  }, [commit]);
 
-  const dismiss = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+  const dismiss = useCallback(id => {
+    const h = timersRef.current.get(id);
+    if (h) { clearTimeout(h); timersRef.current.delete(id); }
+    commit(listRef.current.filter(t => t.id !== id));
+  }, [commit]);
+
+  useEffect(() => () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current.clear();
   }, []);
 
   return { toasts, addToast, dismiss };

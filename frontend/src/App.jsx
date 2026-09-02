@@ -2389,6 +2389,18 @@ export default function App(){
   };
   const [page, setPageRaw] = useState(() => {
     const h = window.location.hash;
+    // setPage("live") writes its hash with replaceState, so #live is what the
+    // URL still reads after any session — and this initializer then reopened
+    // the camera page on the next load or the next sign-in, in front of a user
+    // who had asked for their dashboard. A fresh mount cannot have a session in
+    // progress by definition: streamRef is null, nothing is scoring, the
+    // <video> has not been created yet. So #live here is always stale.
+    //
+    // onAuthStateChanged has its own copy of this check, but it only runs once
+    // Firebase resolves — on a slow connection that is several seconds of the
+    // live page sitting there first, which is exactly what a user reports as
+    // "I logged in and it went straight to the live page".
+    if (h === "#live") { window.history.replaceState({}, "", "#home"); return "home"; }
     if (h) return hashToPage(h);
     // BUG FIX: every standalone marketing page (Product/Solutions/Pricing/
     // HowItWorks/FAQ + their shared StandaloneLayout header) links Sign In
@@ -3183,6 +3195,27 @@ export default function App(){
   // after a short grace period instead of retrying forever in silence.
   const backendFailRef  = useRef(0);
   const backendFailShownRef = useRef(false);
+  // When posture recovered, nothing ever took the warning back down.
+  //
+  // The alert box is driven by alertMsg.type: the analysis loop sets it to
+  // "warn" when a fault has persisted for 15s, and the good-posture branch
+  // then only updated scoreStatus — it never touched alertMsg. But the score
+  // readout is rendered by `scoreStatus && alertMsg.type!=="warn"`, so once a
+  // warning fired, the score row stayed hidden and the warning stayed on
+  // screen for the rest of the session no matter what the user did. That is
+  // the "Drop your shoulders" still showing at 79/Excellent with the shoulder
+  // metric reading Low: the score had recovered, the sentence had not.
+  //
+  // Cleared only after the posture has been good for a sustained stretch, so
+  // a single lucky frame in the middle of a genuine slump does not blink the
+  // warning away and back.
+  const goodSinceRef = useRef(0);
+  const ALERT_CLEAR_MS = 4000;
+  const clearStaleAlert = useCallback((now)=>{
+    if(!goodSinceRef.current){ goodSinceRef.current = now; return; }
+    if(now - goodSinceRef.current < ALERT_CLEAR_MS) return;
+    setAlertMsg(m => (m?.type==="warn"||m?.type==="bad") ? {text:"",type:"info"} : m);
+  },[]);
   const startingCameraRef = useRef(false); // sync guard — see startCamera()
   const stoppingRef = useRef(false); // sync guard — see stopCamera()
   // Wall-clock pacing for the backend /analyze call, replacing a frame-counter
@@ -3930,11 +3963,13 @@ export default function App(){
               // accumulate nor reset the bad-streak timer, since we can't
               // tell if it's genuinely bad posture or just a bad frame.
               // Separate 60s cooldown so lighting notices don't block posture alerts.
+              goodSinceRef.current=0;
               if(now-lightAlRef.current>60000){
                 lightAlRef.current=now;
                 setAlertMsg({text:isAr?"الإضاءة ضعيفة جدًا — حسّن الإضاءة لقراءة أدق":"Lighting too low — improve lighting for an accurate reading",type:"warn"});
               }
             }else if(gateScore<65){
+              goodSinceRef.current=0;
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000){
                 // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
@@ -4017,6 +4052,7 @@ export default function App(){
               } // close else if(badRef>15000)
             }else{
               badRef.current=null;
+              clearStaleAlert(now);
               // Good posture — silent status update only, no alert box noise
               // NOTE: was `grade(finalResult.overall,t)` — `grade()` reads
               // t.excellent/t.good/t.fair/t.poor, which this translations
@@ -4140,6 +4176,7 @@ export default function App(){
             startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(result); });
             const now=Date.now();
             if(smoothed<65){
+              goodSinceRef.current=0;
               if(!badRef.current)badRef.current=now;
               else if(now-badRef.current>15000){
                 // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
@@ -4167,6 +4204,7 @@ export default function App(){
               } // close else if(badRef>15000)
             }else{
               badRef.current=null;
+              clearStaleAlert(now);
               startTransition(()=>setScoreStatus({score:smoothed,grade:isAr?gradeScoreAr(smoothed):gradeScore(smoothed)}));
             }
           }
@@ -4260,6 +4298,16 @@ export default function App(){
           : "Camera access requires a secure connection (HTTPS). Please open this site over https.", type:"bad" });
         startingCameraRef.current=false;
         return;
+      }
+      // Anything already in streamRef is about to be overwritten by the line
+      // below, and an overwritten MediaStream can never be stopped again — its
+      // tracks stay live and the OS camera light stays on until the tab is
+      // closed. beginScoring()'s catch path is one way to get here with a
+      // stream still parked in the ref. Release it first; this is a no-op in
+      // the normal flow, where stopCamera()/cancelPreview() already cleared it.
+      if(streamRef.current){
+        try{ streamRef.current.getTracks().forEach(t=>{t.stop();t.enabled=false;}); }catch{}
+        streamRef.current=null;
       }
       const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:facingMode}}});
       streamRef.current=s;
@@ -4510,6 +4558,19 @@ export default function App(){
   }
 
   const[sessionResult,setSessionResult]=useState(null);
+  // requestFullscreen() promotes the camera wrapper into the browser's TOP
+  // LAYER, which paints above every stacking context on the page. Nothing in
+  // this app can out-rank it: the session-summary modal sits at z-index 2000,
+  // the health-consent and calibration dialogs at 9000-10000, toasts at 9999,
+  // and in fullscreen all of them render behind the video, invisible and
+  // unclickable. Stopping a session while fullscreen therefore saved it and
+  // then showed nothing at all — and because sessionResult is only cleared by
+  // that modal's own buttons, there was no way out of the state either.
+  // Anything that needs to be read or answered drops fullscreen first.
+  const _fsBlocking = !!sessionResult || showHealthConsent || showCalibWizard || showUpgrade || showBilling;
+  useEffect(()=>{
+    if(_fsBlocking && document.fullscreenElement) document.exitFullscreen?.().catch(()=>{});
+  },[_fsBlocking]);
 
   async function stopCamera(){
     // The UI update is throttled to 4Hz during a session, so the last analysed
@@ -4695,8 +4756,19 @@ export default function App(){
       // historical session document still render correctly.
       worst_snapshots: [],
     };
-    setSessionResult(result);
-      if((result.avg_score||0)>=70){
+    // A report on a session that never happened.
+    //
+    // `dur` is 0 whenever Stop is pressed before beginScoring() set sessRef —
+    // the live preview and the 3-2-1 countdown are both inside that window,
+    // and so is the case where the user opens Live, thinks better of it, and
+    // stops. The modal opened anyway and presented 0/100, "Duration 0:00", 0%
+    // good posture and no metrics as if they were measurements. Nothing below
+    // 5 seconds is saved either (see the branches underneath), so a session
+    // that was not worth recording is not worth reporting on: the "session too
+    // short" toast already says what happened.
+    if(dur >= 5) setSessionResult(result);
+    else setSessionResult(null);
+      if(dur >= 5 && (result.avg_score||0)>=70){
         // sessions/name were never set here — ShareCard destructures both
         // and draws them directly onto the card (session count, name
         // badge), so every shared card silently showed "Sessions: 0" and
@@ -4718,7 +4790,8 @@ export default function App(){
       });
       addToast(isAr?"✅ تم حفظ الجلسة (محلياً)":"✅ Session saved (locally)","success");
     } else if(window.__demoMode && dur < 5){
-      addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
+      if(dur > 0 || totalRef.current > 0)
+        addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
     } else if(user && dur >= 5){ // Save if session lasted at least 5 seconds
       addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
       setIsSavingSession(true);
@@ -4806,9 +4879,16 @@ export default function App(){
         }
       });
     } else if(user && dur < 5){
-      addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
+      // dur===0 with no frames means scoring never began — the user backed out
+      // of the preview or the countdown. Nothing was cut short, so there is
+      // nothing to apologise for; telling them their session was "too short"
+      // implies they lost something they never started.
+      if(dur > 0 || totalRef.current > 0){
+        addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
+      }
     } else if(!user){
-      addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
+      if(dur > 0 || totalRef.current > 0)
+        addToast(isAr?"غير مسجل الدخول":"Not signed in — not saved","error");
     }
     } finally {
       // The session clock is over. It was left set, and both PDF paths
@@ -4877,6 +4957,45 @@ export default function App(){
   // real pauseSession, so navigating to the break page freezes the session and
   // its timer instead of abandoning it with the camera running.
   useEffect(()=>{ pauseForBreakRef.current = () => { if(camActive && !isPaused) pauseSession(); }; });
+
+  // Every navigation away from Live that does NOT go through backFromLive().
+  //
+  // Only two things ever stopped the camera: the in-app Back button, and the
+  // popstate listener for the browser/hardware back button. setPage() uses
+  // pushState, which does not fire popstate — so every other way off this page
+  // left the stream running with the OS indicator light on and the rAF loop
+  // burning CPU behind whatever screen the user landed on. That includes the
+  // session-summary modal's own "Dashboard" button, the header/sidebar nav, the
+  // upgrade and billing redirects, and anything else that calls setPage.
+  //
+  // "break" is deliberately exempt: goToBreak() pauses the session and keeps
+  // the stream attached so returning does not re-prompt for camera permission
+  // (see the effect directly below, which re-attaches it).
+  useEffect(()=>{
+    if(page==="live" || page==="break") return;
+    if(!camActiveRef.current && !streamRef.current) return;
+    const hadSession = camActiveRef.current;
+    stopCamera();
+    // stopCamera() arms the summary modal, which is only mounted in the live
+    // branch — same reasoning as backFromLive(), which confirms the save with a
+    // toast instead and clears the modal so it cannot pop over an unrelated
+    // page later.
+    if(hadSession){
+      setSessionResult(null);
+      addToast(isAr?"اتحفظت الجلسة":"Session saved","success");
+    }
+    setShowHealthConsent(false);
+    setPreviewPhase(null);
+  },[page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Last resort: the whole app unmounting (route swap, hot reload, an
+  // ErrorBoundary swallowing this subtree) with a stream still open. Nothing
+  // above can catch that, and the result is a camera light that stays on with
+  // no UI left anywhere to turn it off.
+  useEffect(()=>()=>{
+    try{ streamRef.current?.getTracks?.().forEach(t=>{t.stop();t.enabled=false;}); }catch{}
+    streamRef.current=null;
+  },[]);
 
   // Returning from the break page remounts the <video>, which comes back with
   // no srcObject — the stream object itself is still live in streamRef. Without
@@ -7547,6 +7666,56 @@ async function downloadPDF(sessionOverride, isClinical=false){
           );
         })()}
 
+        {/* ── What this framing can and cannot measure ──────────────────
+            The single most important thing this page was not saying.
+
+            Four of the twelve posture modules — spine lean, rounded
+            shoulders, forward slouch and trunk rotation — are all measured
+            RELATIVE TO THE HIPS. On a laptop the hips are not in shot: on the
+            synthetic rig the hip midpoint sits at y=1.46 of frame height at
+            60cm and 1.22 at 80cm, and only enters the frame at about 130cm.
+            The app asks the user to sit at 50-80cm. So on the hardware this
+            product is built for, those four modules report reliable:false for
+            the entire session, the engine correctly drops them from the
+            weighted mean, and the result — a genuine measurement of the upper
+            body — was displayed as a complete posture score.
+
+            The four it cannot see are precisely the ones that measure leaning
+            and slumping FORWARD, which is why a user slouching hard a foot
+            from the lens can be told 79/100: side-to-side was measured,
+            forward was not. Saying so is the difference between a partial
+            reading and a wrong one. */}
+        {camActive && analysis?.coverageDetail && analysis.coverageDetail.weightPct < 88 && (()=>{
+          const cov = analysis.coverageDetail;
+          const names = isAr
+            ? {spine_lean:"ميل الجذع",rounded_shoulders:"تدوير الكتفين",torso_flexion:"الانحناء للأمام",trunk_rotation:"لفّ الجذع",fhp_index:"تقدّم الرأس",neck_lean:"ميل الرقبة",elbow_angle:"زاوية الكوع",monitor_height:"ارتفاع الشاشة",head_yaw:"لفّ الرأس",head_tilt:"ميل الرأس",shoulder_level:"استواء الكتفين",shoulder_elevation:"رفع الكتفين"}
+            : {spine_lean:"spine lean",rounded_shoulders:"rounded shoulders",torso_flexion:"forward slouch",trunk_rotation:"trunk rotation",fhp_index:"forward head",neck_lean:"neck lean",elbow_angle:"elbow angle",monitor_height:"monitor height",head_yaw:"head turn",head_tilt:"head tilt",shoulder_level:"shoulder level",shoulder_elevation:"shoulder shrug"};
+          const missing = (cov.missing||[]).map(k=>names[k]||k);
+          const col = cov.weightPct < 65 ? "#C6604F" : "#D6A24C";
+          return (
+            <div style={{padding:"9px 14px",borderBottom:`1px solid ${cs.border}`,
+              background:`${col}12`,borderInlineStart:`3px solid ${col}`}}>
+              <div style={{fontSize:11,fontWeight:700,color:col}}>
+                {isAr
+                  ? `الدرجة محسوبة من ${cov.measured} من ${cov.total} مقاييس (${cov.weightPct}%)`
+                  : `Score measured from ${cov.measured} of ${cov.total} metrics (${cov.weightPct}%)`}
+              </div>
+              {missing.length>0 && (
+                <div style={{fontSize:10,color:cs.muted,marginTop:3,lineHeight:1.5}}>
+                  {isAr?"مش متقاسة دلوقتي: ":"Not being measured: "}{missing.join(isAr?"، ":", ")}
+                </div>
+              )}
+              {!cov.hipsInFrame && (
+                <div style={{fontSize:10,color:cs.muted,marginTop:3,lineHeight:1.5}}>
+                  {isAr
+                    ? "وسطك مش ظاهر في الكادر، وده اللي بيتقاس منه الانحناء للأمام. ابعد شوية عن الكاميرا أو نزّل اللابتوب لحد ما كتفك ووسطك يبانوا مع بعض."
+                    : "Your hips are out of frame, and forward lean is measured from them. Sit further back or lower the laptop until your shoulders and waist are both in shot."}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Live metrics */}
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",letterSpacing:".05em",marginBottom:8}}>
@@ -7559,7 +7728,20 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   !HIDE.has(k) && m.value!=null && m.label
                 );
                 // Sort by score ascending (worst first), cap at 3 by default
-                const sorted = [...mEntries].sort((a,b)=>(a[1].score??100)-(b[1].score??100));
+                // Worst-first, but an UNMEASURED metric has no score to be
+                // worst at — it carries whatever default its module returns
+                // (usually 90-100), so sorting on score alone silently pushed
+                // every unmeasurable metric into the top three whenever the
+                // real ones scored lower, and hid them below the fold when
+                // they didn't. Neither is right: they are not readings.
+                // Measured metrics rank first, worst-first among themselves;
+                // unmeasured ones follow, so the user can see they exist and
+                // that nothing is being claimed about them.
+                const sorted = [...mEntries].sort((a,b)=>{
+                  const au = a[1].reliable===false, bu = b[1].reliable===false;
+                  if(au!==bu) return au?1:-1;
+                  return (a[1].score??100)-(b[1].score??100);
+                });
                 const showAll = showAllMetrics;
                 const visible = showAll ? sorted : sorted.slice(0,3);
                 return (
@@ -7567,6 +7749,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     {visible.map(([k,m])=>(
                       <MetRow key={k} label={isAr?(METRIC_LABEL_AR[k]||m.label):m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
                         dim={m.reliable===false}
+                        dimNote={isAr?"مش ظاهر في الكادر":"not in frame"}
                       />
                     ))}
                     {sorted.length > 3 && (
@@ -7836,7 +8019,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         )}
 
         {/* Alert message — warn/bad/info only */}
-        {(alertMsg.type==="warn"||alertMsg.type==="bad"||(alertMsg.type==="info"&&!scoreStatus))&&(
+        {!!alertMsg.text&&(alertMsg.type==="warn"||alertMsg.type==="bad"||(alertMsg.type==="info"&&!scoreStatus))&&(
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${cs.border}`}}>
           <div style={abox(alertMsg.type)}>{alertMsg.text}</div>
         </div>
