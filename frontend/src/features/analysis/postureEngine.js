@@ -584,7 +584,12 @@ let _torsoBase = _makeBaseline(40, 60);
 // Ear-to-shoulder gap, used by BOTH shoulder elevation and rounded shoulders.
 // See the note in analyzeShoulderElevation for why a population constant
 // cannot work for this one.
-let _earShBase = _makeBaseline(40, 60);
+let _earShBase  = _makeBaseline(40, 60);
+// Per-side baselines so a single raised shoulder is not diluted
+// by averaging with the resting side.  Learned independently of
+// _earShBase (which the calibration wizard still references).
+let _earShBaseL = _makeBaseline(40, 60);
+let _earShBaseR = _makeBaseline(40, 60);
 // Head apparent size relative to shoulder width — the sagittal forward-head
 // signal. See analyzeFHP.
 let _headShBase = _makeBaseline(40, 60);
@@ -835,6 +840,8 @@ export function resetProportions() {
   _trunkBase  = _makeBaseline(40, 60);
   _torsoBase  = _makeBaseline(40, 60);
   _earShBase  = _makeBaseline(40, 60);
+  _earShBaseL = _makeBaseline(40, 60);
+  _earShBaseR = _makeBaseline(40, 60);
   _headShBase = _makeBaseline(40, 60);
   _protractBase = _makeBaseline(12, 25);
   _depthWin = [];
@@ -1713,18 +1720,48 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
   const calibNeutral = (typeof calib?.rounded_neutral === "number" &&
                         calib.rounded_neutral > 0.10 && calib.rounded_neutral < 0.80)
     ? calib.rounded_neutral : null;
-  const learned = _feedBaseline(_earShBase, elevRatio);
-  const NEUTRAL = calibNeutral ?? learned;
 
-  if (NEUTRAL === null) {
+  // Keep the average-based baseline for calib-wizard compatibility, but learn
+  // each side independently so a single raised shoulder isn't diluted by half.
+  _feedBaseline(_earShBase, elevRatio);          // average — kept for calib key
+  const lLearned = _feedBaseline(_earShBaseL, lGap);
+  const rLearned = _feedBaseline(_earShBaseR, rGap);
+
+  // When calibNeutral is set it was measured in a relaxed symmetrical
+  // position, so using it for both sides introduces ≤ ~5% error — well within
+  // THR.SHOULDER_ELEV.ok (= 3%).
+  const NEUTRAL_L = calibNeutral ?? lLearned;
+  const NEUTRAL_R = calibNeutral ?? rLearned;
+
+  if (NEUTRAL_L === null || NEUTRAL_R === null) {
     return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false, learning: true };
   }
 
-  const elevPct  = Math.max(0, NEUTRAL - elevRatio) * 100;
+  // Per-side elevation: how far each shoulder has risen above its own neutral.
+  // Take the maximum so one raised shoulder scores as badly as both raised —
+  // previously (lGap+rGap)/2 made a single-shoulder shrug look half as severe.
+  const lElevPct = Math.max(0, NEUTRAL_L - lGap) * 100;
+  const rElevPct = Math.max(0, NEUTRAL_R - rGap) * 100;
+  const elevPct  = Math.max(lElevPct, rElevPct);
+
+  // Flag when one side is clearly worse — lets the UI give a side-specific cue.
+  const asymmetric = Math.abs(lElevPct - rElevPct) > 7
+    ? (lElevPct > rElevPct ? "left" : "right")
+    : null;
+
   const score    = scoreMetric(elevPct, 0, THR.SHOULDER_ELEV.ok, THR.SHOULDER_ELEV.bad);
   const severity = classify(elevPct, SEV.SHOULDER_ELEV);
-  return { elevPct: Math.round(elevPct * 10) / 10, score, severity, confidence: 82, reliable: true,
-           neutral: Math.round(NEUTRAL * 1000) / 1000, personalised: calibNeutral !== null };
+  return {
+    elevPct: Math.round(elevPct * 10) / 10,
+    lElevPct: Math.round(lElevPct * 10) / 10,
+    rElevPct: Math.round(rElevPct * 10) / 10,
+    asymmetric,
+    score, severity,
+    confidence: 82,
+    reliable: true,
+    neutral: Math.round(((NEUTRAL_L + NEUTRAL_R) / 2) * 1000) / 1000,
+    personalised: calibNeutral !== null,
+  };
 }
 
 function analyzeFHP(lms, W, H, prop) {
@@ -2121,8 +2158,16 @@ function buildAlerts(modules, distCm, lo, hi) {
     add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`, imp("rounded", rounded)),
     add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`, imp("rounded", rounded)),
     add("round_calib_tip", rounded.calibrationRecommended,        `Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading`, imp("rounded", rounded)),
-    add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad, `⚠️ Shoulders elevated/shrugging (${shoulderElev.elevPct}%) — relax shoulders down and back`, imp("shoulder", shoulder)),
-    add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad, `Shoulders slightly raised — relax your trap muscles`, imp("shoulder", shoulder)),
+    add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad,
+      shoulderElev.asymmetric
+        ? `⚠️ ${shoulderElev.asymmetric === "left" ? "Left" : "Right"} shoulder raised — drop that shoulder, relax your neck`
+        : `⚠️ Both shoulders raised (${shoulderElev.elevPct}%) — let them drop down and back`,
+      imp("shoulder", shoulder)),
+    add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad,
+      shoulderElev.asymmetric
+        ? `${shoulderElev.asymmetric === "left" ? "Left" : "Right"} shoulder slightly raised — relax that side`
+        : `Shoulders slightly raised — relax your trap muscles`,
+      imp("shoulder", shoulder)),
     add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`, imp("elbow", elbow)),
     add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`, imp("elbow", elbow)),
     // "below" (looking down) used to always be worded as "Monitor too low —
@@ -2696,7 +2741,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       rounded_shoulders: { value: rounded.depth,    score: rounded.score,  unit: "depth", label: "Rounded shoulders",asymmetry: rounded.asymmetry, reliable: rounded.reliable },
       torso_flexion:     { value: torsoFlex.shrinkPct, score: torsoFlex.score, unit: "%",  label: "Forward slouch",   reliable: torsoFlex.reliable },
       trunk_rotation:    { value: trunkRot.angle,      score: trunkRot.score,  unit: "°",  label: "Trunk rotation",   reliable: trunkRot.reliable },
-      shoulder_elevation:{ value: shoulderElev.elevPct, score: shoulderElev.score, unit: "%", label: "Shoulder elevation (shrug)", reliable: shoulderElev.reliable },
+      shoulder_elevation:{ value: shoulderElev.elevPct, score: shoulderElev.score, unit: "%", label: "Shoulder elevation (shrug)", reliable: shoulderElev.reliable, learning: shoulderElev.learning, asymmetric: shoulderElev.asymmetric ?? null },
       elbow_angle:       { value: elbow.angle,      score: elbow.score,    unit: "°",  label: "Elbow angle",         reliable: elbow.reliable },
       monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable },
       session_fatigue:   { value: fatiguePenalty,   score: Math.max(0, overall - fatiguePenalty), unit: "pts", label: "Fatigue adjustment", session_min: sessionMin },
