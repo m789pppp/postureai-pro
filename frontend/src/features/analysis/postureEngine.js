@@ -1426,14 +1426,14 @@ function analyzeTorsoFlexion(lms, W, H, prop, calib = null) {
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
   if (!prop.shOK || !hipOK) {
-    return { ratio: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+    return { ratio: 0, shrinkPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
   }
 
   const midHipY = ((g(PL.L_HIP).y + g(PL.R_HIP).y) / 2) * H;
   const torsoPx = midHipY - prop.midSh.y;           // image-space, hips below shoulders
   const shRefPx = prop.shWidthPxRaw ?? prop.shWidthPx;
   if (torsoPx <= 0 || shRefPx < 20) {
-    return { ratio: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+    return { ratio: 0, shrinkPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
   }
   const ratio = torsoPx / shRefPx;
 
@@ -1446,11 +1446,17 @@ function analyzeTorsoFlexion(lms, W, H, prop, calib = null) {
     : _feedBaseline(_torsoBase, ratio);
 
   if (neutral == null) {
-    return { ratio: 0, score: 90, severity: "normal", confidence: 0, reliable: false, calibrating: true };
+    return { ratio: 0, shrinkPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false, calibrating: true };
   }
 
   // Only SHORTENING counts. A longer-than-neutral span means sitting taller
   // than baseline, which is not a fault.
+  // Every early return above now carries shrinkPct: 0. It did not, and the
+  // metric object is read straight into the UI as `${torsoFlex.shrinkPct}%` —
+  // so any frame that took one of those branches rendered "undefined%" to the
+  // user. On a laptop that is every frame: this analyzer needs the hips, and
+  // at 50-80cm from a webcam the hips are roughly a full frame-height below
+  // the bottom edge.
   const shrinkPct = Math.max(0, (neutral - ratio) / Math.max(neutral, 0.1)) * 100;
   const score    = scoreMetric(shrinkPct, 0, THR.TORSO_FLEX.ok, THR.TORSO_FLEX.bad);
   const severity = classify(shrinkPct, SEV.TORSO_FLEX);

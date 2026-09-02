@@ -692,13 +692,31 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
   ctx.font="bold 10px system-ui"; ctx.globalAlpha=.95;
 
   // Neck angle (ear-shoulder vertical)
+  // The canvas element carries `transform: scaleX(-1)` so the skeleton lines
+  // up with the mirrored video the user sees. Everything drawn on it is
+  // therefore flipped — including text, which comes out written backwards.
+  // Confirmed from a real session: the distance label rendered as "mɔ1E"
+  // instead of "31cm", in both bottom corners.
+  //
+  // Lines and dots do not care about handedness, so the fix is per-string
+  // rather than a re-plumb of every coordinate: flip the context back around
+  // the text's own anchor, draw, and restore. The anchor is expressed in
+  // canvas space exactly as before, so nothing moves.
+  const mtext = (str, x, y) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(-1, 1);
+    ctx.fillText(str, 0, 0);
+    ctx.restore();
+  };
+
   if(valid(lm.midEar)&&valid(lm.midSh)){
     const neckAng = metrics?.neck_lean?.value ?? _angle2pt(lm.midEar,lm.midSh);
     if(neckAng!=null){
       const[sx,sy]=px(lm.midSh);
       ctx.fillStyle="rgba(0,0,0,.55)";
       ctx.fillRect(sx+6,sy-14,40,16); ctx.fillStyle=neckCol;
-      ctx.fillText(`${neckAng}°`,sx+8,sy-2);
+      mtext(`${neckAng}°`, sx + 8, sy - 2);
     }
   }
 
@@ -710,7 +728,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     const tiltAng=metrics?.shoulder_level?.value ?? Math.round(Math.abs(Math.atan2(ry-ly,rx-lx)*180/Math.PI));
     const mx=(lx+rx)/2, my=(ly+ry)/2-14;
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(mx-20,my-12,42,16);
-    ctx.fillStyle=shCol; ctx.fillText(`${tiltAng}°`,mx-18,my);
+    ctx.fillStyle=shCol; mtext(`${tiltAng}°`, mx - 18, my);
   }
 
   // Screen distance
@@ -719,7 +737,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
     ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
     ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
-    ctx.fillText(`📏 ${raw.distCm}cm`,W-60,H-12);
+    mtext(`📏 ${raw.distCm}cm`, W - 60, H - 12);
   }
 
   // ── FHP visual line ───────────────────────────────────────────
@@ -764,9 +782,9 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
       ctx.fillStyle = "rgba(2,8,20,.85)";
       _roundRect(ctx, W-108, 8, 100, 30, 6); ctx.fill();
       ctx.fillStyle = fhpCol; ctx.font = "bold 10px system-ui";
-      ctx.fillText(`FHP ${fhpCm}cm`, W-104, 22);
+      mtext(`FHP ${fhpCm}cm`, W - 104, 22);
       ctx.fillStyle = "#94a3b8"; ctx.font = "9px system-ui";
-      ctx.fillText(`+${loadKg}kg load`, W-104, 33);
+      mtext(`+${loadKg}kg load`, W - 104, 33);
     }
     ctx.restore();
   }
@@ -806,7 +824,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     ctx.fillStyle = "rgba(2,8,20,.85)";
     _roundRect(ctx, W-108, 44, 100, 20, 5); ctx.fill();
     ctx.fillStyle = rsCol; ctx.font = "bold 9px system-ui";
-    ctx.fillText(`⚠ Rounded ${Math.round(rsMet.value??0)}`, W-104, 57);
+    mtext(`⚠ Rounded ${Math.round(rsMet.value??0)}`, W - 104, 57);
     ctx.restore();
   }
 
@@ -830,7 +848,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
   rows.forEach(({label,col,score,val,unit},i)=>{
     const ry=panelY+16+i*24;
     ctx.fillStyle="#94a3b8"; ctx.font="10px system-ui";
-    ctx.fillText(label,panelX+8,ry);
+    mtext(label, panelX + 8, ry);
     // Risk bar
     const barX=panelX+52, barW=54, barFill=Math.max(4,(score??0)/100*barW);
     ctx.fillStyle="rgba(255,255,255,.08)";
@@ -840,7 +858,7 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     // Value
     if(val!=null){
       ctx.fillStyle=col; ctx.font="600 9px system-ui";
-      ctx.fillText(`${val}${unit}`,barX+barW+4,ry);
+      mtext(`${val}${unit}`, barX + barW + 4, ry);
     }
   });
   } // end showAng
@@ -3157,6 +3175,7 @@ export default function App(){
   const frameBufferRef  = useRef(null); // 60-frame aggregation buffer
   const distSmootherRef = useRef(null); // sliding-median distance smoother
   const lastAnalysisTsRef = useRef(0);  // throttles the analysis loop — see runLoop
+  const lastUiPushRef     = useRef(0);  // throttles the React re-render — see runLoop
   // Fallback-mode health tracking — when local MediaPipe failed to load,
   // /api/analyze IS the only source of scores. If it silently keeps
   // failing (backend down, network), the camera looks "frozen" with zero
@@ -3838,7 +3857,25 @@ export default function App(){
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             pushSessionScore(displayScore);
             lastAnalRef.current=finalResult;
-            startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(finalResult); });
+            // Push to React at ~4Hz, not on every analysed frame.
+            //
+            // The analysis loop runs at a 20fps ceiling and this used to call
+            // setAnalysis + setHistory every single time, so the whole live
+            // page — score ring, metrics panel, history chart, alert bar —
+            // re-rendered twenty times a second. That is the lag: the work is
+            // not the pose estimation, it is React reconciling a large tree
+            // against numbers no one can read that fast.
+            //
+            // The skeleton and the on-video labels are drawn imperatively to
+            // the canvas below and are unaffected, so the camera feed stays
+            // smooth at full rate. Only the numbers people read settle at four
+            // updates a second, which is faster than anyone reads them.
+            // lastAnalRef keeps the newest result available to everything that
+            // needs it immediately, including session save.
+            if (_nowTs - lastUiPushRef.current >= 250) {
+              lastUiPushRef.current = _nowTs;
+              startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(finalResult); });
+            }
             // Privacy: pixelate the face first so the skeleton draws on top of it.
             if(faceBlur) drawFaceBlur(ctx,vid,lms,W,H);
             const _drawOpts={skeleton:showSkeleton,angles:showAngles};
@@ -4475,6 +4512,14 @@ export default function App(){
   const[sessionResult,setSessionResult]=useState(null);
 
   async function stopCamera(){
+    // The UI update is throttled to 4Hz during a session, so the last analysed
+    // frame may not have reached React yet. Flush it before anything reads
+    // `analysis`, or the summary can be built from a reading up to 250ms
+    // stale.
+    if (lastAnalRef.current) {
+      lastUiPushRef.current = 0;
+      setAnalysis(lastAnalRef.current);
+    }
     // Reentrancy guard: this function isn't actually awaited end-to-end
     // (the Firestore saveSession() call below is fire-and-forget via
     // .then()/.catch(), not awaited) and isSavingSession — the only thing
