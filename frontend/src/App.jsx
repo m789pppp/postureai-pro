@@ -578,7 +578,24 @@ function postureCue(analysis, isAr){
   const cands=[];
   const add=(k,en,ar,icon)=>{ const sc=m[k]?.score; if(typeof sc==="number"&&sc<55&&m[k]?.reliable!==false) cands.push({sc,en,ar,icon}); };
   add("fhp_index","Tuck your chin back","أدخل ذقنك للخلف","⟲");
-  add("neck_lean","Raise screen to eye level","ارفع الشاشة لمستوى عينك","↑");
+  // NOT "raise your screen". analyzeNeckLean() measures the ear-to-shoulder
+  // angle in the IMAGE plane, and from a front camera that is a LATERAL
+  // measurement — the engine's own weight table says so, and the rig confirms
+  // it: 20° of forward neck flexion moves this metric by 0.0°, while 15° of
+  // sideways lean moves it to 14°. So the one cue this metric could produce
+  // was advice about monitor height for a fault that has nothing to do with
+  // monitor height. Caught on camera: a user with his head tilted roughly 40°
+  // toward one shoulder was told three times to raise his screen.
+  //
+  // This is the same defect already fixed for spine_lean directly below, which
+  // was left in place here — the heavier of the two metrics, at 0.14 of the
+  // score against spine_lean's 0.088.
+  // No side is named. shoulder_level and spine_lean are the only metrics that
+  // carry a `signed` field, and at laptop framing spine_lean is unmeasurable —
+  // so there is no reliable way to say "leaning right" here, and guessing the
+  // side is worse than not saying it.
+  add("neck_lean","Head is leaning to one side — bring it over your shoulders",
+      "راسك مايلة على جنب — رجّعها فوق كتفيك","⟲");
   // spine_lean is geometrically a LATERAL (sideways) lean signal — the
   // engine's angleVert() is documented 2D-only (ignores Z), so it barely
   // reacts to forward slouch (fhp_index/neck_lean already cover that) but
@@ -731,14 +748,16 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     ctx.fillStyle=shCol; mtext(`${tiltAng}°`, mx - 18, my);
   }
 
-  // Screen distance
-  if(raw?.distCm){
-    const dc=raw.distCm>=raw.lo&&raw.distCm<=raw.hi?"#4FAE8E":raw.distCm>=(raw.lo-15)?"#D6A24C":"#C6604F";
-    const[sx,sy]=px(lm.midEar||{x:.5,y:.1});
-    ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(W-62,H-26,58,18);
-    ctx.fillStyle=dc; ctx.font="bold 11px system-ui";
-    mtext(`📏 ${raw.distCm}cm`, W - 60, H - 12);
-  }
+  // REMOVED: the second distance readout.
+  //
+  // This drew `raw.distCm` from the frame being rendered, while the pinned
+  // React chip above the video shows `analysis.distCm` from React state, which
+  // is pushed at 4Hz. Two labels, one measurement, different sampling — and on
+  // camera they disagreed by 7cm (65 vs 72) in a single frame, on a metric
+  // whose whole ideal band is 30cm wide. A user reading both has no reason to
+  // trust either. The chip is the better of the two: it carries the colour,
+  // the "too close / too far" reason from the quality gate, and the direction
+  // to move. This one is gone rather than resynchronised.
 
   // ── FHP visual line ───────────────────────────────────────────
   // Draws a horizontal line from the shoulder midpoint to a projected
@@ -777,14 +796,32 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
       ctx.lineTo(ex - dir*8, ey - 4);
       ctx.lineTo(ex - dir*8, ey + 4);
       ctx.closePath(); ctx.fillStyle = fhpCol; ctx.fill();
-      // FHP badge (top-right of screen)
+      // The canvas carries transform:scaleX(-1) so it matches the mirrored
+      // video, which means a box drawn at canvas x lands at screen W-x. Every
+      // badge in this file was positioned as though that flip did not happen:
+      // this one is commented "top-right of screen" and rendered at the top
+      // LEFT, underneath the "Live" status pill and the distance chip, with
+      // "FHP 3.5cm / +0.1kg load" legible only where it stuck out from behind
+      // them. Fixing the glyph direction earlier did not fix the anchors.
+      //
+      // SX() converts a screen-space x to the canvas x that lands there, so
+      // these coordinates now mean what they say. Placed in the free column
+      // below the distance chip rather than the top-right, which is occupied
+      // by the score panel.
+      const SX = x => W - x;
+      const bx = isAr ? W - 118 : 8;          // screen-space left edge
       ctx.globalAlpha = .88;
       ctx.fillStyle = "rgba(2,8,20,.85)";
-      _roundRect(ctx, W-108, 8, 100, 30, 6); ctx.fill();
+      // Y is in CANVAS pixels (the backing store is the video's native size,
+      // typically 720 tall) while the React chips above are positioned in CSS
+      // pixels against a container that is usually shorter — so a canvas y that
+      // looks clear of them at 1:1 rides up into them once the video is scaled
+      // down. Sat low enough to clear the chips at any sane scale factor.
+      _roundRect(ctx, SX(bx + 110), 150, 110, 30, 6); ctx.fill();
       ctx.fillStyle = fhpCol; ctx.font = "bold 10px system-ui";
-      mtext(`FHP ${fhpCm}cm`, W - 104, 22);
+      mtext(`FHP ${fhpCm}cm`, SX(bx + 6), 164);
       ctx.fillStyle = "#94a3b8"; ctx.font = "9px system-ui";
-      mtext(`+${loadKg}kg load`, W - 104, 33);
+      mtext(`+${loadKg}kg load`, SX(bx + 6), 175);
     }
     ctx.restore();
   }
@@ -822,45 +859,27 @@ function drawFront(ctx,res,W,H,isAr=false,opts={}){
     ctx.save();
     ctx.globalAlpha = .88;
     ctx.fillStyle = "rgba(2,8,20,.85)";
-    _roundRect(ctx, W-108, 44, 100, 20, 5); ctx.fill();
+    const _bx = isAr ? W - 118 : 8;
+    _roundRect(ctx, W - (_bx + 110), 186, 110, 20, 5); ctx.fill();
     ctx.fillStyle = rsCol; ctx.font = "bold 9px system-ui";
-    mtext(`⚠ Rounded ${Math.round(rsMet.value??0)}`, W - 104, 57);
+    mtext(`⚠ Rounded ${Math.round(rsMet.value??0)}`, W - (_bx + 6), 199);
     ctx.restore();
   }
 
-  // ── Risk panel (bottom-left) with values ─────────────────────
-  const panelX=8, panelY=H-110, panelW=160, panelH=104;
-  ctx.globalAlpha=.82;
-  ctx.fillStyle="rgba(2,8,20,.85)";
-  _roundRect(ctx,panelX,panelY,panelW,panelH,8);
-  ctx.fill();
-  ctx.globalAlpha=1;
-
-  const rows=[
-    { label:isAr?"الرقبة":"Neck",     col:neckCol, score:neckScore, val: metrics?.neck_lean?.value, unit:"°" },
-    { label:isAr?"الكتفين":"Shoulder", col:shCol,   score:shScore,   val: metrics?.shoulder_level?.value, unit:"°" },
-    { label:isAr?"الظهر":"Back",       col:backCol, score:backScore, val: metrics?.spine_lean?.value, unit:"°" },
-    { label:isAr?"المسافة":"Dist",     col:raw?.distCm>=raw?.lo&&raw?.distCm<=raw?.hi?"#4FAE8E":raw?.distCm>=(raw?.lo-15)?"#D6A24C":"#C6604F",
-      score: metrics?.screen_distance?.score ?? 90,
-      val: raw?.distCm, unit:"cm" },
-  ];
-  ctx.font="bold 10px system-ui";
-  rows.forEach(({label,col,score,val,unit},i)=>{
-    const ry=panelY+16+i*24;
-    ctx.fillStyle="#94a3b8"; ctx.font="10px system-ui";
-    mtext(label, panelX + 8, ry);
-    // Risk bar
-    const barX=panelX+52, barW=54, barFill=Math.max(4,(score??0)/100*barW);
-    ctx.fillStyle="rgba(255,255,255,.08)";
-    _roundRect(ctx,barX,ry-9,barW,10,5); ctx.fill();
-    ctx.fillStyle=col;
-    _roundRect(ctx,barX,ry-9,barFill,10,5); ctx.fill();
-    // Value
-    if(val!=null){
-      ctx.fillStyle=col; ctx.font="600 9px system-ui";
-      mtext(`${val}${unit}`, barX + barW + 4, ry);
-    }
-  });
+  // REMOVED: the second risk panel.
+  //
+  // Authored as a "bottom-left" panel, it rendered at the bottom RIGHT because
+  // the canvas is CSS-mirrored — and each of its labels, anchored at canvas
+  // x=8, landed at screen x=W-8 and grew rightward off the edge, so on camera
+  // the user saw "Ne", "Sho", "Bac" clipped against the frame border with the
+  // bars and numbers gone entirely.
+  //
+  // It is not being repositioned, because it duplicated the React score panel
+  // above it row for row (neck, shoulder, back, distance) with a second set of
+  // colour thresholds, and inherited the same defect that panel had: it read
+  // `.score` without `.reliable`, so it drew a full green bar for spine_lean
+  // and rounded_shoulders — two metrics the camera cannot see at laptop
+  // framing. One panel, which now says when it has no view.
   } // end showAng
 
   ctx.restore();
@@ -7355,58 +7374,94 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,letterSpacing:.5}}>
                   {isAr?"الدرجة الكلية":"ERGONOMIC SCORE"}
                 </div>
+                {/* This had its own three-tier ladder — Excellent at 70,
+                    Fair at 55, Poor below — while the engine's gradeScore()
+                    (85 / 70 / 55) and the session-summary modal both call
+                    70-84 "Good". So the band this user spent most of a real
+                    session in, 70 to 84, was labelled "Excellent" on the
+                    video and "Good" in the report on the same session, and a
+                    reading of 70 out of 100 — with a metric sitting in the
+                    High-risk tier right underneath it — was announced as
+                    excellent posture. One grader now, the engine's. */}
                 <div style={{fontSize:11,fontWeight:700,
                   color:scoreTierColor(score)}}>
-                  {score>=70?(isAr?"ممتاز":"Excellent"):score>=55?(isAr?"مقبول":"Fair"):(isAr?"ضعيف":"Poor")}
+                  {isAr?gradeScoreAr(score):gradeScore(score)}
                 </div>
               </div>
             </div>
 
             {/* Risk zones */}
+            {/* Two of these four rows were reporting on metrics the camera
+                could not see.
+
+                "Back" is spine_lean and "Rounding" is rounded_shoulders, and
+                both are measured from the hips — which sit below the bottom
+                edge of the frame at any laptop distance. The engine correctly
+                marks them reliable:false and drops them from the score; this
+                panel read only `.score`, got each module's default, and drew a
+                full green bar labelled "Low" next to the word Back. Every
+                session, for every user, the app was telling people their back
+                was fine while having no view of their back at all. That is a
+                worse failure than a wrong number.
+
+                The row names were also imprecise in a way that produced a
+                visible contradiction: "Shoulder" is shoulder_level (one
+                shoulder higher than the other), but the coaching cue "Drop
+                your shoulders" comes from shoulder_elevation (both shrugged) —
+                a metric with no row here. So the screen could read
+                "Shoulder — Low" while instructing the user to drop their
+                shoulders. Both are now named for what they measure, and the
+                shrug has its own row. */}
             {[
               {
-                label:    isAr?"الرقبة":"Neck",
-                score:    analysis?.metrics?.neck_lean?.score,
-                value:    analysis?.metrics?.neck_lean?.value,
+                label:    isAr?"ميل الرقبة":"Neck tilt",
+                m:        analysis?.metrics?.neck_lean,
                 unit:     "°",
               },
               {
-                label:    isAr?"الكتفين":"Shoulder",
-                score:    analysis?.metrics?.shoulder_level?.score,
-                value:    analysis?.metrics?.shoulder_level?.value,
+                label:    isAr?"استواء الكتفين":"Shoulder level",
+                m:        analysis?.metrics?.shoulder_level,
                 unit:     "°",
               },
               {
-                label:    isAr?"الظهر":"Back",
-                score:    analysis?.metrics?.spine_lean?.score,
-                value:    analysis?.metrics?.spine_lean?.value,
+                label:    isAr?"رفع الكتفين":"Shoulder shrug",
+                m:        analysis?.metrics?.shoulder_elevation,
+                unit:     "%",
+              },
+              {
+                label:    isAr?"ميل الظهر":"Back lean",
+                m:        analysis?.metrics?.spine_lean,
                 unit:     "°",
               },
               {
-                label:    isAr?"الأكتاف":"Rounding",
-                score:    analysis?.metrics?.rounded_shoulders?.score,
-                value:    analysis?.metrics?.rounded_shoulders?.value,
+                label:    isAr?"تدوير الكتفين":"Rounding",
+                m:        analysis?.metrics?.rounded_shoulders,
                 unit:     "",
               },
               // Distance intentionally omitted here — it has its own dedicated
               // persistent chip pinned on the video (see above) plus the
               // detailed bar further down the page.
-            ].map(({label,score:s,value,unit},i)=>{
+            ].map(({label,m,unit},i)=>{
+              const unseen = !m || m.reliable === false;
+              const s = unseen ? null : m.score;
               // Same scoreTierColor() thresholds (70/55) as the badge above and
               // ScoreGauge — these bars used to use their own 80/60 split, a
               // third disagreeing color scheme on the same screen.
-              const col = s==null?"#475569":scoreTierColor(s);
-              const risk= s==null?"—":s>=70?(isAr?"منخفض":"Low"):s>=55?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
+              const col = unseen?"#64748b":scoreTierColor(s);
+              const risk= unseen?(isAr?"مش ظاهر":"no view")
+                        : s>=70?(isAr?"منخفض":"Low"):s>=55?(isAr?"متوسط":"Med"):(isAr?"مرتفع":"High");
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",
-                  justifyContent:"space-between",marginBottom:5}}>
-                  <div style={{fontSize:10,color:"#94a3b8",width:60}}>{label}</div>
-                  <div style={{flex:1,height:4,background:"rgba(255,255,255,.06)",
-                    borderRadius:8,margin:"0 6px",overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${s??0}%`,
-                      background:col,borderRadius:8,transition:"width .4s ease"}}/>
+                  justifyContent:"space-between",marginBottom:5,opacity:unseen?.6:1}}>
+                  <div style={{fontSize:10,color:"#94a3b8",width:64}}>{label}</div>
+                  <div style={{flex:1,height:4,borderRadius:8,margin:"0 6px",overflow:"hidden",
+                    background: unseen
+                      ? "repeating-linear-gradient(90deg,rgba(255,255,255,.14) 0 3px,transparent 3px 6px)"
+                      : "rgba(255,255,255,.06)"}}>
+                    {!unseen && <div style={{height:"100%",width:`${s??0}%`,
+                      background:col,borderRadius:8,transition:"width .4s ease"}}/>}
                   </div>
-                  <div style={{fontSize:9,fontWeight:700,color:col,width:28,textAlign:"right"}}>
+                  <div style={{fontSize:9,fontWeight:700,color:col,width:44,textAlign:"right"}}>
                     {risk}
                   </div>
                 </div>
