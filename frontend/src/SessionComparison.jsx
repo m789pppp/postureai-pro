@@ -159,9 +159,17 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {METRICS.map(m => {
+              // reliable===false means the camera could not see what this
+              // metric is derived from — every hip-based metric, in every
+              // laptop session. The stored document keeps the key with a
+              // module default in it, so without this check the table showed
+              // "spine lean 0° → 0° → 0°" as three readings and the diff badge
+              // underneath called it unchanged. Comparing two numbers that
+              // were never measured is the one thing this screen must not do.
               const vals = s3.map(s => {
                 const met = s.metrics?.[m.key];
-                return met ? { value: met.value, score: met.score } : null;
+                if (!met || met.reliable === false) return null;
+                return { value: met.value, score: met.score };
               });
               // skip if no session has this metric
               if (vals.every(v => v === null)) return null;
@@ -195,8 +203,9 @@ export default function SessionComparison({ sessions = [], cs, lang, onClose, ef
           {/* Most improved / most regressed summary */}
           {s3.length >= 2 && (() => {
             const diffs = METRICS.map(m => {
-              const v0 = s3[0]?.metrics?.[m.key]?.value;
-              const v1 = s3[1]?.metrics?.[m.key]?.value;
+              const m0 = s3[0]?.metrics?.[m.key], m1 = s3[1]?.metrics?.[m.key];
+              if (!m0 || !m1 || m0.reliable === false || m1.reliable === false) return null;
+              const v0 = m0.value, v1 = m1.value;
               if (v0 == null || v1 == null) return null;
               const diff = v0 - v1;
               const improved = m.low_good ? diff < 0 : diff > 0;

@@ -1260,7 +1260,14 @@ export function SessionDetailModal({ session, allSessions = [], profile, cs, isA
               const unit = isNum ? "" : (v?.unit === "depth" ? "" : (v?.unit || ""));
               const value = rawVal != null ? `${typeof rawVal==="number"?Math.round(rawVal*10)/10:rawVal}${unit}` : null;
               const label = labels[k] || v?.label || k.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-              return <MetRow key={k} label={label} value={value} score={score} cs={cs} />;
+              // MetRow already renders an unmeasured metric honestly — it just
+              // was never told. The stored session keeps every key including
+              // the ones the camera could not see, each carrying its module's
+              // default score, so this breakdown listed a green bar for spine
+              // lean and rounded shoulders on every laptop session ever saved.
+              const unmeasured = !isNum && v?.reliable === false;
+              return <MetRow key={k} label={label} value={value} score={score} cs={cs}
+                       dim={unmeasured} dimNote={isAr ? "مش متقاس" : "not measured"} />;
             })}
         </div>}
 
