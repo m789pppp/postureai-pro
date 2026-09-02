@@ -273,6 +273,13 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
     (sessions || []).forEach(sess => {
       const m = sess.metrics || {};
       keys.forEach(k => {
+        // Skip what was never measured. The `spine` and `lower` zones here are
+        // built entirely from spine_lean, trunk_rotation and torso_flexion —
+        // all three derived from the hips, all three unmeasurable at laptop
+        // framing, all three stored with their module's default score. So an
+        // HR dashboard was reporting company-wide lumbar and spinal risk from
+        // numbers no camera in the company had ever produced.
+        if (m[k]?.reliable === false) return;
         const sc0 = m[k]?.score;
         if (Number.isFinite(sc0)) { sum += sc0; n += 1; }
       });

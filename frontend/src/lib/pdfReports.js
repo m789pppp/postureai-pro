@@ -355,14 +355,71 @@ function _logo(doc,x,y,sz,b64){
 }
 
 // ── _zonalRisk ─────────────────────────────────────────────────────
+/**
+ * One metric's score, or null when there isn't one.
+ *
+ * Everything in this file used to read `metrics[k]?.score ?? 100` (or ?? 70),
+ * which turns BOTH failure modes into a perfect reading: a key that does not
+ * exist, and a metric the engine explicitly marked unmeasurable. Both are
+ * common here — see _ZONES below for the keys, and note that every hip-derived
+ * metric reports reliable:false at laptop framing, which is every session.
+ *
+ * null means "no reading". Callers average over what they have and say so when
+ * they have nothing, instead of printing a number that came from a default.
+ */
+export function _metricScore(metrics, k){
+  const m = metrics?.[k];
+  if (typeof m === "number") return Number.isFinite(m) ? m : null;
+  if (!m || m.reliable === false) return null;
+  return Number.isFinite(m.score) ? m.score : null;
+}
+
+// The engine's real keys. The three zones below previously referenced
+// `shoulder`, `spine_align`, `hip_angle` and `trunk_lean` — FOUR names the
+// engine has never emitted, in a file that also uses `distance` for
+// `screen_distance`. Eighteen references in total, every one resolving to
+// undefined and falling through to a full-marks default.
+//
+// The arithmetic consequence was not subtle: lumbar risk was
+// 100 - (100+100+100)/3 = 0 for every user, in every session, always. A
+// printed "lower back risk: 0" that was a constant wearing a formula, on the
+// Elite clinical report.
+const _ZONES = {
+  cervical: ["neck_lean", "head_tilt", "head_yaw"],
+  thoracic: ["shoulder_level", "rounded_shoulders", "shoulder_elevation"],
+  lumbar:   ["spine_lean", "torso_flexion", "trunk_rotation"],
+};
+
+/**
+ * Risk per body zone, 0-100, or null for a zone with nothing measured.
+ * A null zone must be rendered as "not measured", never as 0 — zero risk and
+ * no reading are opposite statements.
+ */
+
+// Rendering helpers for a zone that has no reading.
+//
+// Every call site read `zonal[k] || 0`, which prints an unmeasured zone as
+// "0%" — and on a risk scale 0% is the BEST possible result. So the clinical
+// spine diagram reported "Lumbar L1-S1: 0%, low risk" for the one zone this
+// product cannot see from a laptop. Zero risk and no reading are opposite
+// statements and must not share a rendering.
+const _zNum   = (z,k) => (z?.[k] ?? null);
+const _zHas   = (z,k) => _zNum(z,k) !== null;
+const _zBar   = (z,k) => _zHas(z,k) ? _zNum(z,k) : 0;          // geometry only
+const _zPct   = (z,k,isAr) => _zHas(z,k) ? `${_zNum(z,k)}%` : (isAr?"مش متقاس":"not measured");
+const _zColor = (z,k) => _zHas(z,k) ? _riskColor(_zNum(z,k)) : [120,130,145];
+const _zLabel = (z,k,isAr) => _zHas(z,k) ? _riskLabel(_zNum(z,k),isAr) : (isAr?"مش متقاس":"not measured");
+
 function _zonalRisk(metrics){
-  if(!metrics) return{cervical:0,thoracic:0,lumbar:0};
-  const sc=k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??100);
-  return{
-    cervical:Math.round(100-Math.min(100,(sc("neck_lean")+sc("head_tilt")+sc("head_yaw"))/3)),
-    thoracic:Math.round(100-Math.min(100,(sc("shoulder")+sc("rounded_shoulders")+sc("spine_lean"))/3)),
-    lumbar:  Math.round(100-Math.min(100,(sc("spine_align")+sc("hip_angle")+sc("trunk_lean"))/3)),
-  };
+  const out = { cervical:null, thoracic:null, lumbar:null };
+  if(!metrics) return out;
+  for(const [zone, keys] of Object.entries(_ZONES)){
+    const vals = keys.map(k=>_metricScore(metrics,k)).filter(v=>v!==null);
+    out[zone] = vals.length
+      ? Math.round(100 - Math.min(100, vals.reduce((a,b)=>a+b,0) / vals.length))
+      : null;
+  }
+  return out;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -909,9 +966,26 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     });
     lw(doc,.3);
     // User data polygon
-    const metKeys=["neck_lean","shoulder","spine_align","hip_angle","distance"];
-    const userScores=metKeys.map(k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??70));
-    const uPts=angles.map((a,i)=>({x:rcx+Math.cos(a)*rad*(userScores[i]/100),y:rcy2+Math.sin(a)*rad*(userScores[i]/100)}));
+    // Four of these five were names the engine never emits, so four of the
+    // five axes on every radar ever printed were the ?? 70 default — the same
+    // pentagon on every report, with one real vertex.
+    const metKeys=["neck_lean","shoulder_level","spine_lean","fhp_index","screen_distance"];
+    const userScores=metKeys.map(k=>_metricScore(metrics,k));
+    // A null axis used to divide into NaN or collapse the vertex to the
+    // centre, which draws as "this is terrible" rather than "there is no
+    // reading". The polygon is only drawn when every axis has one; otherwise
+    // the grid stands empty and a line says which axes were missing.
+    const _radarOK = userScores.every(v=>v!==null);
+    const uPts=angles.map((a,i)=>{const v=_radarOK?userScores[i]:0;
+      return {x:rcx+Math.cos(a)*rad*(v/100),y:rcy2+Math.sin(a)*rad*(v/100)};});
+    if(!_radarOK){
+      const miss=metKeys.filter((k,i)=>userScores[i]===null)
+        .map(k=>(isAr?(METRIC_LABELS_AR[k]||k):(METRIC_LABELS[k]||k)));
+      sf(6,"italic"); tc(doc,...TEXT3);
+      doc.text(isAr?`مش متقاس في الكادر ده: ${miss.join("، ")}`
+                  :`Not measurable at this framing: ${miss.join(", ")}`, rcx, rcy2+rad+9, {align:"center"});
+    }
+    if(_radarOK){
     fc(doc,37,99,235);
     doc.setGState&&doc.setGState(new doc.GState({opacity:.25}));
     const uSegs=uPts.slice(1).map((p,i)=>[p.x-uPts[i].x,p.y-uPts[i].y]);
@@ -921,6 +995,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     try{doc.lines([...uSegs,[uPts[0].x-uPts[uPts.length-1].x,uPts[0].y-uPts[uPts.length-1].y]],uPts[0].x,uPts[0].y,[1,1],"S",false);}catch{}
     lw(doc,.3);
     uPts.forEach(p=>{fc(doc,37,99,235);doc.circle(p.x,p.y,1.5,"F");});
+    }
     // Labels
     angles.forEach((a,i)=>{
       const lx=rcx+Math.cos(a)*(rad+7),ly=rcy2+Math.sin(a)*(rad+7);
@@ -1192,15 +1267,29 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     dc(doc,...BORDER);lw(doc,.2);
     try{doc.lines([...gp.slice(1).map((p,i)=>[p.x-gp[i].x,p.y-gp[i].y]),[gp[0].x-gp[gp.length-1].x,gp[0].y-gp[gp.length-1].y]],gp[0].x,gp[0].y,[1,1],"S",false);}catch{}
   });lw(doc,.3);
-  const metK3=["neck_lean","shoulder","spine_align","hip_angle","distance"];
-  const uS3=metK3.map(k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??70));
-  const up3=ang3.map((a,i)=>({x:rcx3+Math.cos(a)*rad3*(uS3[i]/100),y:rcy3+Math.sin(a)*rad3*(uS3[i]/100)}));
+  // Four of these five were names the engine never emits, so four of the
+    // five axes on every radar ever printed were the ?? 70 default — the same
+    // pentagon on every report, with one real vertex.
+    const metK3=["neck_lean","shoulder_level","spine_lean","fhp_index","screen_distance"];
+  const uS3=metK3.map(k=>_metricScore(metrics,k));
+  const _radar3OK = uS3.every(v=>v!==null);
+  const up3=ang3.map((a,i)=>{const v=_radar3OK?uS3[i]:0;
+    return {x:rcx3+Math.cos(a)*rad3*(v/100),y:rcy3+Math.sin(a)*rad3*(v/100)};});
+  if(_radar3OK){
   fc(doc,37,99,235);doc.setGState&&doc.setGState(new doc.GState({opacity:.25}));
   try{doc.lines([...up3.slice(1).map((p,i)=>[p.x-up3[i].x,p.y-up3[i].y]),[up3[0].x-up3[up3.length-1].x,up3[0].y-up3[up3.length-1].y]],up3[0].x,up3[0].y,[1,1],"F",false);}catch{}
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   dc(doc,37,99,235);lw(doc,.8);
   try{doc.lines([...up3.slice(1).map((p,i)=>[p.x-up3[i].x,p.y-up3[i].y]),[up3[0].x-up3[up3.length-1].x,up3[0].y-up3[up3.length-1].y]],up3[0].x,up3[0].y,[1,1],"S",false);}catch{}
   lw(doc,.3);up3.forEach(p=>{fc(doc,37,99,235);doc.circle(p.x,p.y,1.5,"F");});
+  }
+  if(!_radar3OK){
+    const miss3=metK3.filter((k,i)=>uS3[i]===null)
+      .map(k=>(isAr?(METRIC_LABELS_AR[k]||k):(METRIC_LABELS[k]||k)));
+    sf(5,"italic");tc(doc,...TEXT3);
+    doc.text(isAr?`مش متقاس: ${miss3.join("، ")}`:`Not measurable: ${miss3.join(", ")}`,
+             rcx3,rcy3+rad3+8,{align:"center"});
+  }
   ang3.forEach((a,i)=>{
     const lx=rcx3+Math.cos(a)*(rad3+7),ly=rcy3+Math.sin(a)*(rad3+7);
     sf(4.5,"normal");tc(doc,...TEXT3);doc.text(lbls3[i].replace('\n',' '),lx,ly,{align:"center"});
@@ -1342,7 +1431,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...CARD2); doc.circle(bx+bw3/2, bodyTop+headR, headR, "FD"); lw(doc,0.3);
     const segs=[["cervical",bodyTop+headR*2,15],["thoracic",bodyTop+headR*2+15,28],["lumbar",bodyTop+headR*2+43,18]];
     segs.forEach(([k,zy,zh])=>{
-      const c=_riskColor(zonal[k]||0);
+      const c=_zColor(zonal,k);
       fc(doc,...c); doc.setGState&&doc.setGState(new doc.GState({opacity:0.4}));
       rr(doc,bx+4,zy,bw3-8,zh-2,2.5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     });
@@ -1355,7 +1444,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     ];
     const zcw=cw*0.60;
     zoneMeta.forEach(([k,en,ar,seg],i)=>{
-      const risk=zonal[k]||0, c=_riskColor(risk), zy=ey+i*26, zh=22;
+      const risk=_zBar(zonal,k), c=_zColor(zonal,k), zy=ey+i*26, zh=22;
       dCard(ml,zy,zcw,zh,4);
       fc(doc,...c); rr(doc,ml,zy,2.4,zh,1.2,"F");
       // risk disc
@@ -1383,13 +1472,17 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
       lumbar:   { en:["Lumbar Spine (Lower)","Sagittal and coronal alignment with hip positioning govern lower-back load; deviation may indicate posterior-chain tightness or uneven disc loading."],
                   ar:["الفقرات القطنية","المحاذاة الأمامية والجانبية مع وضع الورك تتحكّم في حمل أسفل الظهر؛ الانحراف قد يشير إلى شدّ السلسلة الخلفية أو تحميل غير متساوٍ للأقراص."] },
     };
-    const _worstKey = ["cervical","thoracic","lumbar"].sort((a,b)=>(zonal[b]||0)-(zonal[a]||0))[0];
-    const _wc = _riskColor(zonal[_worstKey]||0);
+    // Only zones with a reading can be "the worst"; ranking an unmeasured
+    // zone as 0 quietly guaranteed it was never named.
+    const _measuredZones = ["cervical","thoracic","lumbar"].filter(k=>_zHas(zonal,k));
+    const _worstKey = (_measuredZones.length?_measuredZones:["cervical"])
+      .sort((a,b)=>(_zNum(zonal,b)??0)-(_zNum(zonal,a)??0))[0];
+    const _wc = _zColor(zonal,_worstKey);
     const bnH2 = 30;
     fc(doc,..._wc); doc.setGState&&doc.setGState(new doc.GState({opacity:0.08})); rr(doc,ml,ez,cw,bnH2,5,"F"); doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     fc(doc,..._wc); rr(doc,ml,ez,3.2,bnH2,1.6,"F");
     sf(6.5,"bold"); tc(doc,..._wc); doc.text(isAr?"منطقة التركيز ذات الأولوية":"PRIORITY FOCUS ZONE",ml+9,ez+8);
-    sf(11,"bold"); tc(doc,...TEXT); doc.text(`${isAr?_zoneInfo[_worstKey].ar[0]:_zoneInfo[_worstKey].en[0]} — ${zonal[_worstKey]||0}%`,ml+9,ez+18);
+    sf(11,"bold"); tc(doc,...TEXT); doc.text(`${isAr?_zoneInfo[_worstKey].ar[0]:_zoneInfo[_worstKey].en[0]} — ${_zPct(zonal,_worstKey,isAr)}`,ml+9,ez+18);
     sf(7.5,"normal"); tc(doc,...TEXT2);
     doc.text(doc.splitTextToSize(isAr?"ابدأ التمارين التصحيحية من هذه المنطقة أولاً للحصول على أسرع تحسّن.":"Start corrective exercise here first for the fastest overall improvement.",cw-16)[0],ml+9,ez+26);
     ez += bnH2 + 10;
@@ -1397,13 +1490,13 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     // ── Zone Insights (clinical descriptions per region) ──
     ez=_eSection(ez,isAr?"ماذا تعني كل منطقة":"What Each Zone Means","",[99,102,241]); ez+=2;
     ["cervical","thoracic","lumbar"].forEach((k)=>{
-      const info=isAr?_zoneInfo[k].ar:_zoneInfo[k].en, c=_riskColor(zonal[k]||0);
+      const info=isAr?_zoneInfo[k].ar:_zoneInfo[k].en, c=_zColor(zonal,k);
       const lines=doc.splitTextToSize(info[1],cw-14);
       const ih=8+lines.length*4.6+4;
       dCard(ml,ez,cw,ih,4);
       fc(doc,...c); rr(doc,ml,ez,2.4,ih,1.2,"F");
       sf(8.5,"bold"); tc(doc,...TEXT); doc.text(info[0],ml+7,ez+7);
-      sf(6.5,"bold"); tc(doc,...c); doc.text(`${zonal[k]||0}%`,ml+cw-6,ez+7,{align:"right"});
+      sf(6.5,"bold"); tc(doc,...c); doc.text(_zPct(zonal,k,isAr),ml+cw-6,ez+7,{align:"right"});
       sf(7,"normal"); tc(doc,...TEXT2);
       lines.forEach((l,li)=>doc.text(l,ml+7,ez+12.5+li*4.6));
       ez += ih + 5;
@@ -1454,7 +1547,10 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     });
     ey+=ergo.length*30+2;
     // Overall ergonomic index
-    const eIdx=Math.round(ergo.reduce((a,e)=>a+(metrics[e.key]?.score??100),0)/ergo.length);
+    // ?? 100 again: an ergonomic index that rose toward perfect for every
+    // metric the session could not measure.
+    const _eVals=ergo.map(e=>_metricScore(metrics,e.key)).filter(v=>v!==null);
+    const eIdx=_eVals.length?Math.round(_eVals.reduce((a,b)=>a+b,0)/_eVals.length):null;
     const eC=eIdx<40?[239,68,68]:eIdx<65?[245,158,11]:[34,197,94];
     if(ey<H-24){
       dCard(ml,ey,cw,16,4,CARD2);
@@ -1921,7 +2017,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   clinicalZones.forEach(({key,region,title,desc,metrics:mlist})=>{
     if(y>H-72){y=_clinPage();}
-    const risk=zonal[key]||0;
+    const risk=_zBar(zonal,key);
     const rcol=_riskColor(risk);
     const rlbl=_riskLabel(risk,false);
 
@@ -1981,17 +2077,17 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   doc.setDrawColor(200,210,220); doc.setLineWidth(0.5);
   doc.setFillColor(241,245,249); doc.circle(bx+bodyW/2, bodyTop+headR, headR,"FD");
   // Cervical zone
-  const cervCol=_riskColor(zonal.cervical||0);
+  const cervCol=_zColor(zonal,"cervical");
   doc.setFillColor(...cervCol); doc.setGState&&doc.setGState(new doc.GState({opacity:0.35}));
   doc.roundedRect(bx+4, bodyTop+headR*2, bodyW-8, 12, 2, 2, "F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   // Thoracic zone
-  const thorCol=_riskColor(zonal.thoracic||0);
+  const thorCol=_zColor(zonal,"thoracic");
   doc.setFillColor(...thorCol); doc.setGState&&doc.setGState(new doc.GState({opacity:0.35}));
   doc.roundedRect(bx+2, bodyTop+headR*2+12, bodyW-4, 22, 2, 2, "F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   // Lumbar zone
-  const lumbCol=_riskColor(zonal.lumbar||0);
+  const lumbCol=_zColor(zonal,"lumbar");
   doc.setFillColor(...lumbCol); doc.setGState&&doc.setGState(new doc.GState({opacity:0.35}));
   doc.roundedRect(bx+3, bodyTop+headR*2+34, bodyW-6, 14, 2, 2, "F");
   doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
@@ -2003,9 +2099,9 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   // Legend
   const lx = ml; let ly = y+2;
   [
-    ["Cervical  C1–C7", _riskLabel(zonal.cervical||0,false), cervCol, zonal.cervical||0],
-    ["Thoracic  T1–T12", _riskLabel(zonal.thoracic||0,false), thorCol, zonal.thoracic||0],
-    ["Lumbar  L1–S1", _riskLabel(zonal.lumbar||0,false), lumbCol, zonal.lumbar||0],
+    ["Cervical  C1–C7", _zLabel(zonal,"cervical",false), cervCol, _zBar(zonal,"cervical"), _zHas(zonal,"cervical")],
+    ["Thoracic  T1–T12", _zLabel(zonal,"thoracic",false), thorCol, _zBar(zonal,"thoracic"), _zHas(zonal,"thoracic")],
+    ["Lumbar  L1–S1", _zLabel(zonal,"lumbar",false), lumbCol, _zBar(zonal,"lumbar"), _zHas(zonal,"lumbar")],
   ].forEach(([zone,rl,col,pct])=>{
     doc.setFillColor(...col); doc.roundedRect(lx,ly,8,8,1,1,"F");
     doc.setFontSize(8.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
@@ -2043,14 +2139,14 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
   // Prioritise exercises by zone risk
   const zonePriority = ["cervical","thoracic","lumbar"]
-    .sort((a,b)=>(zonal[b]||0)-(zonal[a]||0));
+    .filter(k=>_zHas(zonal,k)).sort((a,b)=>(_zNum(zonal,b))-(_zNum(zonal,a)));
 
   for(const zk of zonePriority.slice(0,3)){
     if(y>H-55){y=_clinPage();}
-    const col = _riskColor(zonal[zk]||0);
+    const col = _zColor(zonal,zk);
     doc.setFillColor(...col); doc.roundedRect(ml,y,cw,9,2,2,"F");
     doc.setFontSize(9); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(`${zk.charAt(0).toUpperCase()+zk.slice(1)} Zone Exercises (Risk: ${_riskLabel(zonal[zk]||0,false)} ${zonal[zk]||0}%)`,ml+4,y+6.5); y+=13;
+    doc.text(`${zk.charAt(0).toUpperCase()+zk.slice(1)} Zone Exercises (Risk: ${_zLabel(zonal,zk,false)} ${_zPct(zonal,zk,false)})`,ml+4,y+6.5); y+=13;
     for(const ex of EXERCISES[zk].slice(0,2)){
       if(y>H-24){y=_clinPage();}
       doc.setFontSize(7.5); doc.setFont("helvetica","normal");
@@ -2134,22 +2230,32 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
   if(y>H-135){y=_clinPage();}
   y=_clinSec(y,"Clinical Notes & Recommendations","Suggested focus areas — please apply clinical judgment",[99,102,241]);
 
+  // The narrative compared and interpolated zone numbers directly. With a zone
+  // that has no reading those comparisons are all false and the template
+  // prints the word "null" into a clinical report — and before that, when
+  // every unmeasured zone silently became 0, the text confidently named the
+  // lumbar spine as the healthiest region of every user it had never seen.
+  // Only zones with an actual reading are described.
+  const _zc = _zNum(zonal,"cervical"), _zt2 = _zNum(zonal,"thoracic"), _zl = _zNum(zonal,"lumbar");
+  const _measured = [["Cervical",_zc],["Thoracic",_zt2],["Lumbar",_zl]].filter(([,v])=>v!==null);
+  const _unmeasured = [["Cervical",_zc],["Thoracic",_zt2],["Lumbar",_zl]].filter(([,v])=>v===null).map(([n])=>n);
+  const _worstZone = _measured.slice().sort((a,b)=>b[1]-a[1])[0] || null;
+  const _covNote = _unmeasured.length
+    ? ` This session could not measure the ${_unmeasured.join(" and ").toLowerCase()} zone${_unmeasured.length>1?"s":""} — the landmarks they derive from were outside the camera frame, so no statement is made about them.`
+    : "";
+
   const clinicalRecos = [
-  avg < 60
-    ? `Overall posture score of ${avg}/100 indicates significant postural deviation across multiple planes. ${zonal.cervical > zonal.thoracic && zonal.cervical > zonal.lumbar ? "Cervical zone is the primary contributor." : zonal.thoracic > zonal.lumbar ? "Thoracic zone shows the most concern." : "Lumbar zone requires the most attention."} Full clinical assessment with manual palpation recommended.`
+  (avg < 60
+    ? `Overall posture score of ${avg}/100 indicates significant postural deviation across the planes that were measured.${_worstZone?` ${_worstZone[0]} zone is the largest measured contributor at ${_worstZone[1]}%.`:""} Full clinical assessment with manual palpation recommended.`
     : avg < 80
-    ? `Moderate postural deviations identified (score: ${avg}/100). ${zonal.cervical > 45 ? "Cervical risk at " + zonal.cervical + "% requires targeted intervention. " : ""}${zonal.thoracic > 45 ? "Thoracic risk at " + zonal.thoracic + "% noted. " : ""}Targeted corrective exercise programming is likely to yield measurable improvement within 4-6 weeks.`
-    : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns. ${zonal.cervical > zonal.thoracic ? "Monitor cervical zone closely during extended work periods." : "Continue current workstation setup and posture awareness practices."}`,
-  zonal.cervical >= 45
-    ? `Cervical zone risk: ${zonal.cervical}%. Neck lean and head position metrics require attention. Chin tuck exercises (3x10 reps daily) and monitor height adjustment to eye level are indicated. Consider cervicogenic headache screening if symptoms present.`
-    : `Cervical zone within acceptable range (${zonal.cervical}%). Current head and neck positioning is adequate. Maintain 50-70cm screen distance and monitor at eye level.`,
-  zonal.thoracic >= 45
-    ? `Thoracic zone risk: ${zonal.thoracic}%. Shoulder asymmetry and upper spinal curvature detected. Thoracic extension exercises (foam roller at T6-T9, 2x60s) and scapular retraction drills recommended. Workstation ergonomic review advised.`
-    : `Thoracic zone acceptable (${zonal.thoracic}%). Shoulder balance and upper back posture are within normal parameters. Encourage thoracic extension breaks every 45 minutes.`,
-  zonal.lumbar >= 45
-    ? `Lumbar zone risk: ${zonal.lumbar}%. Spinal alignment and hip angle metrics indicate concern. Posterior pelvic tilt exercises (3x10) and hip flexor stretches (3x30s/side) indicated. Lumbar support cushion and sit-stand desk rotation recommended.`
-    : `Lumbar zone within expected range (${zonal.lumbar}%). Current seated posture maintains adequate lumbar support. Continue current chair settings with feet flat and knees at 90 degrees.`,
-];
+    ? `Moderate postural deviations identified (score: ${avg}/100).${_measured.filter(([,v])=>v>45).map(([n,v])=>` ${n} risk at ${v}% requires targeted intervention.`).join("")} Targeted corrective exercise programming is likely to yield measurable improvement within 4-6 weeks.`
+    : `Posture quality is broadly good during monitored sessions (${avg}/100, ${goodPct}% good posture). Reinforce current ergonomic patterns.${_worstZone?` ${_worstZone[0]} zone carries the highest measured risk at ${_worstZone[1]}%.`:""}`) + _covNote,
+  _zc === null
+    ? `Cervical zone was not measured in this session; no neck or head-position finding is available.`
+    : _zc >= 45
+    ? `Cervical zone risk: ${_zc}%. Neck lean and head position metrics require attention. Chin tuck exercises (3x10 reps daily) and monitor height adjustment to eye level are indicated. Consider cervicogenic headache screening if symptoms present.`
+    : `Cervical zone within acceptable range (${_zc}%). Current head and neck positioning is adequate. Maintain 50-70cm screen distance and monitor at eye level.`,
+  ];
 
   clinicalRecos.forEach((rec,i)=>{
     if(y>H-35){y=_clinPage();}
@@ -2173,7 +2279,7 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     ["Raise monitor to eye level","Top of the screen at or just below eye height — use a stand or riser.",(metrics.monitor_height?.score??100)<65],
     ["Set viewing distance to 50–70cm","About an arm's length; enlarge on-screen text rather than leaning in.",(metrics.screen_distance?.score??100)<65],
     ["Support elbows at 90–110°","Adjust chair and armrests so forearms rest level with the desk.",(metrics.elbow_angle?.score??100)<65],
-    ["Engage lumbar support","Sit fully back; use the chair's lumbar support or a cushion.",(zonal.lumbar||0)>=40],
+    ["Engage lumbar support","Sit fully back; use the chair's lumbar support or a cushion.",(_zNum(zonal,"lumbar")??0)>=40],
     ["Micro-break every 30 minutes","Stand, reset posture, and look 6m away for 20 seconds.",true],
   ];
   _adj.forEach(([t,d,flag],i)=>{

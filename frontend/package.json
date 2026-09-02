@@ -17,6 +17,7 @@
     "test:engine": "node src/features/analysis/postureEngine.selftest.mjs",
     "test:accuracy": "node src/features/analysis/postureEngine.accuracy.mjs",
     "test:blur": "node src/lib/faceBlur.test.mjs",
+    "test:pdf": "node src/lib/pdfReports.test.mjs",
     "test:posture": "npm run test:engine && npm run test:accuracy"
   },
   "dependencies": {
