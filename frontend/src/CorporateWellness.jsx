@@ -8,6 +8,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { generateQuarterlyWellnessReport } from "./lib/pdfReports.js";
+import { getCompany } from "./firebase.js";
 import { updateUserProfile } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
@@ -70,10 +71,18 @@ Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Wr
     }
     setGenerating(true);
     try {
+      // The financial projection is computed only from figures the
+      // organisation entered on its own company document — average salary,
+      // the extra sick days it attributes to an at-risk employee, and the
+      // productivity loss it assigns to one. Fetch that document so an org
+      // that HAS set them gets its projection; one that has not gets a
+      // report that says so instead of one built from our constants.
+      let orgDoc = null;
+      try { if (profile?.company_id) orgDoc = await getCompany(profile.company_id); } catch {}
       await generateQuarterlyWellnessReport({
         users, company, quarter,
         lang: isAr ? "ar" : "en",
-        profile, aiExecutiveSummary: aiSummary,
+        profile, org: orgDoc, aiExecutiveSummary: aiSummary,
       });
       addToast?.(isAr ? "✅ تم إنشاء التقرير بنجاح" : "✅ Report generated successfully", "success");
       // Log generation for billing

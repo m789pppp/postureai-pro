@@ -8,7 +8,7 @@ import {
   getDepartments, createDepartment, deleteDepartment,
   getDepartmentEmployees, bulkInviteEmployees,
   getCompany, updateCompany,
-  getUserSessions, getAllUsers,
+  getAllUsers,
   getAuthToken, SUPPORT_EMAIL,
 } from "./firebase.js";
 
@@ -48,9 +48,16 @@ function Inp({ value, onChange, placeholder, style={} }) {
 }
 
 // -- Employee row ---------------------------------------------------
-function EmpRow({ emp, isAr, onInvite }) {
-  const avg = emp.avg_score || (emp.scores?.length ? Math.round(emp.scores.reduce((a,b)=>a+b,0)/emp.scores.length) : 0);
-  const isRisk = avg > 0 && avg < 50;
+// `showScore` separates the two jobs this row does. The roster itself is a
+// management tool — an HR admin has to see who is in the company to assign a
+// department or send an invite — but the score, grade and Risk badge beside
+// each name are the named per-person reporting that aggregate_only exists to
+// suppress. The Overview tab was gated and this tab was not, so the notice
+// said "each employee's score is visible only to them" and the next tab along
+// listed every one of them, sorted by score.
+function EmpRow({ emp, isAr, onInvite, showScore = true }) {
+  const avg = showScore ? (emp.avg_score || (emp.scores?.length ? Math.round(emp.scores.reduce((a,b)=>a+b,0)/emp.scores.length) : 0)) : 0;
+  const isRisk = showScore && avg > 0 && avg < 50;
   return (
     <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:"rgba(255,255,255,.02)", border:"1px solid rgba(255,255,255,.06)", borderRadius:12, transition:"background .15s" }}
       onMouseEnter={e=>e.currentTarget.style.background="rgba(26,86,219,.06)"}
@@ -74,10 +81,13 @@ function EmpRow({ emp, isAr, onInvite }) {
 }
 
 // -- Dept card ------------------------------------------------------
-function DeptCard({ dept, allSessions, isAr, onDelete }) {
-  const ds = allSessions.filter(s=>(s.department||s.dept)===dept.name);
-  const avg = ds.length ? Math.round(ds.reduce((a,s)=>a+(s.avg_score||0),0)/ds.length) : 0;
-  const risk = ds.filter(s=>(s.avg_score||0)<50).length;
+function DeptCard({ dept, employees = [], isAr, onDelete }) {
+  // Averaged over the department's employee records rather than over their
+  // individual session documents — same figure, without the client reading
+  // fifty people's posture histories to compute it.
+  const de = employees.filter(e=>(e.department||e.dept)===dept.name && (e.avg_score||0)>0);
+  const avg = de.length ? Math.round(de.reduce((a,e)=>a+(e.avg_score||0),0)/de.length) : 0;
+  const risk = de.filter(e=>(e.avg_score||0)<50).length;
   const [del, setDel] = useState(false);
   return (
     <div style={{ background:"rgba(255,255,255,.03)", border:`1px solid ${del?"rgba(239,68,68,.3)":"rgba(255,255,255,.07)"}`, borderRadius:14, padding:18, transition:"all .2s" }}>
@@ -229,7 +239,12 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   const [company,    setCompany]  = useState(null);
   const [depts,      setDepts]    = useState([]);
   const [employees,  setEmployees]= useState([]);
-  const [allSessions,setAllSess]  = useState([]);
+  const [dash,setDash]            = useState(null);
+  // The server decides. "individual" only when the organisation opted in
+  // explicitly; anything else — including an unreachable endpoint — is treated
+  // as aggregate-only, because failing open on a privacy control is the wrong
+  // direction to fail.
+  const namedOK = dash?.privacy_mode === "individual";
   const [loading,    setLoading]  = useState(true);
   const [loadError,  setLoadError]= useState(false);
   const [retryTick,  setRetryTick]= useState(0);
@@ -260,12 +275,41 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
       setCompany(co);
       setDepts(dp||[]);
       setEmployees(em||[]);
-      // Load sessions for each employee
-      Promise.allSettled((em||[]).slice(0,50).map(e=>getUserSessions(e.id||e.uid)))
-        .then(results=>{
-          const all=results.flatMap(r=>r.status==="fulfilled"?r.value:[]);
-          setAllSess(all);
-        });
+
+      // This used to fetch up to FIFTY employees' individual session
+      // documents straight from Firestore, one request each, and use them
+      // only to compute company-wide averages.
+      //
+      // That made the organisation's privacy setting decorative. Switching a
+      // company to aggregate_only changes what /api/company/dashboard
+      // returns — and this screen never asked it. The HR admin's browser read
+      // every employee's posture history directly, because the Firestore rule
+      // let an HR account read any session in its own company. A control the
+      // client can walk around is not a control.
+      //
+      // The same aggregates come from the guarded endpoint, which applies
+      // aggregate_only and its k-anonymity floor server-side, so nothing is
+      // lost by asking it instead. The cross-user session rule has been
+      // removed to match.
+      (async () => {
+        try {
+          const tok = await getAuthToken();
+          // Without lang the endpoint defaults to Arabic and privacy_note
+          // comes back in one language only — which then wins over the
+          // client's own bilingual fallback and puts Arabic body text under an
+          // English heading.
+          const r = await fetch(`${API}/company/dashboard?days=30&lang=${isAr?"ar":"en"}`, {
+            headers: { Authorization: `Bearer ${tok}` },
+          });
+          if (!r.ok) throw new Error(String(r.status));
+          setDash(await r.json());
+        } catch {
+          // Endpoint unreachable: the panel still manages the roster, it just
+          // shows no analytics. It must NOT fall back to reading the data
+          // directly — that is the hole this closes.
+          setDash({ unavailable: true });
+        }
+      })();
     // BUG FIX: this used to be `.catch(()=>{})` — a failed load (permission
     // error, network drop) silently fell through to render the full
     // dashboard with company=null / 0 employees / 0 departments, which is
@@ -275,9 +319,13 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
   },[companyId, retryTick]);
 
   // Derived stats
-  const totalSess  = allSessions.length;
-  const avgScore   = totalSess ? Math.round(allSessions.reduce((a,s)=>a+(s.avg_score||0),0)/totalSess) : 0;
-  const highRisk   = employees.filter(e=>(e.avg_score||0)>0&&(e.avg_score||0)<50).length;
+  // Aggregates now come from the endpoint. The employee-document fallback
+  // keeps the tiles populated while it loads and is aggregate by nature.
+  const totalSess  = dash?.kpis?.total_sessions ?? 0;
+  const _scored    = employees.filter(e=>(e.avg_score||0)>0);
+  const avgScore   = dash?.kpis?.company_avg_score
+    ?? (_scored.length ? Math.round(_scored.reduce((a,e)=>a+(e.avg_score||0),0)/_scored.length) : 0);
+  const highRisk   = dash?.kpis?.at_risk_count ?? _scored.filter(e=>(e.avg_score||0)<50).length;
   const activeThisWeek = employees.filter(e=>{
     const d=e.last_active?.toDate?.()??new Date(e.last_active||0);
     return Date.now()-d<7*86400000;
@@ -288,7 +336,11 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     const matchDept = deptFilter==="all" || (e.department||e.dept)===deptFilter;
     const matchSearch = !search || (e.name||"").toLowerCase().includes(search.toLowerCase()) || (e.email||"").toLowerCase().includes(search.toLowerCase());
     return matchDept && matchSearch;
-  }).sort((a,b)=>(b.avg_score||0)-(a.avg_score||0));
+  // Sorting by score ranks people even with the number hidden, so under
+  // aggregate reporting the roster is alphabetical.
+  }).sort((a,b)=> namedOK
+      ? (b.avg_score||0)-(a.avg_score||0)
+      : String(a.name||a.email||"").localeCompare(String(b.name||b.email||"")));
 
   // Dept names
   const deptNames = [...new Set(employees.map(e=>e.department||e.dept||"").filter(Boolean))];
@@ -447,7 +499,9 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
       const r=await fetch(`${API}/hr/monthly-report`,{
         method:"POST",
         headers:{"Content-Type":"application/json",...(tok?{Authorization:`Bearer ${tok}`}:{})},
-        body:JSON.stringify({company_name:company?.name||"Company",sessions:allSessions,employees,month:new Date().toLocaleString("default",{month:"long"}),year:new Date().getFullYear()}),
+        // `sessions` was every employee's raw session documents, collected by
+        // the fan-out this screen no longer does. The server has them already.
+        body:JSON.stringify({company_name:company?.name||"Company",employees,month:new Date().toLocaleString("default",{month:"long"}),year:new Date().getFullYear()}),
       });
       if(r.ok){const blob=await r.blob();const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`HR_Report_${Date.now()}.pdf`;a.click();addToast(isAr?"تم تحميل التقرير":"Report downloaded","success");}
       else addToast(isAr?"الباك اند مش شغال - شغّل backend أولاً":"Backend not running","error");
@@ -743,9 +797,9 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
                   <span style={{fontSize:11,color:"#64748b"}}>{isAr?"الأحمر = يحتاج تدخل":"Red = needs attention"}</span>
                 </div>
                 {depts.map(d=>{
-                  const ds=allSessions.filter(s=>(s.department||s.dept)===d.name);
-                  const avg=ds.length?Math.round(ds.reduce((a,s)=>a+(s.avg_score||0),0)/ds.length):0;
-                  const risk=employees.filter(e=>(e.department||e.dept)===d.name&&(e.avg_score||0)>0&&(e.avg_score||0)<50).length;
+                  const de=employees.filter(e=>(e.department||e.dept)===d.name&&(e.avg_score||0)>0);
+                  const avg=de.length?Math.round(de.reduce((a,e)=>a+(e.avg_score||0),0)/de.length):0;
+                  const risk=de.filter(e=>(e.avg_score||0)<50).length;
                   return(
                     <div key={d.id} style={{marginBottom:16,paddingBottom:16,borderBottom:"1px solid rgba(255,255,255,.05)"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -768,8 +822,31 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
               </div>
             )}
 
-            {/* Top & risk employees */}
-            {employees.length>0&&(
+            {/* Named per-person reporting — a ranked "Top 5" and a list of
+                people scoring under 50, both by name, plus a button that
+                messages exactly those people. This is what aggregate_only
+                exists to suppress, and it was rendering regardless because
+                the panel never asked the server what mode the organisation
+                was in. Shown only when the server says "individual". */}
+            {employees.length>0 && !namedOK && (
+              <div style={{background:"rgba(148,163,184,.05)",border:"1px solid rgba(148,163,184,.15)",borderRadius:14,padding:18}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:6}}>
+                  🔒 {isAr?"التقارير مجمّعة لهذه المؤسسة":"Aggregate reporting for this organisation"}
+                </div>
+                <div style={{fontSize:11.5,color:"#64748b",lineHeight:1.6}}>
+                  {dash?.privacy_note
+                    || (isAr
+                      ? "درجة كل موظف بيشوفها هو بس. الأرقام فوق مجمّعة على مستوى الشركة والأقسام. لو مؤسستك محتاجة تقارير بالأسماء، ده إعداد بيتغيّر على مستوى الشركة وبقرار صريح."
+                      : "Each employee's score is visible only to them. The figures above are company and department aggregates. Named reporting is a deliberate, organisation-level setting.")}
+                </div>
+                {dash?.suppressed && (
+                  <div style={{fontSize:11,color:"#64748b",marginTop:8}}>
+                    {isAr ? (dash.message_ar || "") : (dash.message || "")}
+                  </div>
+                )}
+              </div>
+            )}
+            {employees.length>0 && namedOK && (
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <div style={{background:"rgba(16,185,129,.04)",border:"1px solid rgba(16,185,129,.15)",borderRadius:14,padding:18}}>
                   <div style={{fontSize:12,fontWeight:700,color:"#10b981",marginBottom:12}}>🏆 {isAr?"أفضل 5 موظفين":"Top 5 Employees"}</div>
@@ -842,7 +919,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
               </div>
             ):(
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-                {depts.map(d=><DeptCard key={d.id} dept={d} allSessions={allSessions} isAr={isAr} onDelete={removeDept}/>)}
+                {depts.map(d=><DeptCard key={d.id} dept={d} employees={employees} isAr={isAr} onDelete={removeDept}/>)}
               </div>
             )}
           </>
@@ -863,11 +940,22 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
                 ))}
               </div>
             </div>
-            <div style={{fontSize:11,color:"#475569",marginBottom:10}}>{filtEmp.length} {isAr?"موظف":"employees"} . {isAr?"مرتب حسب الأعلى نقاطاً":"sorted by score"}</div>
+            <div style={{fontSize:11,color:"#475569",marginBottom:10}}>
+              {filtEmp.length} {isAr?"موظف":"employees"}
+              {namedOK ? ` · ${isAr?"مرتب حسب الأعلى نقاطاً":"sorted by score"}`
+                       : ` · ${isAr?"مرتب أبجديًا":"sorted by name"}`}
+            </div>
+            {!namedOK && (
+              <div style={{fontSize:11,color:"#64748b",background:"rgba(148,163,184,.05)",border:"1px solid rgba(148,163,184,.15)",borderRadius:10,padding:"10px 12px",marginBottom:10,lineHeight:1.6}}>
+                🔒 {isAr
+                  ? "الدرجات مخفية — المؤسسة دي مضبوطة على التقارير المجمّعة. القايمة دي للإدارة (الأقسام والدعوات) بس."
+                  : "Scores hidden — this organisation is set to aggregate reporting. This list is for roster management only."}
+              </div>
+            )}
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {filtEmp.length===0?(
                 <div style={{textAlign:"center",padding:60,color:"#475569",fontSize:13}}>{isAr?"لا توجد نتائج":"No results"}</div>
-              ):filtEmp.map((e,i)=><EmpRow key={i} emp={e} isAr={isAr}/>)}
+              ):filtEmp.map((e,i)=><EmpRow key={i} emp={e} isAr={isAr} showScore={namedOK}/>)}
             </div>
           </>
         )}

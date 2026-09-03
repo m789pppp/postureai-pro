@@ -39,7 +39,13 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
   await setDoc(doc(db, "users/alice"), { email: "alice@tkh.edu.eg", name: "Alice", tier: "standard", company_id: "acme" });
   await setDoc(doc(db, "users/bob"),   { email: "bob@tkh.edu.eg",   name: "Bob",   tier: "standard", company_id: "other" });
-  await setDoc(doc(db, "sessions/s1"), { uid: "alice", avg_score: 71 });
+  // An HR admin inside Alice's own company. The rules used to let this
+  // account read every session document in the company straight from the
+  // client, which is how the HR dashboard walked around the organisation's
+  // aggregate_only setting — that switch is enforced on the company endpoint
+  // and nowhere else.
+  await setDoc(doc(db, "users/hilda"), { email: "hilda@acme.com", name: "Hilda", tier: "b2b_growth", company_id: "acme", is_hr: true });
+  await setDoc(doc(db, "sessions/s1"), { uid: "alice", avg_score: 71, company_id: "acme" });
   await setDoc(doc(db, "sessions/s2"), { uid: "bob",   avg_score: 64 });
   await setDoc(doc(db, "invites/i1"),  { email: "new@acme.com", company_id: "acme", role: "employee" });
   await setDoc(doc(db, "user_consent/alice"), { uid: "alice", camera: { granted: true, version: "2026-08-30" } });
@@ -47,12 +53,15 @@ await env.withSecurityRulesDisabled(async (ctx) => {
 
 const alice = env.authenticatedContext("alice", { email: "alice@tkh.edu.eg" }).firestore();
 const bob   = env.authenticatedContext("bob",   { email: "bob@tkh.edu.eg" }).firestore();
+const hilda = env.authenticatedContext("hilda", { email: "hilda@acme.com" }).firestore();
 const anon  = env.unauthenticatedContext().firestore();
 
 console.log("\nSession data — \"no participant can see another participant's data\"");
 await t("owner reads own session",        () => assertSucceeds(getDoc(doc(alice, "sessions/s1"))));
 await t("other user CANNOT read session", () => assertFails(getDoc(doc(bob,   "sessions/s1"))));
 await t("anonymous CANNOT read session",  () => assertFails(getDoc(doc(anon,  "sessions/s1"))));
+await t("HR in the same company CANNOT read an employee's session",
+        () => assertFails(getDoc(doc(hilda, "sessions/s1"))));
 await t("owner writes own session",       () => assertSucceeds(setDoc(doc(alice, "sessions/new1"), { uid: "alice", avg_score: 80 })));
 await t("cannot write session as another user", () => assertFails(setDoc(doc(bob, "sessions/new2"), { uid: "alice", avg_score: 99 })));
 
