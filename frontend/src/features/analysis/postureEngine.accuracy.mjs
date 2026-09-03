@@ -580,6 +580,38 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
         laptop?.metrics?.torso_flexion?.value === 0,
         `value ${laptop?.metrics?.torso_flexion?.value}`);
 
+  // A landmark the tracker clamped to the frame border is not a measurement.
+  //
+  // MediaPipe keeps reporting a confident position for a joint that has left
+  // the frame, pinned to the edge — this rig marks it invisible instead, which
+  // is why the defect below never showed up here until the clamping was
+  // simulated. As a user leans in, the true shoulder separation keeps growing
+  // while the reported one saturates, so anything dividing by it drifts.
+  // Shoulder elevation drifted furthest and told a user who had never shrugged
+  // to drop his shoulders, for five straight frames of a real session.
+  {
+    const clamp = l => l.map(p => p ? ({
+      ...p,
+      x: Math.min(0.995, Math.max(0.005, p.x)),
+      y: Math.min(0.995, Math.max(0.005, p.y)),
+      visibility: Math.max(p.visibility ?? 0, 0.92),
+    }) : p);
+    const leanIn = (base, then) => {
+      resetProportions();
+      let r = null;
+      for (let i = 0; i < 130; i++) r = analyzeMP(clamp(renderSubject({}, {}, { distCm: base })), W, H, "front");
+      for (let i = 0; i < 50;  i++) r = analyzeMP(clamp(renderSubject({}, {}, { distCm: then })), W, H, "front");
+      return r?.metrics?.shoulder_elevation;
+    };
+    const near = leanIn(57, 30), clipped = leanIn(57, 18);
+    check("Leaning in with the shoulders still in frame reads no shrug",
+          near?.reliable === true && near.value < 3, `${fmt(near?.value)}%`);
+    check("Once a shoulder is clamped to the frame edge, the shrug is refused",
+          clipped?.reliable === false,
+          clipped?.reliable === false ? "reported unreliable"
+            : `reported ${fmt(clipped?.value)}% as a real reading`);
+  }
+
   // The engine has to HAND that fact to the UI, not merely act on it
   // internally. Everything above was already true before coverageDetail
   // existed — and the page still displayed a single unqualified score,

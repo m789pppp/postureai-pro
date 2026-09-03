@@ -764,6 +764,38 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
     effectiveShoulderWidthCm,
     ipdEstimated: _ipdShEMA !== null,
     shOK: vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER),
+    // A shoulder sitting on the frame edge is an EXTRAPOLATION, not a
+    // measurement.
+    //
+    // MediaPipe does not drop a landmark that leaves the frame — it keeps
+    // reporting a confident position, clamped to the border. So as a user
+    // leans toward the screen the true projected shoulder separation keeps
+    // growing while the reported one saturates at the frame width. Anything
+    // dividing by shWidthPx then drifts, and shoulder elevation drifts fastest
+    // because its numerator, the ear-to-shoulder gap, keeps scaling normally.
+    //
+    // Measured on the rig — neutral learned at 57cm, then leaning in, with the
+    // landmarks clamped the way the real tracker clamps them:
+    //
+    //     30cm  1.3%     27cm  1.8%      (shoulders still inside the frame)
+    //     24cm  3.3%     21cm  6.8%      (22cm is where they clip)
+    //     18cm 10.3%
+    //
+    // 6.1% is where the red "Drop your shoulders" cue fires. Past the clip
+    // point the engine tells a user who has never shrugged to relax their
+    // shoulders, and keeps telling them for as long as they sit close. Seen on
+    // camera at 27-35cm across five frames of one session; a real subject
+    // clips earlier than this rig because his shoulders are wider relative to
+    // his webcam's field of view.
+    //
+    // 1.2% of frame width either side: wide enough to catch a landmark the
+    // tracker has pinned to the border, narrow enough never to reject a
+    // shoulder that is genuinely in shot.
+    shAtEdge: (() => {
+      const m = 0.012;
+      const lx = g(PL.L_SHOULDER)?.x ?? 0.5, rx = g(PL.R_SHOULDER)?.x ?? 0.5;
+      return lx <= m || lx >= 1 - m || rx <= m || rx >= 1 - m;
+    })(),
     // Frame width in pixels. analyzeRoundedShoulders converts a normalised z
     // difference into centimetres and needs it; every other consumer already
     // had W in scope at its own call site.
@@ -1693,7 +1725,11 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   const earOK = vis(PL.L_EAR) && vis(PL.R_EAR);
-  if (!prop.shOK || !earOK) return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+  // prop.shAtEdge: this metric divides by the shoulder separation, so a
+  // shoulder clamped to the frame border reads as a shrug that is not there.
+  // See the note on shAtEdge in computeProportions().
+  if (!prop.shOK || !earOK || prop.shAtEdge)
+    return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   // Each ear-to-shoulder gap is measured PERPENDICULAR TO THE SHOULDER LINE,
   // not along the image vertical.
@@ -1764,6 +1800,13 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
   const lElevPct = Math.max(0, NEUTRAL_L - lGap) * 100;
   const rElevPct = Math.max(0, NEUTRAL_R - rGap) * 100;
   const elevPct  = Math.max(lElevPct, rElevPct);
+  // With the camera high and the subject close, the ratio came out non-finite
+  // and this returned `elevPct: undefined` alongside `reliable: true` — a
+  // metric claiming a reading it does not have, which consumers then rendered
+  // as "undefined%". Found by sweeping camera height against distance on the
+  // rig. Refuse rather than report.
+  if (!Number.isFinite(elevPct))
+    return { elevPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
 
   // Flag when one side is clearly worse — lets the UI give a side-specific cue.
   // 7 points of spread needed roughly 20° of one-sided shrug before the
@@ -2153,8 +2196,18 @@ function buildAlerts(modules, distCm, lo, hi) {
     // If the head is off vertical because the whole torso is, the instruction
     // is "sit centred", not "tuck your chin". Only flag the neck for the part
     // the trunk does NOT account for.
-    add("neck_sev",  neck.angle > neck.badAdj && !trunkExplainsHead,                    `⚠️ Severe neck lean ${neck.angle}° — raise monitor to eye level immediately`, imp("neck", neck)),
-    add("neck_mid",  neck.angle > (neck.okAdj + neck.badAdj) / 2 && neck.angle <= neck.badAdj && !trunkExplainsHead, `Neck lean ${neck.angle}° — tuck chin slightly`, imp("neck", neck)),
+    //
+    // The suppression above was added and the COPY was left alone, so whenever
+    // the alert did fire it still told the user to raise their monitor or tuck
+    // their chin — sagittal corrections for a lateral measurement, which is
+    // the fault this very comment describes. Caught on a real session log:
+    // "Neck lean 17° — tuck chin slightly", filed as Critical, while the user
+    // was tilting his head toward one shoulder. On the rig, 20° of forward
+    // neck flexion moves this metric 0.0° and 15° of sideways lean moves it to
+    // 14°, so the instruction has to be about bringing the head back over the
+    // shoulders, not about the screen.
+    add("neck_sev",  neck.angle > neck.badAdj && !trunkExplainsHead,                    `⚠️ Head leaning ${neck.angle}° off centre — bring it back over your shoulders`, imp("neck", neck)),
+    add("neck_mid",  neck.angle > (neck.okAdj + neck.badAdj) / 2 && neck.angle <= neck.badAdj && !trunkExplainsHead, `Head leaning ${neck.angle}° to one side — level it over your shoulders`, imp("neck", neck)),
     add("fhp_sev",   fhp.reliable && fhp.distCm > 6,             `⚠️ Forward head ${fhp.distCm}cm (~${fhp.neckAngleDeg}° pitch, +${fhp.extraLoadKg}kg neck load) — raise monitor`, imp("fhp", fhp)),
     add("fhp_mid",   fhp.reliable && fhp.distCm > 3 && fhp.distCm <= 6, `Forward head ${fhp.distCm}cm (+${fhp.extraLoadKg}kg) — tuck chin back`, imp("fhp", fhp)),
     // Head tilt and shoulder imbalance are suppressed for the same reason as

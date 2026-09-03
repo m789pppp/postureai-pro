@@ -130,7 +130,9 @@ function msgArFor(causeKey, res) {
   const m = res?.metrics || {};
   const v = k => m[k]?.value;
   switch (causeKey) {
-    case "neck":    return `ميل رقبة ${v("neck_lean")}° — ارفع الشاشة لمستوى عينيك`;
+    // Lateral measurement, lateral instruction — see the neck alerts in
+    // postureEngine.js for why "raise the screen" was the wrong correction.
+    case "neck":    return `راسك مايلة ${v("neck_lean")}° على جنب — رجّعها فوق كتفيك`;
     case "fhp":     return `الرأس لقدام ${v("fhp_index")}سم — ارجع دقنك لورا وارفع الشاشة`;
     case "spine":   return `مايل ${(m.spine_lean?.signed ?? 0) > 0 ? "يمين" : "شمال"} ${v("spine_lean")}° — اقعد في النص وثبّت وزنك على الجنبين`;
     case "slouch":  return `منحني لقدام — رصّ ضهرك على الكرسي وخلي صدرك فوق حوضك`;
@@ -4101,7 +4103,7 @@ export default function App(){
                   if(causeKey==="neck") acRef.current.neck++;
                   else if(causeKey==="dist") acRef.current.dist++;
                 }
-                else if(nl>14){causeKey="neck";msg=`Neck lean ${nl}° — raise monitor to eye level`;msgAr=`ميل رقبة ${nl}° — ارفع الشاشة لمستوى عينيك`;acRef.current.neck++;}
+                else if(nl>14){causeKey="neck";msg=`Head leaning ${nl}° to one side — level it over your shoulders`;msgAr=`راسك مايلة ${nl}° على جنب — رجّعها فوق كتفيك`;acRef.current.neck++;}
                 else if(Math.abs(yaw)>12){causeKey="yaw";msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
                 else if(dist&&dist<lo){causeKey="dist";msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
 
@@ -4840,6 +4842,11 @@ export default function App(){
       // empty array so the summary screen's `?.length>0` guard and any
       // historical session document still render correctly.
       worst_snapshots: [],
+      // Snapshotted here so the summary modal's PDF and Share buttons do not
+      // have to read histRef/lastAnalRef live — which is what stopped the live
+      // page's own session state from being cleared when the session ended.
+      score_history: hist.slice(-600),
+      metrics: la.metrics || {},
     };
     // A report on a session that never happened.
     //
@@ -4984,6 +4991,36 @@ export default function App(){
       // open. Clearing it here makes those paths fall back to the real
       // recorded duration.
       sessRef.current = null;
+
+      // The session was over in the data and still running on the screen.
+      //
+      // Every per-session counter — history, good/total frames, alert list,
+      // alert counts, the session clock — was reset only by beginScoring(), at
+      // the START of the next session. So after Stop & Save the Live page went
+      // on showing the finished session in full: the Session Summary tiles,
+      // the score-history chart and the alert log, with nothing to say it had
+      // ended. Reported as "I come back and I'm in the same session even
+      // though I ended it" — and that is exactly what it looks like, because
+      // the only thing that changes is a modal you can dismiss.
+      //
+      // Cleared here instead, now that `result` and the save payload above are
+      // both snapshots and the summary modal reads its PDF/Share data from
+      // sessionResult rather than from these refs.
+      histRef.current=[]; setHistory([]);
+      fullHistRef.current=[]; fullHistLastMsRef.current=0;
+      goodRef.current=0; setGoodF(0);
+      totalRef.current=0; setTotalF(0);
+      acRef.current={total:0,neck:0,dist:0}; setAlertCounts({total:0,neck:0,dist:0});
+      alRef.current=[]; setAlerts([]);
+      setSessionTime(0);
+      setScoreStatus(null);
+      // `analysis` drives the live metrics list and the on-video panel. Left
+      // set, it kept describing the finished session on an idle page.
+      // lastAnalRef is deliberately NOT cleared — the summary modal's PDF and
+      // Share still read it.
+      setAnalysis(null);
+      setSessionInsights([]); insightsRef.current=null;
+
       // Release the reentrancy guard for THIS invocation. Anything that throws
       // above must not leave the flag stuck true, or every subsequent stop —
       // including the browser-back camera teardown — becomes a no-op and the
@@ -6672,8 +6709,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
                         ...sessionResult,
                         created_at: new Date(), mode, tier: effectiveTier,
                         session_id: sessionId,
-                        score_history: histRef.current||[],
-                        metrics: lastAnalRef.current?.metrics||sessionResult.metrics||{},
+                        score_history: sessionResult.score_history||histRef.current||[],
+                        metrics: sessionResult.metrics||lastAnalRef.current?.metrics||{},
                       },
                       profile: { ...profile, tier: effectiveTier },
                       allSessions: userSessions,
@@ -6697,7 +6734,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
                       duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
                       mode, tier: effectiveTier, session_id: sessionId,
-                      score_history: histRef.current||[],
+                      score_history: sessionResult?.score_history||histRef.current||[],
                       metrics: lastAnalRef.current?.metrics||{},
                       ai_tip: lastAnalRef.current?.ai_tip||lastAnalRef.current?.ai_insight||"",
                       improvement_tip: lastAnalRef.current?.improvement_tip||"",
@@ -7410,8 +7447,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
           )}
 
           {/* Score overlay */}
-        {/* Professional live metrics panel */}
-        {analysis && score > 0 && (
+        {/* Professional live metrics panel.
+            Gated on camActive && !previewPhase. It used to render whenever an
+            `analysis` object existed with a score, which outlives the session:
+            during the framing preview it sat over the "Make sure you're framed
+            well" instructions showing the PREVIOUS session's numbers, so the
+            user read a score, a grade and five risk rows for a session that had
+            already ended, layered under the buttons for the one about to
+            start. */}
+        {analysis && score > 0 && camActive && !previewPhase && (
           <div style={{
             // Mirrors the persistent distance chip above (which correctly
             // flips left:isAr?"auto":8 / right:isAr?8:"auto"). This panel
