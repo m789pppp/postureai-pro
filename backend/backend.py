@@ -16099,7 +16099,6 @@ def billing_usage():
         }
         limits = LIMITS.get(tier, LIMITS["standard"])
 
-        # Pull usage from Redis
         today_key  = f"usage:{uid}:sessions:{datetime.utcnow().strftime('%Y-%m-%d')}"
         month_key  = f"usage:{uid}:sessions:{datetime.utcnow().strftime('%Y-%m')}"
         coach_key  = f"usage:{uid}:ai_coach:{datetime.utcnow().strftime('%Y-%m')}"
@@ -16109,11 +16108,49 @@ def billing_usage():
             try:
                 v = rget(key)
                 return int(v) if v else 0
-            except: return 0
+            except Exception:
+                return 0
+
+        # Session counts come from the SAME place that enforces the limit.
+        #
+        # These were read from Redis keys "usage:{uid}:sessions:{period}" that
+        # nothing in the deployed stack ever writes: the only writers are this
+        # file's own /api/session/start and /api/billing/usage/increment, and
+        # vercel.json routes /api/session/start to the Node handler instead
+        # (which counts documents, not Redis) while nothing calls increment at
+        # all. So sessions_this_month was 0 for every user, always — and the
+        # dashboard's usage bar takes this number in preference to its own
+        # client-side count, so it read "0 of 5" right up until the 5th session
+        # was refused with no warning.
+        #
+        # api/_handlers/session/start.js counts users/{uid}/sessions documents
+        # with created_at >= period start. Counting the same documents here is
+        # what makes the bar and the block agree.
+        def _session_count(since_iso):
+            try:
+                snap = (db.collection("users").document(uid).collection("sessions")
+                          .where("created_at", ">=", since_iso).count().get())
+                # google-cloud-firestore returns [[AggregationResult]]
+                return int(snap[0][0].value)
+            except Exception:
+                return None
+
+        _now         = datetime.utcnow()
+        _month_start = _now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+        _day_start   = _now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        _m = _session_count(_month_start)
+        _d = _session_count(_day_start)
 
         usage = {
-            "sessions_today":       _get_count(today_key),
-            "sessions_this_month":  _get_count(month_key),
+            # Fall back to Redis only if the aggregation is unavailable, so a
+            # Firestore hiccup degrades to the old behaviour rather than
+            # reporting a confident zero.
+            "sessions_today":       _d if _d is not None else _get_count(today_key),
+            "sessions_this_month":  _m if _m is not None else _get_count(month_key),
+            # Per-field, because the two aggregations can fail independently and
+            # a Redis fallback of 0 must never be labelled as a real count.
+            "sessions_source":        "firestore" if _m is not None else "redis",
+            "sessions_today_source":  "firestore" if _d is not None else "redis",
             "ai_coach_this_month":  _get_count(coach_key),
             "pdf_exports_this_month": _get_count(pdf_key),
         }

@@ -8,6 +8,7 @@ import {
   metricScore, cervicalLoadKg, neckFlexionDeg, sessionFatigue,
   weekWindows, lifetimeSessions, readingReliability,
 } from "./lib/clinicalMetrics.js";
+import { PAIN_AREAS } from "./FreeTierGrowth.jsx";
 
 // ── Tokens ────────────────────────────────────────────────────────
 // T is built per-render inside FreeChatCoach using the cs prop.
@@ -334,6 +335,12 @@ function buildSystemPrompt(ctx, isAr) {
   const sessTxt = ctx.sessions_exact ? `${ctx.sessions_count}` : `${ctx.sessions_count}+`;
   const al = (ctx.top_alerts||[]).slice(0,5).join("; ")||"None recorded";
   const nm = ctx.user_name||"Patient";
+  // The stored value is an id ("lower_back"). Interpolating it raw put an
+  // English identifier into the Arabic prompt, which forbids English output.
+  const _paDef = PAIN_AREAS.find(a => a.id === ctx.pain_area);
+  const pa = ctx.pain_area && ctx.pain_area !== "none"
+    ? (isAr ? (_paDef?.ar || ctx.pain_area) : (_paDef?.en || ctx.pain_area))
+    : null;
 
   if (isAr) return `تعليمات إلزامية: يجب أن تردّ باللغة العربية فقط في كل الأحوال. ممنوع منعاً باتاً الرد بالإنجليزية أو أي لغة أخرى بغض النظر عن لغة المستخدم.
 
@@ -347,7 +354,8 @@ function buildSystemPrompt(ctx, isAr) {
 - حمل الرقبة المقاس: ${load==null?"مش متقاس":`${load} كجم فوق الوضع المحايد`} | زاوية الانحناء المقاسة: ${flex==null?"مش متقاسة":`${flex}°`}
 - الجلسات: ${sessTxt} إجمالي | ${ctx.week_sessions} هذا الأسبوع | سلسلة ${ctx.streak_days||0} يوم
 - المعايرة: ${ctx.has_calibration?"دقة شخصية ✅":"عامة ⚠️ — عتبات عامة مش مظبوطة على جسم المستخدم"}${ctx.reliability_pct!=null?` | ${ctx.reliability_pct}% من القراءات كانت موثوقة`:""}
-- تنبيهات متكررة: ${al}
+- تنبيهات متكررة: ${al}${pa?`
+- **المستخدم قال بنفسه إن الألم في: ${pa}** — ده أهم مُدخل عندك، لازم ترجع له في ردك.`:""}
 
 ## القاعدة السريرية:
 **هانسراج 2014 — حمل الرقبة:** 0°=4.5كجم، 15°=12كجم، 30°=18كجم، 45°=22كجم، 60°=27كجم
@@ -380,7 +388,8 @@ ${load==null
 | Sessions | ${sessTxt} total | ${ctx.week_sessions}/wk | ${ctx.streak_days||0}-day streak |
 | Calibration | ${ctx.has_calibration?"Personalized ✅":"Generic ⚠️ — population thresholds, not fitted to this user"} |${ctx.reliability_pct!=null?`
 | Reading reliability | ${ctx.reliability_pct}% of metrics read reliably | |`:""}
-| Top issues | ${al} |
+| Top issues | ${al} |${pa?`
+| **Self-reported pain** | **${pa}** — the user told us this themselves; it outranks every inferred figure above, reference it directly |`:""}
 
 ## CLINICAL REFS
 **Hansraj 2014 cervical load:** 0°=4.5kg → 15°=12kg → 30°=18kg → 45°=22kg → 60°=27kg
@@ -530,6 +539,9 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
       fatigue_from:fatigueRes?.from??0,
       reliability_pct:rel?.pct??null,
       streak_days:profile?.streak_days||0,
+      // The user's own answer to "where does it hurt?" — the highest-signal
+      // input available, and until now it reached nothing.
+      pain_area:profile?.pain_area||null,
       user_name:profile?.name?.split(" ")[0]||"",top_alerts:topAlerts,
     };
     // calibration and _tier were missing from the deps, so a calibration that

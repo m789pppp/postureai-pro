@@ -498,20 +498,26 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
   const [showDemoSession, setShowDemoSession] = useState(false);
   const [teaserDismissed, setTeaserDismissed] = useState(false);
   // The client-computed `month` above (filtering userSessions by date) can
-  // drift from the actual enforcement counter: /api/session/start counts
-  // against a server-side Redis key, incremented independently of whether
-  // the session doc later saved successfully to Firestore. Fetch the real
-  // number so the bar can never show "3 of 5" while the user is actually
-  // already blocked at 5/5 (or vice versa). Falls back to the client count
-  // instantly (no loading flash) and swaps in the authoritative number
-  // once it arrives.
+  // drift from the actual enforcement counter, which counts documents in
+  // users/{uid}/sessions rather than the top-level `sessions` collection this
+  // screen reads. Fetch the enforced number so the bar can never show "3 of 5"
+  // while the user is already blocked at 5/5. Falls back to the client count
+  // instantly (no loading flash).
+  //
+  // The endpoint used to read Redis keys nothing writes, so it returned 0 for
+  // every user — and because `typeof 0 === "number"` passed this check, the
+  // zero OVERWROTE the correct client count and the bar read "0 of 5" until
+  // the 5th session was refused. It now counts the same documents the limit is
+  // enforced against and reports which source it used; anything that is not a
+  // positive count from Firestore leaves the client-side number in place.
   const [realMonthUsage, setRealMonthUsage] = useState(null);
   useEffect(() => {
     if (!isFreeTier) return;
     let cancelled = false;
     BillingAPI.usage().then(res => {
       const n = res?.usage?.sessions_this_month;
-      if (!cancelled && typeof n === "number") setRealMonthUsage(n);
+      const trustworthy = res?.usage?.sessions_source === "firestore";
+      if (!cancelled && typeof n === "number" && trustworthy) setRealMonthUsage(n);
     }).catch(() => {}); // fail quiet — client-computed count is still shown
     return () => { cancelled = true; };
   }, [isFreeTier, userSessions.length]);
@@ -602,14 +608,20 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
           }}/>
       , document.body)}
 
+      {/* Show whichever count is HIGHER. The server counts start-of-session
+          records (including sessions abandoned before they saved); the client
+          counts saved documents. Under-reporting is the harmful direction — it
+          lets someone plan around a quota they have already spent — so never
+          let one source hide usage the other can see. */}
       {isFreeTier && (
-        <SessionUsageBar used={realMonthUsage ?? month} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
+        <SessionUsageBar used={Math.max(realMonthUsage ?? 0, month)} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
       )}
 
-      {isFreeTier && (
-        <PainAreaSelfReport isAr={isAr} cs={cs} initial={profile?.pain_area||null}
-          onSave={(areaId)=> user?.uid ? updateUserProfile(user.uid,{pain_area:areaId}) : undefined}/>
-      )}
+      {/* Was gated to isFreeTier — the inverse of every other gate in the app.
+          "Where does it hurt?" is the single highest-signal thing a user can
+          tell the coach, and paying users could not answer it at all. */}
+      <PainAreaSelfReport isAr={isAr} cs={cs} initial={profile?.pain_area||null}
+        onSave={(areaId)=> user?.uid ? updateUserProfile(user.uid,{pain_area:areaId}) : undefined}/>
 
       {pro && (
         <>

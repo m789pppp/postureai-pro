@@ -63,9 +63,9 @@ const CATEGORIES = [
       // (trialExpires.setDate(+7)) and every other surface says 7.
       ["Is there a free trial?","Yes. All plans include a 7-day free trial — no credit card required. You get full access to all features for your plan tier during the trial."],
       ["What's the difference between Individual and Company plans?","Individual plans are for single users. Company (HR) plans add the HR dashboard, team management, department reporting, bulk user import, weekly auto-reports, and API access."],
-      ["Can I change plans later?","Yes. You can upgrade or downgrade at any time. Downgrades take effect at the end of your billing period. Upgrades are instant with pro-rated billing."],
+      ["Can I change plans later?","Yes. Message us on WhatsApp with the plan you want to move to. Upgrades are pro-rated against what you have already paid; downgrades take effect at the end of your billing period."],
       ["Do you offer discounts for NGOs or universities?","Yes. We offer 50% discounts for verified educational institutions and NGOs. Contact us with your organisation details to apply."],
-      ["What payment methods are accepted?","We accept all major credit cards, Vodafone Cash, Fawry, and bank transfer for annual plans. Egyptian customers can pay in EGP via Kashier."],
+      ["What payment methods are accepted?","Subscriptions are activated over WhatsApp — send us the plan you want and we arrange payment (bank transfer, Vodafone Cash, or InstaPay) and activate the account, usually within 30 minutes. Online card checkout is not open yet."],
     ],
   },
   {

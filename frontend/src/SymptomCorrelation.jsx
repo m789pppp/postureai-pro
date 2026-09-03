@@ -34,10 +34,12 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
   const [selected, setSelected] = useState({}); // {type: severity}
   const [saving, setSaving] = useState(false);
   const [savedToday, setSavedToday] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const [insights, setInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [note, setNote] = useState(null);
+  const [insightsError, setInsightsError] = useState("");
 
   const [history, setHistory] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -78,8 +80,15 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
       // token, no uid needed here at all.
       await SymptomAPI.log({ symptoms });
       setSavedToday(true);
+      setSaveError("");
     } catch (e) {
-      // silent — non-critical background feature
+      // Was `catch (e) { /* silent */ }`. A failed save left the form looking
+      // untouched with no message, so a user could log symptoms every day for a
+      // month and have none of it stored — and the Insights tab's "log a few
+      // more days" nudge would agree with them that they simply hadn't logged
+      // enough yet. Every failure mode of this feature was invisible.
+      console.warn("[SymptomCorrelation] save failed:", e?.message || e);
+      setSaveError(e?.message || (isAr ? "تعذر الحفظ — جرّب تاني" : "Couldn't save — try again"));
     } finally {
       setSaving(false);
     }
@@ -105,8 +114,17 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
         const d = await SymptomAPI.correlation("90d");
         const list = Array.isArray(d) ? d : (d?.insights || []);
         setInsights(list);
+        setInsightsError("");
         if (!list.length) setNote(isAr?"سجّل أعراضك يومياً لمدة أسبوع لرؤية الربط":"Log symptoms daily for a week to see correlations");
-      } catch { setInsights([]); }
+      } catch (e) {
+        // `catch { setInsights([]) }` turned every failure — a 500 from the
+        // missing sessions composite index, a 403, an expired token — into the
+        // same benign "log a few more days" nudge. That is how this feature
+        // could be completely broken and look merely patient.
+        console.warn("[SymptomCorrelation] insights failed:", e?.message || e);
+        setInsights([]);
+        setInsightsError(e?.message || (isAr ? "تعذر تحميل الربط" : "Couldn't load correlations"));
+      }
       finally { setLoadingInsights(false); }
     })();
   }, [isAr]);
@@ -175,6 +193,12 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
                   {isAr ? "حسّيت بإيه النهاردة؟ (اختياري، بس بيحسّن دقة الربط مع بيانات وضعيتك)" :
                           "How are you feeling today? (optional, but sharpens the correlation with your posture data)"}
                 </div>
+                {/* A failed save used to leave the form looking untouched. */}
+                {saveError && (
+                  <div style={{ ...card, padding:"10px 14px", marginBottom:14, color:"#f87171", fontSize:12.5 }}>
+                    {saveError}
+                  </div>
+                )}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:18 }}>
                   {SYMPTOMS.map(s => {
                     const active = s.type in selected;
@@ -267,10 +291,18 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
         {tab === "insights" && (
           <div>
             {loadingInsights && <div style={{ color:"#64748b" }}>{isAr?"جاري التحليل…":"Analyzing…"}</div>}
-            {!loadingInsights && note && (
+            {/* An error is not "not enough data yet" — the two used to render
+                identically, so a broken backend read as a patient one. */}
+            {!loadingInsights && insightsError && (
+              <div style={{ ...card, textAlign:"center", color:"#f87171", fontSize:13 }}>
+                {isAr ? "تعذر تحميل الربط — جرّب تاني بعد شوية" : "Couldn't load correlations — try again shortly"}
+                <div style={{ color:"#64748b", fontSize:11, marginTop:6 }}>{insightsError}</div>
+              </div>
+            )}
+            {!loadingInsights && !insightsError && note && (
               <div style={{ ...card, textAlign:"center", color:"#94a3b8", fontSize:13 }}>{note}</div>
             )}
-            {!loadingInsights && insights && insights.length === 0 && !note && (
+            {!loadingInsights && !insightsError && insights && insights.length === 0 && !note && (
               <div style={{ ...card, textAlign:"center", color:"#64748b" }}>
                 {isAr ? "مفيش ربط واضح ظاهر لسه — سجّل كام يوم كمان" : "No clear correlation yet — log a few more days"}
               </div>

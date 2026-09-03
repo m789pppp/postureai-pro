@@ -3,6 +3,7 @@
  * Blocks access to app until user subscribes
  */
 import { useState } from "react";
+import { ONLINE_PAYMENT_LIVE, whatsappRequestLink, activationPromise, SALES_WHATSAPP_DISPLAY } from "./lib/salesWhatsapp.js";
 
 export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, onLogout, cs }) {
   const isAr = lang === "ar";
@@ -26,6 +27,17 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
   // all). onUpgrade(plan.id) passes the id straight through to checkout,
   // so a user who saw "$9.99" here and clicked would actually be charged
   // $19.99 — corrected to match the real per-tier prices everywhere else.
+  const pickPlan = (plan) => {
+    if (!ONLINE_PAYMENT_LIVE) {
+      window.open(whatsappRequestLink({
+        kind: "renew", planName: plan.name,
+        detail: `${plan.price}${plan.period || ""}`, isAr,
+      }), "_blank", "noopener,noreferrer");
+      return;
+    }
+    onUpgrade(plan.id);
+  };
+
   const plans = isAr ? [
     { id:"professional", name:"احترافي", price:"399 جنيه", period:"/شهر", color:"#0ea5e9",
       features:["✓ AI Coach بدون حدود","✓ تقارير PDF كاملة","✓ تحليل وضعية متقدم","✓ إحصائيات تفصيلية"] },
@@ -118,7 +130,7 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
             }}
             onMouseEnter={()=>setHov(plan.id)}
             onMouseLeave={()=>setHov("")}
-            onClick={()=>onUpgrade(plan.id)}>
+            onClick={()=>pickPlan(plan)}>
               {plan.badge&&(
                 <div style={{
                   position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",
@@ -141,7 +153,7 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
                   </div>
                 ))}
               </div>
-              <button onClick={e=>{e.stopPropagation();onUpgrade(plan.id);}} style={{
+              <button onClick={e=>{e.stopPropagation();pickPlan(plan);}} style={{
                 width:"100%",padding:"12px 0",
                 background:hov===plan.id?`linear-gradient(135deg,${plan.color},${plan.color}cc)`:
                   dark?"rgba(255,255,255,.06)":"rgba(26,86,219,.08)",
@@ -150,7 +162,9 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
                 color:hov===plan.id?"#fff":(dark?"rgba(255,255,255,.8)":t.acc),
                 cursor:"pointer",transition:"all .2s",fontFamily:"inherit",
               }}>
-                {isAr?"اشترك الآن →":"Subscribe Now →"}
+                {ONLINE_PAYMENT_LIVE
+                  ? (isAr?"اشترك الآن →":"Subscribe Now →")
+                  : (isAr?"فعّل على واتساب →":"Activate on WhatsApp →")}
               </button>
             </div>
           ))}
@@ -159,8 +173,10 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
         {/* Footer */}
         <div style={{textAlign:"center",display:"flex",flexDirection:"column",gap:10,alignItems:"center"}}>
           <div style={{fontSize:12.5,color:t.muted}}>
-            {isAr?"✓ إلغاء في أي وقت  ·  ✓ دفع آمن  ·  ✓ دعم فني كامل"
-                 :"✓ Cancel anytime  ·  ✓ Secure payment  ·  ✓ Full support"}
+            {ONLINE_PAYMENT_LIVE
+              ? (isAr?"✓ إلغاء في أي وقت  ·  ✓ دفع آمن  ·  ✓ دعم فني كامل"
+                     :"✓ Cancel anytime  ·  ✓ Secure payment  ·  ✓ Full support")
+              : `${SALES_WHATSAPP_DISPLAY} · ${activationPromise(isAr)}`}
           </div>
           <button onClick={onLogout} style={{
             background:"none",border:"none",

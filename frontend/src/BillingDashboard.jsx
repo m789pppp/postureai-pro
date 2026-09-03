@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { BillingAPI, PaymentAPI } from "./services/api.js";
+import { ONLINE_PAYMENT_LIVE, openWhatsapp, activationPromise, SALES_WHATSAPP_DISPLAY } from "./lib/salesWhatsapp.js";
 import { COLORS as C, TYPE as TY, SPACE as SP, RADIUS as R,
          GLOBAL_CSS, scoreColor } from "./DesignSystem.js";
 import { Skeleton, Spinner, EmptyState, ErrorState,
@@ -279,6 +280,31 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
 
   const applyPlanChange = async () => {
     if (!newPlan || newPlan === tier) return;
+
+    // While online checkout is off, this is how a plan change actually
+    // happens. It used to POST /api/billing/change-plan, which writes a
+    // `payments` document with status "pending" and returns a message — no
+    // money is collected, no provider is contacted, and nothing follows. The
+    // user saw "Upgrade to elite — 1,200 EGP credit applied. Net: 4,390 EGP"
+    // and then waited for a change that was never coming. The proration figures
+    // are still worth showing, so they are carried into the message.
+    if (!ONLINE_PAYMENT_LIVE) {
+      const net = prorate?.net_charge;
+      openWhatsapp({
+        kind: "change_plan",
+        planName: newPlan,
+        billing: newCycle,
+        price: Number.isFinite(net) ? net : null,
+        detail: [
+          `current: ${tier}`,
+          Number.isFinite(prorate?.credit_amount) ? `credit ${prorate.credit_amount} EGP` : "",
+        ].filter(Boolean).join(", "),
+        email: profile?.email || "",
+        isAr: isAr_,
+      });
+      return;
+    }
+
     setLoading(p=>({...p,change:true}));
     try {
       const r = await BillingAPI.changePlan({
@@ -506,13 +532,15 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
               </div>
             ) : usage ? (<>
               <UsageMeter
-                label={isAr_?"الجلسات اليوم":"Sessions Today"}
+                label={(isAr_?"الجلسات اليوم":"Sessions Today")
+                       + (usage.usage.sessions_today_source === "redis" ? (isAr_?" (تقديري)":" (unavailable)") : "")}
                 used={usage.usage.sessions_today}
                 limit={usage.limits.sessions_per_day}
                 color={TOKENS.blue}
               />
               <UsageMeter
-                label={isAr_?"الجلسات هذا الشهر":"Sessions This Month"}
+                label={(isAr_?"الجلسات هذا الشهر":"Sessions This Month")
+                       + (usage.usage.sessions_source === "redis" ? (isAr_?" (تقديري)":" (unavailable)") : "")}
                 used={usage.usage.sessions_this_month}
                 limit={usage.limits.sessions_per_month}
                 color={TOKENS.sky}
@@ -760,14 +788,25 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
             )}
 
             {newPlan && newPlan !== tier && (
-              <Btn
-                loading={loading.change}
-                onClick={applyPlanChange}
-                style={{ width:"100%", justifyContent:"center" }}>
-                {planRank(newPlan)>planRank(tier)
-                  ?(isAr_?"ترقية الآن →":"Upgrade Now →")
-                  :(isAr_?"تخفيض الخطة →":"Downgrade Plan →")}
-              </Btn>
+              <>
+                <Btn
+                  loading={loading.change}
+                  onClick={applyPlanChange}
+                  style={{ width:"100%", justifyContent:"center" }}>
+                  {ONLINE_PAYMENT_LIVE
+                    ? (planRank(newPlan)>planRank(tier)
+                        ?(isAr_?"ترقية الآن →":"Upgrade Now →")
+                        :(isAr_?"تخفيض الخطة →":"Downgrade Plan →"))
+                    : (planRank(newPlan)>planRank(tier)
+                        ?(isAr_?"اطلب الترقية على واتساب":"Request upgrade on WhatsApp")
+                        :(isAr_?"اطلب تغيير الخطة على واتساب":"Request plan change on WhatsApp"))}
+                </Btn>
+                {!ONLINE_PAYMENT_LIVE && (
+                  <div style={{ fontSize:11, color:C.muted, textAlign:"center", marginTop:8, lineHeight:1.6 }}>
+                    {SALES_WHATSAPP_DISPLAY} · {activationPromise(isAr_)}
+                  </div>
+                )}
+              </>
             )}
           </Card>
         )}

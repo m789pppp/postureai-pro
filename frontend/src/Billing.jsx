@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "./config/api.js";
 import { SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY, whatsappActivationLink,
-         activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
+         activationPromise, activateLabel, openWhatsapp,
+         ONLINE_PAYMENT_LIVE } from "./lib/salesWhatsapp.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch, getAuthToken } from "./services/api.js";
@@ -17,7 +18,10 @@ const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";
 // had a "Coming Soon" state for exactly this situation; Kashier now has the
 // same, and both are opt-in rather than opt-out.
 const KASHIER_LIVE = import.meta.env.VITE_KASHIER_ENABLED === "true";
-const ANY_ONLINE_PAYMENT = !!STRIPE_KEY || KASHIER_LIVE;
+// Was a second, local definition of the same switch (!!STRIPE_KEY ||
+// KASHIER_LIVE). It agreed with ONLINE_PAYMENT_LIVE by coincidence rather than
+// by construction; one of them would eventually have been changed alone.
+const ANY_ONLINE_PAYMENT = ONLINE_PAYMENT_LIVE;
 
 // ── Stripe loader ─────────────────────────────────────────────────
 let stripeInstance = null;
@@ -251,9 +255,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       errPaymentUnavailable: "Payment isn't available right now. Please try again shortly or contact support.",
       errPortal: "Couldn't open your billing portal. Please try again in a moment.",
       soonCard: "Credit Card — Coming Soon", soonKashier: "Kashier — Coming Soon",
-      waBtn: "Activate on WhatsApp",
       waNote: "Online payment is coming soon. To start now, send us the plan you want on WhatsApp",
-      waPromise: "Activated within 30 minutes of your message.",
     },
     ar: { title: "اختر خطتك", billing: "الفوترة", monthly: "شهري", yearly: "سنوي", save: "وفر 20%", current: "خطتك الحالية", upgrade: "ترقية", downgrade: "تخفيض", contact: "تواصل مع المبيعات", free: "مجاني للأبد", perMonth: "/شهر", perYear: "/سنة", stripeNote: "دفع آمن عبر Stripe — إلغاء في أي وقت", kashierNote: "دفع آمن عبر Kashier — بطاقات ومحافظ مصرية", or: "أو ادفع بـ",
       errGeneric: "حصلت مشكلة في بدء الدفع. حاول تاني بعد لحظات.",
@@ -262,9 +264,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       errPaymentUnavailable: "الدفع مش متاح دلوقتي. حاول تاني بعد شوية أو تواصل مع الدعم.",
       errPortal: "تعذر فتح صفحة الفوترة. حاول تاني بعد لحظات.",
       soonCard: "بطاقة ائتمان — قريباً", soonKashier: "Kashier — قريباً",
-      waBtn: "فعّل عبر واتساب",
       waNote: "الدفع الإلكتروني قريباً. لو عايز تبدأ دلوقتي، ابعتلنا الباقة اللي عايزها على واتساب",
-      waPromise: "التفعيل خلال 30 دقيقة من إرسال الرسالة.",
     },
   };
   const t = T[lang] || T.en;
@@ -471,9 +471,15 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                     {t.contact}
                   </a>
                 ) : isCurr ? (
-                  <button onClick={() => openStripePortal(profile?.uid).catch(e => { console.error("[Billing] portal error:", e.message); setError(t.errPortal); })} style={{ width: "100%", background: "none", border: `1px solid ${col}50`, borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: col, cursor: "pointer" }}>
-                    {isAr ? "إدارة الاشتراك" : "Manage subscription"}
-                  </button>
+                  ONLINE_PAYMENT_LIVE ? (
+                    <button onClick={() => openStripePortal(profile?.uid).catch(e => { console.error("[Billing] portal error:", e.message); setError(t.errPortal); })} style={{ width: "100%", background: "none", border: `1px solid ${col}50`, borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: col, cursor: "pointer" }}>
+                      {isAr ? "إدارة الاشتراك" : "Manage subscription"}
+                    </button>
+                  ) : (
+                    <button onClick={() => openWhatsapp({ kind: "manage", planName: name, billing, email: profile?.email || "", isAr })} style={{ width: "100%", background: "none", border: `1px solid ${col}50`, borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: col, cursor: "pointer" }}>
+                      {isAr ? "إدارة الاشتراك على واتساب" : "Manage subscription on WhatsApp"}
+                    </button>
+                  )
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     {/* Stripe/Kashier buttons used to only disable themselves
@@ -517,7 +523,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                            width: "100%", background: "#25D366", border: "none", borderRadius: 9,
                            padding: "11px 0", fontSize: 12, fontWeight: 700, color: "#06281a",
                            textDecoration: "none", marginTop: 2 }}>
-                        <span aria-hidden="true">🟢</span>{t.waBtn}
+                        <span aria-hidden="true">🟢</span>{activateLabel(isAr)}
                       </a>
                     )}
                   </div>
@@ -546,7 +552,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                 <span>{activateLabel(isAr)}</span>
                 <span style={{ opacity:.72, fontWeight:700 }}>· {SALES_WHATSAPP_DISPLAY}</span>
               </a>
-            <div style={{ color: DARK.muted, marginTop: 8, textAlign: "center" }}>{t.waPromise}</div>
+            <div style={{ color: DARK.muted, marginTop: 8, textAlign: "center" }}>{activationPromise(isAr)}</div>
           </div>
         )}
 
@@ -558,7 +564,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
 
         <div style={{ padding: "12px 20px 20px", display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", borderTop: `0.5px solid ${DARK.border}` }}>
           <div style={{ fontSize: 10, color: DARK.muted, display: "flex", gap: 6, alignItems: "center" }}>
-            🔒 {STRIPE_KEY ? t.stripeNote : KASHIER_LIVE ? t.kashierNote : t.waPromise}
+            🔒 {STRIPE_KEY ? t.stripeNote : KASHIER_LIVE ? t.kashierNote : activationPromise(isAr)}
           </div>
           <div style={{ fontSize: 10, color: DARK.muted }}>
             {isAr ? "الأسعار شاملة الضريبة • إلغاء في أي وقت" : "Prices include VAT • Cancel anytime"}

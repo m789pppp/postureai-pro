@@ -147,10 +147,6 @@
       "dest": "/api/misc.js"
     },
     {
-      "src": "/api/stress/correlation",
-      "dest": "/api/misc.js"
-    },
-    {
       "src": "/api/habits/whatsapp-cron",
       "dest": "/api/habits.js"
     },

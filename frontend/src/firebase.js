@@ -536,7 +536,12 @@ export async function saveSession(uid, data) {
     const newAvg   = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
     const streak   = prof?.last_session_at ? (() => {
       const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
-      return (Date.now()-last.getTime()) < 1.5*86400000 ? (prof.streak_days||0)+1 : 1;
+      // Local calendar days, because that is the unit the "🔥 Nd" badge claims.
+      const dayOf = d => { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
+      const gapDays = Math.round((dayOf(Date.now()) - dayOf(last)) / 86400000);
+      if (gapDays <= 0) return prof.streak_days || 1;   // same day — already counted
+      if (gapDays === 1) return (prof.streak_days || 0) + 1;
+      return 1;                                         // a day was missed
     })() : 1;
 
     // Monthly session count — feeds ChurnPrediction.jsx's health score,
@@ -575,8 +580,9 @@ export async function getUserSessions(uid) {
   // client-side instead" — but that doesn't work: limit(50) truncates to
   // whatever arbitrary-order subset Firestore returns BEFORE any
   // client-side sort runs, so sorting afterward can't recover the true
-  // most-recent-50 from an already-wrong subset. Same fix and same
-  // existing composite index as onUserSessions() above.
+  // most-recent-50 from an already-wrong subset. Needs the same composite
+  // index as onUserSessions() above — which was never declared, so this
+  // query threw and fell back to the un-ordered path on every call.
   const q = query(
     collection(db,"sessions"),
     where("uid","==",uid),
@@ -649,8 +655,14 @@ export function onUserSessions(uid, callback, onError) {
   // the 50 most recent sessions. Any user with more than 50 total sessions
   // could have been looking at stale/old data across Session History,
   // Season Progress, and dashboard stats instead of their recent activity.
-  // The composite index this needs (uid ASC + created_at DESC) already
-  // existed in firestore.indexes.json — it just wasn't being used.
+  // The composite index this needs (uid ASC + created_at DESC) did NOT exist:
+  // firestore.indexes.json declared indexes for symptom_logs, bookings,
+  // api_usage, api_keys, certificates, payments and roadmap_votes, and nothing
+  // at all for `sessions`. So this query threw failed-precondition on every
+  // call and the un-ordered fallback below was the ONLY path that ever ran —
+  // which is why a user past 50 sessions saw an arbitrary 50 of them and their
+  // dashboard stopped changing when they finished a session. The index is
+  // declared now; the fallback stays for the window while it builds.
   const q = query(
     collection(db,"sessions"),
     where("uid","==",uid),
