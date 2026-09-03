@@ -296,7 +296,11 @@ const SUGGESTIONS = {
 // ── System prompt builder ─────────────────────────────────────────
 function buildSystemPrompt(ctx, isAr) {
   const sc = ctx.avg_score>=85?"Excellent":ctx.avg_score>=70?"Good":ctx.avg_score>=55?"Fair":"Needs Attention";
-  const nr = ctx.neck_risk||0;
+  // null when no recent session recorded a reliable neck reading. It used to
+  // be 100 - avg_score, so the coach was handed a "cervical risk" that was the
+  // overall score in disguise and wrote clinical-sounding advice about it.
+  const nr = ctx.neck_risk;
+  const nrTxt = nr == null ? (isAr ? "مش متقاس" : "not measured") : `${nr}%`;
   const fa = ctx.fatigue_score||0;
   const bu = ctx.burnout_risk||0;
   const tr = ctx.trend_pct||0;
@@ -310,7 +314,7 @@ function buildSystemPrompt(ctx, isAr) {
 
 ## بيانات ${nm} السريرية:
 - درجة الوضعية: **${ctx.avg_score}/100** (${sc}) | هذا الأسبوع: ${wa}/100 (${tr>0?"+":""}${tr}%)
-- خطر الرقبة: **${nr}%** — ${nr>=70?"🔴 مرتفع":nr>=40?"🟡 متوسط":"🟢 منخفض"}
+- خطر الرقبة: **${nrTxt}** — ${nr==null?"ما تتكلمش عن الرقبة كأنك قستها":nr>=70?"🔴 مرتفع":nr>=40?"🟡 متوسط":"🟢 منخفض"}
 - مؤشر الإجهاد: ${fa}% | خطر الإرهاق: ${bu}%
 - الجلسات: ${ctx.sessions_count} إجمالي | ${ctx.week_sessions} هذا الأسبوع | سلسلة ${ctx.streak_days||0} يوم
 - المعايرة: ${ctx.has_calibration?"دقة شخصية ✅":"عامة ⚠️ — دقة أقل 15-20%"}
@@ -338,7 +342,7 @@ function buildSystemPrompt(ctx, isAr) {
 |--------|-------|--------|
 | Posture | ${ctx.avg_score}/100 | ${sc} |
 | This week | ${wa}/100 | ${tr>0?"+":""}${tr}% trend |
-| Cervical risk | ${nr}% | ${nr>=70?"🔴 HIGH":nr>=40?"🟡 MODERATE":"🟢 LOW"} |
+| Cervical risk | ${nrTxt} | ${nr==null?"no reliable neck reading in recent sessions — do not describe it as measured":nr>=70?"🔴 HIGH":nr>=40?"🟡 MODERATE":"🟢 LOW"} |
 | Fatigue | ${fa}% | ${fa>=70?"HIGH":fa>=45?"MODERATE":"Normal"} |
 | Burnout risk | ${bu}% | ${bu>=70?"HIGH":bu>=45?"MODERATE":"Low"} |
 | Sessions | ${ctx.sessions_count} total | ${ctx.week_sessions}/wk | ${ctx.streak_days||0}-day streak |
@@ -347,7 +351,7 @@ function buildSystemPrompt(ctx, isAr) {
 
 ## CLINICAL REFS
 **Hansraj 2014 cervical load:** 0°=4.5kg → 15°=12kg → 30°=18kg → 45°=22kg → 60°=27kg
-Est. flexion for ${nm}: ~${nr>=70?"35-45°":nr>=40?"20-30°":"<15°"}
+Est. flexion for ${nm}: ${nr==null?"unavailable — no neck reading recorded":nr>=70?"~35-45°":nr>=40?"~20-30°":"~<15°"}
 **Nachemson disc pressure:** upright=100% → slouch=185% → forward lean=220%
 
 ## PROTOCOL
@@ -435,12 +439,38 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
       });
     });
     const topAlerts=Object.entries(ac).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k);
+    // profile.avg_score is a LIFETIME cumulative mean, recomputed on every
+    // save as ((old * (n-1)) + this) / n. At 73 sessions a perfect session
+    // moves it by under one point, so the pill reads the same number week
+    // after week — reported as "this data never updates", which is exactly
+    // what a lifetime average does. Both figures are kept: `recent_avg` is
+    // what the user is doing now and drives the pill, `avg_score` stays the
+    // all-time figure the rest of the app uses.
+    const recent = (sessions||[]).slice(0, 7).map(x=>x.avg_score||0).filter(Boolean);
+    const recentAvg = avg(recent);
     const avgScore=profile?.avg_score||avg(scores);
     const fatigue=Math.min(100,Math.max(0,Math.round((100-wAvg)*.6+(sessions?.length<5?30:10))));
-    const neck=Math.min(100,Math.round(100-avgScore+(avgScore<60?20:0)));
+
+    // Neck risk from the NECK, not from the overall score.
+    //
+    // It was Math.round(100 - avgScore + (avgScore < 60 ? 20 : 0)) — pure
+    // arithmetic on the number in the pill beside it. An overall 49 produced
+    // "71% neck" every time, and it could never move independently of the
+    // score because it was the score. Meanwhile the engine measures neck_lean
+    // on every frame, stores it on every session, and none of it was read.
+    //
+    // Averaged over the recent sessions that actually recorded a reliable
+    // neck_lean. null when none did, so the pill can say so rather than
+    // inventing a percentage.
+    const neckScores = (sessions||[]).slice(0, 10)
+      .map(x => x?.metrics?.neck_lean)
+      .filter(m => m && m.reliable !== false && Number.isFinite(m.score))
+      .map(m => m.score);
+    const neck = neckScores.length ? Math.max(0, Math.min(100, 100 - avg(neckScores))) : null;
     const burnout=Math.min(100,Math.round(fatigue*.8+(thisWk.length>5?15:0)));
     return {
-      avg_score:avgScore,week_avg:wAvg,last_week_avg:lAvg,trend_pct:trendPct,
+      avg_score:avgScore,recent_avg:recentAvg,recent_n:recent.length,
+      week_avg:wAvg,last_week_avg:lAvg,trend_pct:trendPct,
       sessions_count:profile?.sessions_count||sessions?.length||0,week_sessions:thisWk.length,
       has_calibration:!!calibration,tier:_tier,neck_risk:neck,
       fatigue_score:fatigue,burnout_risk:burnout,streak_days:profile?.streak_days||0,
@@ -602,10 +632,22 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
           {/* Context pills */}
           <div style={{display:"flex",gap:5,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
             {[
-              {label:`${context.avg_score}/100`,color:context.avg_score>=70?T.green:context.avg_score>=55?T.amber:T.red},
-              {label:`${context.neck_risk}% ${isAr?"رقبة":"neck"}`,color:context.neck_risk>=70?T.red:context.neck_risk>=40?T.amber:T.green},
+              // The score pill shows the recent average, which moves; the
+              // all-time figure is in the coach's context, not on a pill that
+              // looked live and was not. The neck pill is omitted entirely
+              // when no recent session recorded a reliable neck reading —
+              // better a missing pill than a number derived from the one next
+              // to it.
+              context.recent_n
+                ? {label:`${context.recent_avg}/100 · ${isAr?`آخر ${context.recent_n}`:`last ${context.recent_n}`}`,
+                   color:context.recent_avg>=70?T.green:context.recent_avg>=55?T.amber:T.red}
+                : null,
+              context.neck_risk!=null
+                ? {label:`${context.neck_risk}% ${isAr?"رقبة":"neck"}`,
+                   color:context.neck_risk>=70?T.red:context.neck_risk>=40?T.amber:T.green}
+                : null,
               {label:`${context.sessions_count} ${isAr?"جلسة":"sessions"}`,color:T.subtle},
-            ].map(p=>(
+            ].filter(Boolean).map(p=>(
               <div key={p.label} style={{
                 fontSize:9.5,color:p.color,background:`${p.color}12`,
                 border:`0.5px solid ${p.color}30`,borderRadius:6,
@@ -812,7 +854,16 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
     return {
       avg_score: profile?.avg_score || avg(scores),
       streak_days: profile?.streak_days || 0,
-      neck_risk: Math.min(100, Math.round(100-(profile?.avg_score||avg(scores))+((profile?.avg_score||avg(scores))<60?20:0))),
+      // Same defect as the coach's context above: this was 100 - avg_score,
+      // a restatement of the overall score labelled as the neck. Read from the
+      // metric the engine actually records, or report nothing.
+      neck_risk: (() => {
+        const ns = (sessions||[]).slice(0,10)
+          .map(x => x?.metrics?.neck_lean)
+          .filter(m => m && m.reliable !== false && Number.isFinite(m.score))
+          .map(m => m.score);
+        return ns.length ? Math.max(0, Math.min(100, 100 - avg(ns))) : null;
+      })(),
       top_alerts: topAlerts,
       // Free-tier self-report ("Where does it hurt?") — was captured and
       // saved but never actually fed into any personalization until now.
