@@ -112,7 +112,12 @@ for (const [label, pose, cam = {}] of POSES) {
     return Math.hypot((l.x - r.x) * W, (l.y - r.y) * H);   // 2D, not |dx|
   };
   console.log("");
-  for (const [label, pose, cam = {}] of POSES) {
+  // Scale is asserted at 90cm so the box has room in frame — at the rig's
+  // default 60cm the (now larger) box runs into the border on most poses and
+  // the assertion would skip itself, which is how a scale test quietly stops
+  // testing anything.
+  for (const [label, pose] of POSES.map(([l, p]) => [l, p])) {
+    const cam = { distCm: 90 };
     const lms = renderSubject(pose, {}, cam);
     const scale = trueHeadScale(lms);
     const o = oldBox(lms), n = faceBlurBox(lms, W, H);
@@ -122,7 +127,10 @@ for (const [label, pose, cam = {}] of POSES) {
     if (clipped) { console.log(`  --    ${label} — head partly out of frame, scale not asserted`); continue; }
     const ratio = n ? Math.min(n.w, n.h) / scale : 0;
     const oRatio = o ? Math.min(o.w, o.h) / scale : 0;
-    check(`The mosaic stays proportional to the head — ${label}`, ratio >= 1.5,
+    // Raised from 1.5 after a real subject at 88cm still showed jaw and beard
+    // below the mosaic: 1.7x covered every landmark and not the anatomy the
+    // landmarks stop short of.
+    check(`The mosaic stays proportional to the head — ${label}`, ratio >= 2.0,
           `${fmt(ratio)}x the true ear separation (the shipped geometry gave ${fmt(oRatio)}x)`);
   }
 }

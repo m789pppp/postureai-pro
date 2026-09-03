@@ -66,8 +66,14 @@ export function drawFaceBlur(ctx, src, lms, W, H) {
   // to be grown past them — generously, because under-covering a face is the
   // failure that matters here and over-covering costs nothing but a slightly
   // larger mosaic.
-  const padX = span * 0.55, padY = span * 0.70;
-  const bx = x0 - padX, by = y0 - padY * 1.15;   // more headroom above: hair
+  // Sized against the anatomy the landmarks do NOT reach. MediaPipe's head
+  // points span the eyes and ears only — about a fifth of the head's height —
+  // while the crown sits roughly one ear-height above the ear line and the
+  // chin one below, and hair and beard sit outside both. The first pass at
+  // this padded to ~1.7x the ear separation, which still left the jaw and
+  // beard showing on a real subject at 88cm. 2.1x down, 2.2x across.
+  const padX = span * 0.62, padY = span * 0.90;
+  const bx = x0 - padX, by = y0 - padY * 1.05;
   const bw = spanX + padX * 2, bh = spanY + padY * 2.1;
 
   // Clamp by INTERSECTING with the frame, not by subtracting the overflow
@@ -116,8 +122,14 @@ export function faceBlurBox(lms, W, H) {
   const spanX = x1 - x0, spanY = y1 - y0;
   const span = Math.max(spanX, spanY);
   if (span < 10) return null;
-  const padX = span * 0.55, padY = span * 0.70;
-  const bx = x0 - padX, by = y0 - padY * 1.15;
+  // Sized against the anatomy the landmarks do NOT reach. MediaPipe's head
+  // points span the eyes and ears only — about a fifth of the head's height —
+  // while the crown sits roughly one ear-height above the ear line and the
+  // chin one below, and hair and beard sit outside both. The first pass at
+  // this padded to ~1.7x the ear separation, which still left the jaw and
+  // beard showing on a real subject at 88cm. 2.1x down, 2.2x across.
+  const padX = span * 0.62, padY = span * 0.90;
+  const bx = x0 - padX, by = y0 - padY * 1.05;
   const bw = spanX + padX * 2, bh = spanY + padY * 2.1;
   // Clamp by INTERSECTING with the frame, not by subtracting the overflow
   // from the size — subtracting takes the overhang off the far edge too, so a

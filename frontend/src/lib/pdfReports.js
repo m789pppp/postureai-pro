@@ -256,8 +256,17 @@ function _scoreLabel(s,isAr){
 const _t = t => (!t?"standard":t.includes("elite")||t==="enterprise"||t==="premium"?"elite":t.includes("pro")||t.includes("professional")||t==="growth"?"professional":t);
 function _scLt(s){ return s>=80?PDF_TOKENS.successLt:s>=60?PDF_TOKENS.warningLt:PDF_TOKENS.dangerLt; }
 function _sl(s,ar){ return s>=80?(ar?"ممتاز":"Excellent"):s>=60?(ar?"جيد":"Good"):(ar?"يحتاج تحسين":"Needs Work"); }
-function _riskLabel(v,ar){ return v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }
-function _riskColor(v){ return v>=70?PDF_TOKENS.danger:v>=40?PDF_TOKENS.warning:PDF_TOKENS.success; }
+// null = no reading. Made explicit at the primitives because there are five
+// separate zone renderers in this file and each one had its own `|| 0`, which
+// turns "we could not see your lower back" into "your lower back scored 0% —
+// low risk", the best possible result. Confirmed on a real report: the Spinal
+// Zone Risk Map printed "Lumbar L1-S1 · 0% RISK · Risk: Low" for the one zone
+// a laptop camera cannot see.
+function _riskLabel(v,ar){ return v==null?(ar?"مش متقاس":"not measured")
+  :v>=70?(ar?"عالي":"High"):v>=40?(ar?"متوسط":"Moderate"):(ar?"منخفض":"Low"); }
+function _riskColor(v){ return v==null?PDF_TOKENS.muted
+  :v>=70?PDF_TOKENS.danger:v>=40?PDF_TOKENS.warning:PDF_TOKENS.success; }
+function _riskPct(v){ return v==null?"n/a":`${v}%`; }
 function _fmtDur(s){ if(!s)return"—"; const m=Math.floor(s/60),r=s%60; return m>0?`${m}m ${r}s`:`${r}s`; }
 function _fmtDate(ts,ar){
   if(!ts)return"—";
@@ -637,6 +646,7 @@ function _step(doc,x,y,w,num,title,score,steps,isAr){
 // ── ZONE CARD v5 ─────────────────────────────────────────────────
 function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   const col=_riskColor(risk);
+  const _pct=_riskPct(risk);
   const lines=doc.splitTextToSize(desc,w-50);
   const h=Math.max(48,lines.length*5+34);
   fc(doc,...PDF_TOKENS.card);rr(doc,x,y,w,h,4,"F");
@@ -644,7 +654,7 @@ function _zone(doc,x,y,w,name,region,risk,desc,mlist,isAr){
   fc(doc,...col);doc.rect(x,y,2.5,h,"F");rr(doc,x,y,2.5,h,1.2,"F");
   // Risk badge
   fc(doc,...col);doc.circle(x+18,y+h/2,11,"F");
-  font(doc,9.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(`${risk}%`,x+18,y+h/2+3.5,{align:"center"});
+  font(doc,risk==null?6:9.5,"bold");tc(doc,...PDF_TOKENS.card);doc.text(risk==null?"n/a":_pct,x+18,y+h/2+3.5,{align:"center"});
   // Title
   font(doc,10,"bold",isAr);tc(doc,...PDF_TOKENS.ink);doc.text(_fit(doc,name,w*0.5),x+35,y+12);
   font(doc,7.5,"bold");tc(doc,...PDF_TOKENS.primary);doc.text(_fit(doc,region,w*0.5),x+35,y+19);
@@ -2006,18 +2016,18 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     {
       key:"thoracic", region:"T1–T12", title:"Thoracic Spine (Upper Back)",
       desc:"Evaluates shoulder symmetry, rounded shoulder posture, and upper spinal curvature. Chronic elevation indicates risk for thoracic kyphosis progression, intercostal restriction, or rotator cuff impingement patterns.",
-      metrics:"Shoulder Balance, Rounded Shoulders, Spine Lean, Trunk Lean",
+      metrics:"Shoulder Level, Rounded Shoulders, Shoulder Elevation",
     },
     {
       key:"lumbar", region:"L1–S1", title:"Lumbar Spine (Lower Back)",
-      desc:"Measures sagittal and coronal spinal alignment, hip angle, and pelvic positioning relative to trunk. Risk elevation may indicate posterior chain tightness, lumbar flexion intolerance, or disc load asymmetry.",
-      metrics:"Spine Alignment, Hip Angle, Trunk Lean",
+      desc:"Measures trunk lean, forward flexion and axial rotation relative to the hips. Risk elevation may indicate posterior chain tightness, lumbar flexion intolerance, or disc load asymmetry. All three require the hips to be inside the camera frame, which a laptop webcam at typical desk distance cannot achieve — see the coverage note on the session page.",
+      metrics:"Spine Lean, Forward Slouch, Trunk Rotation",
     },
   ];
 
   clinicalZones.forEach(({key,region,title,desc,metrics:mlist})=>{
     if(y>H-72){y=_clinPage();}
-    const risk=_zBar(zonal,key);
+    const risk=_zNum(zonal,key);           // nullable — see _riskLabel
     const rcol=_riskColor(risk);
     const rlbl=_riskLabel(risk,false);
 
@@ -2027,8 +2037,8 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
 
     // Zone identifier
     doc.setFillColor(...rcol); doc.roundedRect(ml+2,y+2,22,22,2,2,"F");
-    doc.setFontSize(13); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
-    doc.text(`${risk}%`, ml+13, y+13.5, {align:"center"});
+    doc.setFontSize(risk==null?7:13); doc.setTextColor(255,255,255); doc.setFont("helvetica","bold");
+    doc.text(_riskPct(risk), ml+13, y+13.5, {align:"center"});
     doc.setFontSize(6); doc.text("RISK", ml+13, y+20, {align:"center"});
 
     doc.setFontSize(9.5); doc.setTextColor(15,23,42); doc.setFont("helvetica","bold");
@@ -2036,12 +2046,12 @@ export async function generateClinicalPDF({ session, profile, user, lang="en", s
     doc.setFontSize(7.5); doc.setTextColor(14,165,233); doc.setFont("helvetica","bold");
     doc.text(region, ml+28, y+14);
     doc.setFontSize(7); doc.setTextColor(...rcol); doc.setFont("helvetica","bold");
-    doc.text(`Risk Level: ${rlbl}`, ml+28, y+20);
+    doc.text(risk==null?"Not measured this session":`Risk Level: ${rlbl}`, ml+28, y+20);
 
     // Risk bar
     const bx=ml+cw*0.52, bw2=cw*0.46;
     doc.setFillColor(226,232,240); doc.roundedRect(bx,y+15,bw2,4,1,1,"F");
-    doc.setFillColor(...rcol); doc.roundedRect(bx,y+15,Math.max(bw2*(risk/100),3),4,1,1,"F");
+    if(risk!=null) { doc.setFillColor(...rcol); doc.roundedRect(bx,y+15,Math.max(bw2*(risk/100),3),4,1,1,"F"); }
 
     // Description
     doc.setFontSize(7.5); doc.setTextColor(51,65,85); doc.setFont("helvetica","normal");
@@ -3105,11 +3115,15 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   const avgDurMin   = Math.round(sessions.reduce((a,s)=>a+(s.duration_s||s.duration_sec||0),0)/sessions.length/60);
 
   const allZonal = sessions.filter(s=>s.metrics).map(s=>_zonalRisk(s.metrics));
-  const avgZonal = {
-    cervical: allZonal.length?Math.round(allZonal.reduce((a,b)=>a+b.cervical,0)/allZonal.length):0,
-    thoracic: allZonal.length?Math.round(allZonal.reduce((a,b)=>a+b.thoracic,0)/allZonal.length):0,
-    lumbar:   allZonal.length?Math.round(allZonal.reduce((a,b)=>a+b.lumbar,0)/allZonal.length):0,
+  // Average only the sessions that actually measured a zone. `a + null` is `a`
+  // in JS, so summing straight through turned an all-unmeasured lumbar into a
+  // clean 0 — the same 0% "low risk" as a single session, but now averaged
+  // across a whole history and presented as a trend.
+  const _avgZone = k => {
+    const vals = allZonal.map(z => z[k]).filter(v => v !== null && v !== undefined);
+    return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
   };
+  const avgZonal = { cervical:_avgZone("cervical"), thoracic:_avgZone("thoracic"), lumbar:_avgZone("lumbar") };
   const best  = [...sessions].sort((a,b)=>(b.avg_score||0)-(a.avg_score||0))[0];
   const worst = [...sessions].sort((a,b)=>(a.avg_score||0)-(b.avg_score||0))[0];
 
@@ -3216,7 +3230,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     y = _sh(doc, ml, y, isAr?"الملخص التنفيذي":"Executive Summary",
       isAr?"أهم النتائج والإجراءات الموصى بها":"Key findings and recommended actions", PDF_TOKENS.primary, isAr);
 
-    const worstZoneKey = Object.entries(avgZonal).sort((a,b)=>b[1]-a[1])[0]?.[0] || "cervical";
+    const worstZoneKey = Object.entries(avgZonal).filter(([,v])=>v!=null).sort((a,b)=>b[1]-a[1])[0]?.[0] || "cervical";
     const zoneLabel = { cervical: isAr?"الرقبة والعمود العنقي":"Neck & cervical spine",
                          thoracic: isAr?"أعلى الظهر":"Upper back / thoracic",
                          lumbar:   isAr?"أسفل الظهر":"Lower back / lumbar" }[worstZoneKey];
@@ -3447,7 +3461,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   ];
   zones.forEach(({k,en,ar,r,desc})=>{
     if(y>H-42){doc.addPage();_hdr(doc,W,ml,mr,isAr?"خريطة المخاطر":"Risk Map",isAr);y=22;}
-    const risk=avgZonal[k]||0, rc=_riskColor(risk);
+    const risk=avgZonal[k], rc=_riskColor(risk);   // nullable
     const zh=34;
     fc(doc,...PDF_TOKENS.card); rr(doc,ml,y,cw,zh,4,"F");
     dc(doc,...rc); lw(doc,0.25); rr(doc,ml,y,cw,zh,4,"S"); lw(doc,0.3);
@@ -3455,7 +3469,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
     // Risk circle
     fc(doc,...rc); doc.circle(ml+18,y+zh/2,10,"F");
     font(doc,9.5,"bold",isAr&&_cairoLoaded); tc(doc,...PDF_TOKENS.card);
-    doc.text(`${risk}%`,ml+18,y+zh/2+3.5,{align:"center"});
+    doc.text(_riskPct(risk),ml+18,y+zh/2+3.5,{align:"center"});
     // Title + region
     font(doc,10,"bold",isAr); tc(doc,...PDF_TOKENS.ink);
     doc.text(isAr?ar:en,ml+33,y+10);
@@ -3488,7 +3502,7 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   _sh(doc,ml,y,isAr?"تحليل Corvus AI":"Corvus AI Analysis",isAr?"مولّد من بيانات جلساتك":"Generated from your session data",PDF_TOKENS.primary,isAr);
   y+=16;
 
-  const highestRiskAll = Math.max(avgZonal.cervical, avgZonal.thoracic, avgZonal.lumbar);
+  const highestRiskAll = Math.max(...[avgZonal.cervical, avgZonal.thoracic, avgZonal.lumbar].filter(v=>v!=null), 0);
 const highestRiskName = avgZonal.cervical >= avgZonal.thoracic && avgZonal.cervical >= avgZonal.lumbar
   ? (isAr ? "Cervical (neck)" : "Cervical (neck)")
   : avgZonal.thoracic >= avgZonal.lumbar
