@@ -136,12 +136,23 @@ service cloud.firestore {
 
     // ── Sessions Collection ─────────────────────────────────────
     match /sessions/{sessionId} {
-      // Read: own sessions OR admin OR HR in same company
+      // Read: own sessions, or a platform admin.
+      //
+      // The HR clause is gone. It let any HR account read every session
+      // document in its own company straight from the client, which is
+      // exactly how the HR dashboard was reading fifty employees' posture
+      // histories — around the organisation's own aggregate_only setting,
+      // which is enforced on /api/company/dashboard and nowhere else. A
+      // privacy mode the browser can bypass is not a privacy mode.
+      //
+      // Company reporting now goes through that endpoint, which holds the
+      // aggregate_only switch and the k-anonymity floor, and reads Firestore
+      // with the Admin SDK server-side. Nothing legitimate lost the access it
+      // needed: HRPanel was the only caller that read another user's
+      // sessions, and it no longer does.
       allow read: if isAuthenticated() && (
         resource.data.uid == request.auth.uid
         || isAdmin()
-        || (isHR() && resource.data.get('company_id', '') != ''
-            && isSameCompany(resource.data.get('company_id', '')))
       );
       // Create: only own sessions (use request.resource for new doc)
       allow create: if isAuthenticated()

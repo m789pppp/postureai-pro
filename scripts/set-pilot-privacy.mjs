@@ -87,9 +87,16 @@ if (wantsList) {
   console.log("─".repeat(72));
   snap.docs.forEach(d => {
     const c = d.data() || {};
-    const mode = c.aggregate_only
+    // Unset now means aggregate-only — the server default was flipped so the
+    // safe state is what an organisation gets for doing nothing. Only an
+    // explicit false opts into named reporting, and this listing has to show
+    // that distinction or an admin cannot tell a deliberate choice from a
+    // company nobody has configured.
+    const mode = c.aggregate_only === false
+      ? "individual (named leaderboard) — set explicitly"
+      : c.aggregate_only === true
       ? `aggregate-only (min ${c.min_group_size || 5})`
-      : "individual (named leaderboard)";
+      : `aggregate-only (default, min ${c.min_group_size || 5})`;
     console.log(d.id.slice(0, 24).padEnd(26) + String(c.name || "—").slice(0, 26).padEnd(28) + mode);
   });
   process.exit(0);

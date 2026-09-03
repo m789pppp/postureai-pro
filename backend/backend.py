@@ -9330,8 +9330,18 @@ def company_dashboard():
         # `aggregate_only` on the company document switches this org to
         # department/company aggregates with no individual identified to
         # anyone but themselves, and applies a k-anonymity floor so a small
-        # group cannot be de-anonymised by subtraction. Off by default, so
-        # existing B2B deployments are unchanged.
+        # group cannot be de-anonymised by subtraction.
+        #
+        # NOW ON BY DEFAULT. It shipped off, which meant a company that had
+        # never heard of the setting handed its HR admin a named posture
+        # leaderboard of every employee — email, average score, an A-D grade
+        # and an "At Risk" flag — as the out-of-the-box behaviour. A privacy
+        # control that has to be discovered and switched on is not a control;
+        # the safe state has to be what you get for doing nothing.
+        #
+        # An organisation that genuinely wants named reporting sets
+        # aggregate_only: False on its company document deliberately, which is
+        # also the point at which it can be told what it is turning on.
         _org = {}
         try:
             _org_snap = db.collection("companies").document(company_id).get()
@@ -9339,7 +9349,7 @@ def company_dashboard():
                 _org = _org_snap.to_dict() or {}
         except Exception:
             _org = {}
-        aggregate_only = bool(_org.get("aggregate_only", False))
+        aggregate_only = bool(_org.get("aggregate_only", True))
         min_group_size = int(_org.get("min_group_size", 5) or 5)
 
         # ── Fetch all employees in this company ───────────────────
@@ -9561,7 +9571,7 @@ def company_alert_employees():
                 _org = _snap.to_dict() or {}
         except Exception:
             _org = {}
-        if bool(_org.get("aggregate_only", False)) and target != "all":
+        if bool(_org.get("aggregate_only", True)) and target != "all":
             return jsonify({
                 "error": "individual_targeting_disabled",
                 "message": ("This organisation is configured for aggregate reporting. "
@@ -11652,13 +11662,57 @@ def monthly_hr_report():
         company    = data.get("company_name","Company")
         month_name = data.get("month",datetime.now().strftime("%B"))
         year       = data.get("year",datetime.now().year)
-        sessions_d = data.get("sessions",[])
         employees  = data.get("employees",[])
+
+        # The KPIs used to be computed from a `sessions` array the CLIENT
+        # posted — which it built by reading every employee's session
+        # documents straight from Firestore. That read is gone (it walked
+        # around the organisation's aggregate_only setting), so this handler
+        # fetches what it needs itself, with the Admin SDK, scoped to the
+        # caller's own company.
+        company_id = (getattr(g, "company_id", "") or getattr(g, "role", {}).get("company_id", "") or "").strip()
+        sessions_d = []
+        if company_id and db is not None:
+            try:
+                _since = datetime.now(timezone.utc) - timedelta(days=31)
+                for _d in (db.collection("sessions")
+                             .where("company_id", "==", company_id)
+                             .limit(3000).stream()):
+                    _s = _d.to_dict() or {}
+                    _c = _s.get("created_at")
+                    _t = getattr(_c, "timestamp", None)
+                    if _t is None or _c is None:
+                        sessions_d.append(_s)
+                    else:
+                        try:
+                            if _c >= _since:
+                                sessions_d.append(_s)
+                        except Exception:
+                            sessions_d.append(_s)
+            except Exception as _e:
+                app.logger.warning("monthly_hr_report sessions fetch: %s", _e)
+
         total_sess = len(sessions_d)
         avg_score  = round(sum(s.get("avg_score",0) for s in sessions_d)/max(total_sess,1))
         good_pct   = round(sum(s.get("good_pct",0) for s in sessions_d)/max(total_sess,1))
         alerts_tot = sum(s.get("alerts_count",0) for s in sessions_d)
-        risk_high  = [e for e in employees if e.get("avg_score",100) < 50]
+
+        # aggregate_only applies here too. This report named up to ten
+        # employees, with their department and score, and consulted nothing —
+        # so an organisation switched to aggregate reporting could still get a
+        # named at-risk table out of the header button. The company dashboard
+        # endpoint holds the switch; this one has to honour the same answer.
+        _org_doc = {}
+        try:
+            if company_id and db is not None:
+                _snap = db.collection("companies").document(company_id).get()
+                if _snap.exists:
+                    _org_doc = _snap.to_dict() or {}
+        except Exception:
+            _org_doc = {}
+        names_allowed = not bool(_org_doc.get("aggregate_only", True))
+        risk_high  = [e for e in employees if e.get("avg_score",100) < 50] if names_allowed else []
+        risk_count = len([e for e in employees if e.get("avg_score",100) < 50])
         buf = io.BytesIO()
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
@@ -11675,7 +11729,9 @@ def monthly_hr_report():
                     ["Average Posture Score",f"{avg_score}/100","✓" if avg_score>=70 else "⚠"],
                     ["Good Posture %",f"{good_pct}%","✓" if good_pct>=65 else "⚠"],
                     ["Total Alerts",str(alerts_tot),"✓" if alerts_tot<20 else "⚠"],
-                    ["High Risk Employees",str(len(risk_high)),"✓" if not risk_high else "⚠"]]
+                    # The COUNT is an aggregate and stays visible in both
+                    # modes; only the named table below is suppressed.
+                    ["High Risk Employees",str(risk_count),"✓" if not risk_count else "⚠"]]
         kpi_table = Table(kpi_data,colWidths=[8*cm,4*cm,3*cm])
         kpi_table.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#1a56db")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),10),("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#e2e8f0")),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#f8fafc")]),("PADDING",(0,0),(-1,-1),8)]))
         story.append(kpi_table); story.append(Spacer(1,0.5*cm))
@@ -11687,6 +11743,14 @@ def monthly_hr_report():
             rt = Table(risk_data,colWidths=[5*cm,3*cm,2.5*cm,2.5*cm,4*cm])
             rt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#ef4444")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),9),("GRID",(0,0),(-1,-1),0.5,colors.HexColor("#fecaca")),("PADDING",(0,0),(-1,-1),6)]))
             story.append(rt); story.append(Spacer(1,0.3*cm))
+        elif risk_count:
+            story.append(Paragraph(
+                f"{risk_count} employee(s) are scoring under 50. This organisation is "
+                "configured for aggregate reporting, so they are not named here — each "
+                "person's score is visible to them.",
+                ParagraphStyle("AggNote",parent=styles["Normal"],
+                               textColor=colors.HexColor("#64748b"),fontSize=9)))
+            story.append(Spacer(1,0.3*cm))
         story.append(Spacer(1,1*cm))
         story.append(Paragraph(f"Report generated by PostureAI Pro on {datetime.now().strftime('%d %B %Y at %H:%M')}. This report is for HR use only.",
             ParagraphStyle("F",parent=styles["Normal"],fontSize=8,textColor=colors.HexColor("#94a3b8"))))

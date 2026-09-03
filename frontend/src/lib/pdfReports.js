@@ -3669,7 +3669,7 @@ export async function generateAIPDF({ sessions=[], profile, aiSummary="", lang="
 // ══════════════════════════════════════════════════════════════════════════════
 export async function generateQuarterlyWellnessReport({
   users = [], company = "", quarter = "", lang = "en",
-  profile, aiExecutiveSummary = "",
+  profile, org = null, aiExecutiveSummary = "",
 }) {
   const { jsPDF } = await import("jspdf");
   const isAr = lang === "ar";
@@ -3687,13 +3687,61 @@ export async function generateQuarterlyWellnessReport({
   const excellent = activeUsers.filter(u => (u.avg_score || 0) >= 80);
   const moderate = activeUsers.filter(u => (u.avg_score || 0) >= 55 && (u.avg_score || 0) < 80);
 
-  // ROI calculations (Egyptian market benchmarks)
-  const AVG_SALARY_EGP = 8000;
-  const SICK_DAYS_AT_RISK = 4.2;   // avg extra sick days/quarter for at-risk employees
-  const PRODUCTIVITY_LOSS_PCT = 0.18;
-  const projectedSickLeaveCost = Math.round(atRisk.length * SICK_DAYS_AT_RISK * (AVG_SALARY_EGP / 22));
-  const productivityLoss = Math.round(atRisk.length * AVG_SALARY_EGP * PRODUCTIVITY_LOSS_PCT);
-  const totalRisk = projectedSickLeaveCost + productivityLoss;
+  // ── Financial projection — only from the customer's own figures ───────
+  //
+  // This section used to print a sick-leave cost, a productivity loss and a
+  // Projected ROI percentage from three constants written into this file:
+  //
+  //     AVG_SALARY_EGP        = 8000    a salary this app does not know
+  //     SICK_DAYS_AT_RISK     = 4.2     "extra sick days per quarter", no source
+  //     PRODUCTIVITY_LOSS_PCT = 0.18    18% lost output, no source
+  //
+  // multiplied by the count of employees whose average POSTURE SCORE is under
+  // 55 — a score from an engine that has never been measured against a human
+  // body with known ground truth. So the chain from an unvalidated reading to
+  // a currency figure and an ROI percentage ran end to end, and the ROI was
+  // the largest number on the cover.
+  //
+  // It was also structurally unable to look bad. The "risk" side scales with
+  // headcount while B2B pricing is flat, so the percentage mostly measures how
+  // many people work there:
+  //
+  //     30 staff, 10 flagged   ->  296%
+  //     100 staff, 30 flagged  ->  324%
+  //
+  // A company deciding whether to buy would be acting on that number.
+  //
+  // Now: nothing is projected unless the organisation has entered its own
+  // figures on its company document. When it has, every input is printed
+  // beside the result so the reader can see whose assumption produced it.
+  const _num = v => (typeof v === "number" && Number.isFinite(v) && v > 0) ? v : null;
+  // "18" and "0.18" both mean eighteen percent to whoever typed it. Taken
+  // literally the first inflates the whole projection a hundredfold and then
+  // prints "1800% productivity loss" as the customer's own stated figure —
+  // the exact failure this section was rewritten to prevent. Anything above 1
+  // is read as a percentage; anything at or above 100 is not a rate at all.
+  const _rate = v => {
+    const n = _num(v);
+    if (n === null) return null;
+    if (n < 1) return n;
+    if (n < 100) return n / 100;
+    return null;
+  };
+  // The organisation's own document is the source. profile is the HR admin's
+  // user record and is only a fallback for a single-tenant setup.
+  const _in = k => org?.[k] ?? profile?.[k];
+  const roiIn = {
+    salary:   _num(_in("roi_avg_salary_egp")),
+    sickDays: _num(_in("roi_sick_days_at_risk")),
+    prodLoss: _rate(_in("roi_productivity_loss_pct")),
+    workDays: _num(_in("roi_working_days_per_month")) ?? 22,
+  };
+  const roiReady = roiIn.salary !== null && roiIn.sickDays !== null && roiIn.prodLoss !== null;
+  const projectedSickLeaveCost = roiReady
+    ? Math.round(atRisk.length * roiIn.sickDays * (roiIn.salary / roiIn.workDays)) : null;
+  const productivityLoss = roiReady
+    ? Math.round(atRisk.length * roiIn.salary * roiIn.prodLoss) : null;
+  const totalRisk = roiReady ? projectedSickLeaveCost + productivityLoss : null;
   // Was `totalU * 499 * 3` — treating the cost as PER-USER, at a price
   // (499 EGP) that doesn't match any real tier either (individual Pro is
   // 399 EGP/mo; the 499 figure was actually the unrelated USD Enterprise
@@ -3704,7 +3752,8 @@ export async function generateQuarterlyWellnessReport({
   // just the org's actual flat monthly fee × 3, not multiplied by totalU.
   const _B2B_FLAT_EGP_MONTHLY = { b2b_starter: 2499, b2b_growth: 6999 };
   const corvusCost = Math.round((_B2B_FLAT_EGP_MONTHLY[profile?.tier] || _B2B_FLAT_EGP_MONTHLY.b2b_starter) * 3);
-  const roi = corvusCost > 0 ? Math.round(((totalRisk - corvusCost) / corvusCost) * 100) : 0;
+  const roi = (roiReady && corvusCost > 0)
+    ? Math.round(((totalRisk - corvusCost) / corvusCost) * 100) : null;
 
   // ── COVER PAGE ────────────────────────────────────────────────────────────
   // Dark navy header block
@@ -3740,7 +3789,12 @@ export async function generateQuarterlyWellnessReport({
     { v: String(totalU),        l: isAr ? "إجمالي الموظفين" : "Employees Tracked", col: PDF_TOKENS.primary },
     { v: String(teamAvg),       l: isAr ? "متوسط درجة الوضعية" : "Avg Posture Score",  col: _sc(teamAvg) },
     { v: `${atRisk.length}`,    l: isAr ? "موظف في خطر" : "At-Risk Employees",       col: PDF_TOKENS.danger },
-    { v: `${roi}%`,             l: isAr ? "العائد على الاستثمار" : "Projected ROI",   col: PDF_TOKENS.success },
+    // The fourth tile is the ROI only when the customer supplied the figures
+    // behind it. Otherwise it shows something this report can actually
+    // measure — how many of the tracked employees are scoring well.
+    roiReady
+      ? { v: `${roi}%`, l: isAr ? "العائد على الاستثمار" : "Projected ROI", col: PDF_TOKENS.success }
+      : { v: String(excellent.length), l: isAr ? "موظف بدرجة ممتازة" : "Scoring Well", col: PDF_TOKENS.success },
   ];
   const bw = (cw - 9) / 4;
   kpis.forEach(({ v, l, col }, i) => {
@@ -3792,6 +3846,23 @@ export async function generateQuarterlyWellnessReport({
   sf(11, "bold"); tc(doc, 10, 15, 30);
   doc.text(isAr ? "التأثير المالي المتوقع" : "Projected Financial Impact", ml, y); y += 7;
 
+  // Without the customer's own figures there is no projection to print — so
+  // the section says what it needs instead of inventing it.
+  if (!roiReady) {
+    fc(doc, ...PDF_TOKENS.bg); rr(doc, ml, y, cw, 34, 3, "F");
+    fc(doc, ...PDF_TOKENS.warning); rr(doc, ml, y, 2.5, 34, 1.2, "F");
+    sf(7.5, "bold"); tc(doc, ...PDF_TOKENS.ink);
+    doc.text(isAr ? "مفيش توقّع مالي في التقرير ده"
+                  : "No financial projection in this report", ml + 7, y + 8);
+    sf(6.3, "normal"); tc(doc, ...PDF_TOKENS.sub);
+    const _need = isAr
+      ? "التوقّع محتاج أرقام شركتك نفسها: متوسط الراتب الشهري، أيام المرض الإضافية المتوقعة للموظف المعرّض، ونسبة الخسارة في الإنتاجية. من غيرهم أي رقم هيكون افتراض من عندنا مش قياس من عندكم — واتشال."
+      : "A projection needs your organisation's own figures: average monthly salary, the extra sick days you attribute to an at-risk employee, and the productivity loss you assign to one. Without them any currency figure would be our assumption rather than your measurement, so none is shown.";
+    doc.splitTextToSize(_need, cw - 14).slice(0, 3)
+      .forEach((l, i) => doc.text(l, ml + 7, y + 15 + i * 5));
+    y += 42;
+  } else {
+  const _fmtPct = v => `${Math.round(v * 100)}%`;
   const financials = [
     [isAr ? "تكلفة الإجازات المرضية المتوقعة" : "Projected sick-leave cost", `${projectedSickLeaveCost.toLocaleString()} EGP`],
     [isAr ? "خسارة الإنتاجية المقدّرة" : "Estimated productivity loss",     `${productivityLoss.toLocaleString()} EGP`],
@@ -3810,6 +3881,20 @@ export async function generateQuarterlyWellnessReport({
     doc.text(v, ml + cw - 4, y + 6, { align: "right" });
     y += 11;
   });
+  // Whose assumptions these are, printed with the result rather than buried.
+  sf(5.8, "italic"); tc(doc, ...PDF_TOKENS.muted);
+  const _basis = isAr
+    ? `محسوبة من أرقامكم: راتب ${roiIn.salary.toLocaleString()} ج.م/شهر · ${roiIn.sickDays} يوم مرض إضافي للموظف المعرّض · ${_fmtPct(roiIn.prodLoss)} خسارة إنتاجية · ${roiIn.workDays} يوم عمل/شهر · ${atRisk.length} موظف درجتهم أقل من 55.`
+    : `From figures your organisation supplied: ${roiIn.salary.toLocaleString()} EGP/month salary · ${roiIn.sickDays} extra sick days per at-risk employee · ${_fmtPct(roiIn.prodLoss)} productivity loss · ${roiIn.workDays} working days/month · applied to the ${atRisk.length} employee(s) averaging under 55.`;
+  doc.splitTextToSize(_basis, cw - 4).slice(0, 3).forEach((l, i) => doc.text(l, ml, y + 3 + i * 4));
+  y += 4 + Math.min(3, doc.splitTextToSize(_basis, cw - 4).length) * 4;
+  sf(5.8, "italic"); tc(doc, ...PDF_TOKENS.muted);
+  doc.text(isAr
+    ? "الخسارة بتكبر مع عدد الموظفين والتكلفة ثابتة، فالنسبة بتعكس حجم الفريق بقدر ما تعكس الوضعية."
+    : "The risk side scales with headcount while the licence is flat-rate, so this percentage reflects team size as much as posture.",
+    ml, y + 3);
+  y += 8;
+  }
   y += 8;
 
   // ── DEPARTMENT BREAKDOWN (if available) ───────────────────────────────────
@@ -3853,7 +3938,27 @@ export async function generateQuarterlyWellnessReport({
   }
 
   // ── TOP AT-RISK EMPLOYEES ────────────────────────────────────────────────
-  if (atRisk.length > 0) {
+  // Names eight employees with their department and score. The company
+  // dashboard suppresses exactly this under aggregate_only and this report
+  // never consulted it, so the setting could be on and the quarterly PDF
+  // would still hand the list over. Same switch, same default: named output
+  // only where the organisation has opted in explicitly.
+  const namesAllowed = org?.aggregate_only === false;
+  if (atRisk.length > 0 && !namesAllowed) {
+    if (y > H - 40) { doc.addPage(); y = 22; }
+    fc(doc, ...PDF_TOKENS.bg); rr(doc, ml, y, cw, 22, 3, "F");
+    fc(doc, ...PDF_TOKENS.muted); rr(doc, ml, y, 2.5, 22, 1.2, "F");
+    sf(7.5, "bold"); tc(doc, ...PDF_TOKENS.ink);
+    doc.text(isAr ? `${atRisk.length} موظف تحت 55 — مش متسمّيين هنا`
+                  : `${atRisk.length} employee(s) scoring under 55 — not named here`, ml + 7, y + 8);
+    sf(6.3, "normal"); tc(doc, ...PDF_TOKENS.sub);
+    doc.text(isAr
+      ? "المؤسسة دي مضبوطة على التقارير المجمّعة، فدرجة كل شخص بيشوفها هو بس."
+      : "This organisation is configured for aggregate reporting, so each person's score is visible only to them.",
+      ml + 7, y + 15, { maxWidth: cw - 14 });
+    y += 30;
+  }
+  if (atRisk.length > 0 && namesAllowed) {
     if (y > H - 70) { doc.addPage(); y = 22; }
     sf(11, "bold"); tc(doc, 10, 15, 30);
     doc.text(isAr ? "الموظفون الأكثر عرضة للخطر" : "Highest-Risk Employees", ml, y); y += 4;

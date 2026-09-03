@@ -145,33 +145,25 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
       const snap = await getDocs(q);
       const raw  = snap.docs.map(d => ({ id: d.id, ...d.to_dict?.() || d.data() }));
 
-      // Enrich with real session counts from Firestore
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-      const enriched = await Promise.all(raw.map(async u => {
+      // Session counts come from the USER document, not from each person's
+      // session collection.
+      //
+      // This used to run a Firestore query per member against `sessions`,
+      // reading other people's posture history from the browser. That read is
+      // no longer permitted — the rule that allowed an HR account to read any
+      // session in its company was removed, because it let this and the HR
+      // dashboard walk around the organisation's aggregate_only setting.
+      //
+      // Left as it was, the query fails for every member but the caller and
+      // the bare `catch {}` swallowed it, so every employee came back with 0
+      // sessions and a flat trend and the whole roster was scored as churn
+      // risk — a silent wrong answer, which is worse than the error. The user
+      // document already carries these two figures, maintained server-side by
+      // saveSession(), and they are aggregates rather than per-session data.
+      const enriched = raw.map(u => {
         const uid = u.uid || u.id;
-        let sessions_this_month = u.sessions_this_month || 0;
-        let score_trend_30d     = u.score_trend_30d || 0;
-        try {
-          const sSnap = await getDocs(
-            query(
-              collection(db, "sessions"),
-              where("uid", "==", uid),
-              where("created_at", ">=", thirtyDaysAgo),
-              limit(50)
-            )
-          );
-          sessions_this_month = sSnap.size;
-          if (sSnap.size >= 2) {
-            const sDocs = sSnap.docs.map(d => d.data()).sort((a,b) => {
-              const da = typeof a.created_at === "string" ? a.created_at : a.created_at?.toDate?.()?.toISOString() || "";
-              const db2 = typeof b.created_at === "string" ? b.created_at : b.created_at?.toDate?.()?.toISOString() || "";
-              return da < db2 ? -1 : 1;
-            });
-            const first = sDocs[0]?.avg_score || 0;
-            const last  = sDocs[sDocs.length - 1]?.avg_score || 0;
-            score_trend_30d = last - first;
-          }
-        } catch {}
+        const sessions_this_month = u.sessions_this_month ?? u.sessions_30d ?? u.session_count ?? 0;
+        const score_trend_30d     = u.score_trend_30d ?? 0;
 
         return {
           id:        uid,
@@ -187,7 +179,7 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
           paymentOk: u.payment_ok !== false,
           ...calcHealth({ ...u, sessions_this_month, score_trend_30d }),
         };
-      }));
+      });
 
       setCustomers(enriched);
     } catch (e) {
