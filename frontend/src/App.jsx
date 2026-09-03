@@ -11,6 +11,7 @@ if (typeof window !== 'undefined') {
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
+import { decimate } from "./lib/clinicalMetrics.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -4898,6 +4899,14 @@ export default function App(){
         good_pct:gPct, duration_s:dur, duration_sec:dur,
         alerts_count:acRef.current?.total||0,
         score_history:hist.slice(-60),
+        // score_history is a TAIL slice (and firebase.js caps it again to the
+        // last 30), so a session document has only ever carried the final
+        // minute of a session at one sample per two seconds. Anything computed
+        // from it and described as "across the session" would be measuring the
+        // last minute. score_curve is the same 30 points spread across the
+        // WHOLE session, so within-session change is actually observable.
+        score_curve:decimate(hist, 30),
+        score_curve_span_s:dur,
         alert_causes: alRef.current.map(a=>({cause:a.cause||"posture",hour:a.time?.split(":")?.[0]||"0",severity:a.severity||"mild"})), // #9
         metrics:la.metrics||{},
         ai_tip:       la.ai_tip||la.ai_insight||la.claude_analysis||"",
@@ -5398,6 +5407,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
       good_pct: gPctPDF,
       duration_s: durS,
       score_history: hist,
+      score_curve: decimate(hist, 30),   // whole-session shape; see the note at the other save site
+      score_curve_span_s: durS,
       alerts_count: alRef.current?.length||0,
       metrics: la.metrics||{},
       tier, mode,
