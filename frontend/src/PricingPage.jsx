@@ -318,8 +318,8 @@ export function PricingPage({ lang = "en", darkMode, currentPlan, onSelect, onSe
       {/* Region toggle */}
       <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 20 }}>
         {[
-          { id: "egypt", label: "🇪🇬 مصر", sub: "EGP / Kashier" },
-          { id: "gulf",  label: "🇸🇦🇦🇪 الخليج", sub: "USD / Stripe" },
+          { id: "egypt", label: "🇪🇬 مصر", sub: "EGP" },
+          { id: "gulf",  label: "🇸🇦🇦🇪 الخليج", sub: "USD" },
         ].map(r => (
           <button key={r.id} onClick={() => setRegion(r.id)} style={{
             padding: "8px 20px", borderRadius: 10,

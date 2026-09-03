@@ -1,5 +1,16 @@
-// /api/stress/correlation — stress pattern correlation data
-// Reads from Firestore symptom logs and correlates with session scores
+// UNROUTED. Kept only so api/misc.js's import does not break.
+//
+// This never worked: it read users/{uid}/symptom_logs ordered by `createdAt`,
+// and nothing writes that collection or that field — symptom logs go to the
+// top-level `symptom_logs` with a `date` field (backend.py log_symptom) and
+// stress logs to `stress_logs`. It also returned {ok, days, symptoms,
+// correlation:"insufficient_data"} while StressPosture.jsx reads
+// {enough_data, days_logged, min_required, correlation:<number>}. So a user
+// could log stress daily for a month and the card would still say "log 5 more
+// days" — and because vercel.json routed /api/stress/correlation here, it
+// SHADOWED backend.py's stress_correlation(), which reads the right collection
+// and returns the right shape. That route was removed; the path now falls
+// through to api/main.py. Do not re-route to this file.
 import { initFirebaseAdmin } from "../../_lib/firebaseAdmin.js";
 
 export default async function handler(req, res) {

@@ -301,7 +301,10 @@ export function FirstSessionBadge({ isAr, cs }) {
 /* ────────────────────────────────────────────────────────────────
    5. PainAreaSelfReport — quick "where does it hurt?" picker
    ──────────────────────────────────────────────────────────────── */
-const PAIN_AREAS = [
+// Exported so consumers can render the label rather than the raw id. The AI
+// coach was interpolating `lower_back` verbatim into its prompt — including
+// into the Arabic one, which forbids English output.
+export const PAIN_AREAS = [
   { id: "neck",      en: "Neck",          ar: "الرقبة",        icon: "🟠" },
   { id: "shoulders", en: "Shoulders",     ar: "الكتفين",       icon: "🟡" },
   { id: "upper_back",en: "Upper back",    ar: "أعلى الظهر",    icon: "🔵" },

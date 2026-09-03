@@ -7,6 +7,12 @@
  *   generateCertPDF   — jsPDF badge generator
  */
 import React, { useState, useEffect } from "react";
+import { ONLINE_PAYMENT_LIVE, openWhatsapp, activationPromise, SALES_WHATSAPP_DISPLAY } from "./lib/salesWhatsapp.js";
+
+// One price, used by the label, the WhatsApp message and the (dormant)
+// online order. It was the literal 150 in the request body, "150 EGP" in
+// one string and "١٥٠ جنيه" in another.
+const CERT_PRICE_EGP = 150;
 import { jsPDF } from "jspdf";
 import { installArabicText } from "./lib/arabicShaper.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
@@ -250,7 +256,7 @@ export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
 
   const hasCert = !!profile?.has_cert;
   const type    = "individual"; // only individual for now; company via sales
-  const price   = isAr ? "١٥٠ جنيه" : "150 EGP";
+  const price   = isAr ? `${CERT_PRICE_EGP} جنيه` : `${CERT_PRICE_EGP} EGP`;
 
   // If already has cert, fetch it
   useEffect(() => {
@@ -263,6 +269,23 @@ export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
   }, [hasCert]);
 
   async function handleBuy() {
+    // The one-off certificate purchase had no WhatsApp route and no flag — it
+    // called Kashier directly on a path that is off. It was also broken on its
+    // own terms: api/_handlers/kashier/create-order.js requires `tier` and
+    // returns `redirect_url`, while this sends `amount`/`description` and reads
+    // `payment_url`, so every attempt 400'd and showed "Payment error". A
+    // button that has never once completed a purchase.
+    if (!ONLINE_PAYMENT_LIVE) {
+      openWhatsapp({
+        kind: "certificate",
+        price: CERT_PRICE_EGP,
+        currency: "EGP",
+        detail: profile?.name || profile?.email || "",
+        email: profile?.email || "",
+        isAr,
+      });
+      return;
+    }
     setStep("paying");
     try {
       // Create Kashier payment
@@ -271,7 +294,7 @@ export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
           uid: profile.uid,
-          amount: 150,
+          amount: CERT_PRICE_EGP,
           currency: "EGP",
           description: isAr ? "شهادة إرجونوميكس Corvus" : "Corvus Ergonomist Certificate",
           metadata: { cert_type:"individual", cert_name: profile.name||profile.email },
@@ -401,11 +424,16 @@ export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
               style={{width:"100%",padding:"14px",background:"linear-gradient(135deg,#f59e0b,#d97706)",
                 border:"none",borderRadius:12,color:"#fff",fontSize:14,fontWeight:800,
                 cursor:step==="paying"?"not-allowed":"pointer",opacity:step==="paying"?.7:1}}>
-              {step==="paying"?"...":(isAr?"🏅 احصل على شهادتك — ١٥٠ جنيه":"🏅 Get Your Certificate — 150 EGP")}
+              {step==="paying" ? "..."
+                : ONLINE_PAYMENT_LIVE
+                  ? (isAr?`🏅 احصل على شهادتك — ${price}`:`🏅 Get Your Certificate — ${price}`)
+                  : (isAr?`🏅 اطلب شهادتك على واتساب — ${price}`:`🏅 Order on WhatsApp — ${price}`)}
             </button>
 
             <div style={{fontSize:10,color:cs.muted,textAlign:"center",marginTop:10}}>
-              {isAr?"دفع آمن عبر Kashier · الشهادة فورية بعد الدفع":"Secure payment via Kashier · Instant certificate after payment"}
+              {ONLINE_PAYMENT_LIVE
+                ? (isAr?"دفع آمن · الشهادة فورية بعد الدفع":"Secure payment · Instant certificate after payment")
+                : `${SALES_WHATSAPP_DISPLAY} · ${activationPromise(isAr)}`}
             </div>
           </div>
         )}

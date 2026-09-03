@@ -1,4 +1,4 @@
-import { SUPPORT_EMAIL } from "./firebase.js";
+import { whatsappRequestLink } from "./lib/salesWhatsapp.js";
 /**
  * APIMarketplace.jsx — Corvus Phase 12
  * Full API marketplace: key management, docs, usage analytics, webhooks, SDKs
@@ -526,7 +526,8 @@ export function APIMarketplace({ profile, cs, lang, onClose }) {
                         card's border, and "Select Plan" led nowhere. Until API
                         billing exists, both routes go to a real conversation
                         rather than a button that does nothing. */}
-                    <a href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`Corvus API — ${p.name} plan`)}&body=${encodeURIComponent(`I'd like to discuss the ${p.name} API plan (${fmtNum(p.reqs)} req/mo).`)}`}
+                    <a href={whatsappRequestLink({kind:"api",planName:p.name,price:p.price,currency:"USD",billing:"monthly",detail:`${fmtNum(p.reqs)} req/mo`,isAr})}
+                      target="_blank" rel="noopener noreferrer"
                       onClick={e=>e.stopPropagation()}
                       style={{ marginTop:14, width:"100%", display:"block", textAlign:"center",
                         background:selectedPlan===p.id?p.color:"transparent", border:`1px solid ${p.color}`,

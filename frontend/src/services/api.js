@@ -373,8 +373,22 @@ export const CoachAPI = {
 
 // ── Symptom Correlation API ─────────────────────────────────────────
 export const SymptomAPI = {
-  /** Log (or overwrite) a day's symptom check-in. symptoms: [{type, severity(1-5)}] */
-  log:         (data)   => apiFetch("/symptoms/log",              { method: "POST", body: data }),
+  /**
+   * Log (or overwrite) a day's symptom check-in. symptoms: [{type, severity(1-5)}]
+   *
+   * The day key is deliberately left to the SERVER (utcnow). An earlier version
+   * of this sent the client's local calendar day, reasoning that a late-evening
+   * check-in was being filed against the next UTC day — but that is only true
+   * for negative UTC offsets. Egypt, this product's home market, is UTC+2/+3,
+   * so local runs AHEAD of UTC and the local day rolls over FIRST: a session at
+   * 01:00 local on the 4th is 22:00 UTC on the 3rd, so the session would key to
+   * the 3rd and the symptom log to the 4th and the correlation engine would
+   * never pair them. Sessions are bucketed by _day_key() on the UTC timestamp,
+   * so symptoms must use the same clock. Both sides UTC agree; mixing them does
+   * not. Pairing correctness beats the cosmetic oddity of a 1am check-in
+   * counting as the previous day.
+   */
+  log: (data) => apiFetch("/symptoms/log", { method: "POST", body: data }),
   /** History of the user's own check-ins. period: 7d|30d|90d */
   history:     (period="30d") => apiFetch(`/symptoms/log?period=${period}`),
   /** The correlation engine — posture metrics on symptom days vs. other days. */

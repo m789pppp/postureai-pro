@@ -3,6 +3,7 @@
  * Full HR dashboard: Overview . Departments . Employees . Billing . Invite
  */
 import { API_BASE_URL } from "./config/api.js";
+import { whatsappRequestLink } from "./lib/salesWhatsapp.js";
 import { useState, useEffect, useRef } from "react";
 import {
   getDepartments, createDepartment, deleteDepartment,
@@ -145,7 +146,7 @@ function B2BPlanCard({ plan, billing, current, isAr, addToast }) {
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{background:hov?`${plan.color}10`:"rgba(255,255,255,.03)",border:`${isCur?"2":"1"}px solid ${isCur?plan.color:hov?`${plan.color}40`:"rgba(255,255,255,.07)"}`,borderRadius:16,padding:"20px 18px",position:"relative",transition:"all .22s",transform:hov?"translateY(-3px)":"none",boxShadow:hov?`0 8px 32px ${plan.color}20`:"none"}}>
       {plan.popular&&<div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",background:`linear-gradient(135deg,${plan.color},${plan.color}cc)`,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 12px",borderRadius:99,whiteSpace:"nowrap"}}>{isAr?"الأكثر طلباً":"Most Popular"}</div>}
-      <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>{isAr?plan.name:plan.name}</div>
+      <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>{isAr?plan.name.ar:plan.name.en}</div>
       {price?(
         <div style={{display:"flex",alignItems:"baseline",gap:3,marginBottom:6}}>
           <span style={{fontSize:28,fontWeight:900,color:plan.color}}>{price.toLocaleString()}</span>
@@ -155,7 +156,7 @@ function B2BPlanCard({ plan, billing, current, isAr, addToast }) {
         <div style={{fontSize:20,fontWeight:800,color:plan.color,marginBottom:6}}>{isAr?"سعر مخصص":"Custom"}</div>
       )}
       <div style={{fontSize:11,color:"#64748b",marginBottom:16}}>{plan.seats<0?(isAr?"غير محدود":"Unlimited"):`≤${plan.seats}`} {isAr?"موظف":"emp"}</div>
-      {plan.features.map((f,fi)=>(
+      {(plan.features||[]).map((f,fi)=>(
         <div key={fi} style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
           <span style={{color:plan.color,fontSize:10}}>v</span>
           <span style={{fontSize:11.5,color:"#94a3b8"}}>{f}</span>
@@ -167,12 +168,14 @@ function B2BPlanCard({ plan, billing, current, isAr, addToast }) {
             {isAr?"خطتك الحالية v":"Current Plan v"}
           </div>
         ):plan.price_mo?(
-          <a href={`mailto:support@corvus.io?subject=Upgrade to ${encodeURIComponent(plan.name||plan.id)}`}
+          <a href={whatsappRequestLink({kind:"b2b",planName:isAr?plan.name.ar:plan.name.en,price,billing,detail:plan.seats<0?"unlimited seats":`${plan.seats} seats`,isAr})}
+            target="_blank" rel="noopener noreferrer"
             style={{display:"block",width:"100%",boxSizing:"border-box",background:`linear-gradient(135deg,${plan.color},${plan.color}cc)`,border:"none",borderRadius:8,padding:"9px 0",textAlign:"center",fontSize:12,fontWeight:700,color:"#fff",textDecoration:"none",cursor:"pointer"}}>
             {isAr?"ترقية <-":"Upgrade ->"}
           </a>
         ):(
-          <a href={`mailto:support@corvus.io?subject=Enterprise Plan`}
+          <a href={whatsappRequestLink({kind:"b2b",planName:isAr?plan.name.ar:plan.name.en,detail:isAr?"سعر مخصص":"custom pricing",isAr})}
+            target="_blank" rel="noopener noreferrer"
             style={{display:"block",background:`${plan.color}12`,border:`1px solid ${plan.color}25`,borderRadius:8,padding:"9px 0",textAlign:"center",fontSize:12,fontWeight:700,color:plan.color,textDecoration:"none"}}>
             {isAr?"تواصل معنا":"Contact Sales"}
           </a>

@@ -65,3 +65,59 @@ export const activationPromise = (isAr) =>
 
 /** Label for the button itself. */
 export const activateLabel = (isAr) => (isAr ? "فعّل عبر واتساب" : "Activate on WhatsApp");
+
+/**
+ * The same route, for the things that are not a plan purchase.
+ *
+ * Every payment surface in the app should end here while ONLINE_PAYMENT_LIVE is
+ * false, and several did not: "Change Plan" posted to an endpoint that wrote a
+ * pending payment row and returned a toast (no money, no follow-up, nothing
+ * happened next); "Manage subscription" opened a Stripe portal that 503s
+ * without a key; the certificate purchase called Kashier directly with a body
+ * that endpoint rejects; and the therapist booking had its own hardcoded
+ * `BOOKING_LIVE = false` instead of the shared switch. Each was a dead end
+ * wearing a working button, on the paths where someone was trying to give the
+ * business money.
+ *
+ * `kind` picks the opening line so the person on the other end knows what the
+ * message is about without asking.
+ */
+export function whatsappRequestLink({
+  kind = "general", detail = "", planName = "", billing = "", price = null,
+  currency = "EGP", email = "", isAr = false,
+} = {}) {
+  const OPENERS = {
+    general:     [ "Hi, I'd like to activate a Corvus subscription.", "السلام عليكم، عايز أفعّل اشتراك Corvus." ],
+    change_plan: [ "Hi, I'd like to change my Corvus plan.",          "السلام عليكم، عايز أغيّر باقة Corvus بتاعتي." ],
+    manage:      [ "Hi, I'd like to manage my Corvus subscription.",  "السلام عليكم، عايز أدير اشتراك Corvus بتاعي." ],
+    renew:       [ "Hi, I'd like to renew my Corvus subscription.",   "السلام عليكم، عايز أجدّد اشتراك Corvus." ],
+    certificate: [ "Hi, I'd like to order my Corvus posture certificate.", "السلام عليكم، عايز أطلب شهادة الوضعية من Corvus." ],
+    booking:     [ "Hi, I'd like to book a physiotherapy session.",   "السلام عليكم، عايز أحجز جلسة علاج طبيعي." ],
+    b2b:         [ "Hi, I'd like to talk about a Corvus team plan.",  "السلام عليكم، عايز أتكلم عن باقة فرق العمل في Corvus." ],
+    api:         [ "Hi, I'd like to subscribe to the Corvus API.",    "السلام عليكم، عايز أشترك في Corvus API." ],
+  };
+  const opener = (OPENERS[kind] || OPENERS.general)[isAr ? 1 : 0];
+  const period = billing === "yearly"  ? (isAr ? "سنوي" : "yearly")
+               : billing === "monthly" ? (isAr ? "شهري" : "monthly")
+               : "";
+  const _p = (price === null || price === undefined || price === "") ? NaN
+           : typeof price === "number" ? price : Number(price);
+  const amount = Number.isFinite(_p) ? `${_p.toLocaleString()} ${currency}`
+               : (typeof price === "string" && price.trim()) ? price.trim() : "";
+
+  const lines = [
+    opener,
+    planName ? (isAr ? `الباقة: ${planName}` : `Plan: ${planName}`) : "",
+    period   ? (isAr ? `الاشتراك: ${period}${amount ? ` — ${amount}` : ""}`
+                     : `Billing: ${period}${amount ? ` — ${amount}` : ""}`) : "",
+    !period && amount ? (isAr ? `المبلغ: ${amount}` : `Amount: ${amount}`) : "",
+    detail   ? (isAr ? `التفاصيل: ${detail}` : `Details: ${detail}`) : "",
+    email    ? (isAr ? `بريد الحساب: ${email}` : `Account email: ${email}`) : "",
+  ];
+  return `https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(lines.filter(Boolean).join("\n"))}`;
+}
+
+/** Open the WhatsApp route in a new tab. For onClick handlers. */
+export function openWhatsapp(opts) {
+  window.open(whatsappRequestLink(opts), "_blank", "noopener,noreferrer");
+}

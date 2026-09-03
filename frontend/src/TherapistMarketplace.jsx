@@ -3,6 +3,7 @@
  * Polished UI + fixed demo-mode chat + specialty filter + better cards
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ONLINE_PAYMENT_LIVE, openWhatsapp } from "./lib/salesWhatsapp.js";
 import { MarketplaceAPI } from "./services/api.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
@@ -573,7 +574,9 @@ function BookingModal({ therapist, isAr, loading, eliteCredit, cs, tk, onClose, 
             onClick={()=>onSubmit(
               hasTemplate ? `${fmtDay(new Date(selectedSlot).toDateString())} ${fmtTime(selectedSlot)}` : preferredTime,
               notes, selectedSlot, discountInfo?.valid?discountCode:"")}>
-            {loading ? (isAr?"جاري الحجز…":"Booking…") : (isAr?"تأكيد الحجز والدفع":"Confirm & Pay")}
+            {loading ? (isAr?"جاري الحجز…":"Booking…")
+              : ONLINE_PAYMENT_LIVE ? (isAr?"تأكيد الحجز والدفع":"Confirm & Pay")
+              : (isAr?"تأكيد الحجز — الدفع على واتساب":"Confirm — pay on WhatsApp")}
           </button>
         </div>
       </div>
@@ -865,7 +868,20 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
         setSelected(null); return;
       }
       const res = await MarketplaceAPI.createBooking({therapist_id:selected.id,preferred_time:preferredTime,slot_datetime:slotDatetime||undefined,notes,discount_code:discountCode||undefined,billing_data:{email:user?.email||""}});
-      if(res?.payment?.redirect_url){ window.open(res.payment.redirect_url,"_blank"); addToast?.(isAr?"افتحنا صفحة الدفع":"Payment page opened","success"); }
+      // BOOKING_LIVE is the business gate (is there a signed clinic contract);
+      // ONLINE_PAYMENT_LIVE is the payment gate. They are separate switches, and
+      // this branch used to honour only the first — so the day booking goes
+      // live, every confirmation would open a Kashier page that is switched off.
+      // The booking is recorded either way; only the payment step differs.
+      if(res?.payment?.redirect_url && ONLINE_PAYMENT_LIVE){ window.open(res.payment.redirect_url,"_blank"); addToast?.(isAr?"افتحنا صفحة الدفع":"Payment page opened","success"); }
+      else if(res?.payment && !ONLINE_PAYMENT_LIVE){
+        openWhatsapp({ kind:"booking",
+          detail:[selected.name, preferredTime, slotDatetime].filter(Boolean).join(" · "),
+          price:Number.isFinite(selected?.session_fee_cents) ? selected.session_fee_cents/100 : null,
+          currency:selected?.currency || "EGP",
+          email:user?.email||"", isAr });
+        addToast?.(isAr?"اتسجل الحجز — كمّل التأكيد على واتساب":"Booking recorded — confirm on WhatsApp","success");
+      }
       else if(res?.covered_by_corvus){ addToast?.(isAr?"🎉 اتحجزت مجانًا — Elite":"🎉 Booked free — Elite membership","success"); setEliteCredit(false); }
       else addToast?.(isAr?"اتسجل الحجز":"Booking recorded","success");
       setSelected(null);
