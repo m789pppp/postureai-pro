@@ -13480,7 +13480,11 @@ def coach_chat():
         _alerts_str = ', '.join(top_alerts[:4]) if top_alerts else 'None recorded'
         _score_label = ("Excellent" if avg_score >= 85 else "Good" if avg_score >= 70
                         else "Fair" if avg_score >= 55 else "Needs Attention")
-        _neck_risk   = context.get("neck_risk", 0)
+        # None now means the client had no reliable neck reading to send —
+        # this used to be a client-computed 100 minus the overall score, i.e.
+        # the average posture score wearing a cervical label, which the prompt
+        # below turns into a clinical risk band.
+        _neck_risk   = context.get("neck_risk")
         _fatigue     = context.get("fatigue_score", 0)
         _burnout     = context.get("burnout_risk", 0)
         _week_avg    = context.get("week_avg", avg_score)
@@ -13504,7 +13508,7 @@ PATIENT CLINICAL DATA (authoritative — always reference these numbers):
 - Overall posture score: {avg_score}/100 ({_score_label})
 - This week average: {_week_avg}/100 | Trend: {('+' if _trend_pct > 0 else '')}{_trend_pct}% vs last week
 - Total sessions: {sessions_n} | This week: {_week_sess} | Streak: {_streak} days
-- Cervical risk score: {_neck_risk}% ({'HIGH' if _neck_risk >= 70 else 'MODERATE' if _neck_risk >= 40 else 'LOW'})
+- Cervical risk score: {'not measured — do not describe cervical loading or name a spinal level' if _neck_risk is None else f"{_neck_risk}% ({'HIGH' if _neck_risk >= 70 else 'MODERATE' if _neck_risk >= 40 else 'LOW'})"}
 - Fatigue index: {_fatigue}% | Burnout risk: {_burnout}%
 - Worst posture window: {worst_time if worst_time and worst_time != 'unknown' else 'Not yet identified'}
 - Anthropometric calibration: {'COMPLETE — personalized thresholds active' if calib else 'NOT DONE — generic population thresholds in use'}
