@@ -516,6 +516,14 @@ export async function saveSession(uid, data) {
   // score_history to the last 30 entries so the doc stays well under.
   const safeData = { ...data };
   if(safeData.score_history) safeData.score_history = safeData.score_history.slice(-30);
+  // score_curve is already decimated to 30 points spanning the whole session
+  // (see App.jsx). Cap defensively, but by decimating rather than tail-slicing
+  // — a tail slice here would silently turn the whole-session curve back into
+  // the last-minute one it exists to replace.
+  if(safeData.score_curve && safeData.score_curve.length > 30){
+    const a = safeData.score_curve;
+    safeData.score_curve = Array.from({length:30},(_,i)=>a[Math.round(i*(a.length-1)/29)]);
+  }
   if(safeData.worst_snapshots){
     const roughBytes = JSON.stringify(safeData.worst_snapshots).length;
     if(roughBytes > 600_000) delete safeData.worst_snapshots;
@@ -1069,17 +1077,11 @@ function _logo(doc,x,y,sz,b64){
   fc(doc,...FB_TOKENS.primary);rr(doc,x+sz*.19,y+sz*.19,sz*.62,sz*.62,sz*.12,"F");
   font(doc,sz*.42,"bold");tc(doc,...FB_TOKENS.card);doc.text("P",x+sz/2,y+sz*.72,{align:"center"});
 }
-
-// ── _zonalRisk ─────────────────────────────────────────────────────
-function _zonalRisk(metrics){
-  if(!metrics) return{cervical:0,thoracic:0,lumbar:0};
-  const sc=k=>typeof metrics[k]==="number"?metrics[k]:(metrics[k]?.score??100);
-  return{
-    cervical:Math.round(100-Math.min(100,(sc("neck_lean")+sc("head_tilt")+sc("head_yaw"))/3)),
-    thoracic:Math.round(100-Math.min(100,(sc("shoulder")+sc("rounded_shoulders")+sc("spine_lean"))/3)),
-    lumbar:  Math.round(100-Math.min(100,(sc("spine_align")+sc("hip_angle")+sc("trunk_lean"))/3)),
-  };
-}
+// _zonalRisk() lived here and had no call site anywhere in this file — the
+// PDF path uses the one in lib/pdfReports.js. It was a third copy of the
+// body-zone map, with its own set of metric names the engine never emits,
+// so 'fixing' it changed nothing that ships while leaving a trap for whoever
+// wired it up next. The canonical map is ZONE_METRICS in lib/clinicalMetrics.js.
 
 // ══════════════════════════════════════════════════════════════════
 // v5 PREMIUM COMPONENTS
@@ -1361,7 +1363,16 @@ export async function createShareableReport({ session, profile, user, lang="en",
       score: v?.score ?? 100,
       value: v?.value ?? null,
       unit:  v?.unit  ?? "",
-      label: (METRIC_LABELS[k] || k),
+      // The engine's own resolved label beats this file's lookup table, which
+      // is keyed on names the engine does not emit.
+      label: v?.label || METRIC_LABELS[k] || k,
+      // Was dropped here, so an unmeasurable reading (FHP with the head turned
+      // returns a placeholder score of 90 with reliable:false) printed to a
+      // clinician as "Forward Head Posture — 90 — Excellent", and fed the zone
+      // map as though it were observed.
+      reliable: v?.reliable !== false,
+      ...(Number.isFinite(v?.extra_load_kg) ? { extra_load_kg: v.extra_load_kg } : {}),
+      ...(Number.isFinite(v?.neck_angle_deg) ? { neck_angle_deg: v.neck_angle_deg } : {}),
     };
   }
 
@@ -1376,6 +1387,9 @@ export async function createShareableReport({ session, profile, user, lang="en",
     duration_s:   session.duration_s || session.duration_sec || 0,
     alerts_count: session.alerts_count || 0,
     mode:         session.mode || "laptop",
+    // The shared page hardcoded an "Elite" badge on every report. Snapshot the
+    // real tier at share time instead of asserting one in the view.
+    tier_label:   normalizedTier ? normalizedTier[0].toUpperCase() + normalizedTier.slice(1) : "",
     metrics:      metricSnap,
     score_history: (session.score_history || []).slice(-120), // max 120 frames
     ai_tip:       session.ai_tip || session.ai_insight || "",

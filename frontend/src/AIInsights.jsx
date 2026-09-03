@@ -9,6 +9,10 @@ import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache, getCachedAsync, setFirestoreCache } from "./aiPreloader.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import {
+  metricScore, cervicalLoadKg, neckFlexionDeg, sessionFatigue,
+  weekWindows, lifetimeSessions, readingReliability,
+} from "./lib/clinicalMetrics.js";
 
 // ── AI call via offline engine ──────────────────────────────────────
 // NOTE: previously routed through geminiChat() -> /api/coach/chat, but
@@ -22,8 +26,13 @@ async function callGemini(prompt, systemPrompt, maxTokens = 1000) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────
-const sc = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
-const pct = (a, b) => b ? Math.round(((a - b) / b) * 100) : 0;
+const sc = v => v == null ? "#64748b" : v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
+function scoreBand(v, isAr) {
+  if (v == null) return isAr ? "غير متاح" : "Not measured";
+  if (v >= 75)   return isAr ? "ممتاز"    : "Excellent";
+  if (v >= 50)   return isAr ? "متوسط"    : "Fair";
+  return isAr ? "يحتاج تحسين" : "Needs work";
+}
 const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
 
 function MdText({ text, isAr }) {
@@ -170,9 +179,17 @@ function MdText({ text, isAr }) {
 }
 
 // ── Fatigue Gauge ──────────────────────────────────────────────────
-function FatigueGauge({ level }) {
-  const color = level >= 70 ? "#ef4444" : level >= 45 ? "#f59e0b" : "#10b981";
-  const label = level >= 70 ? "High Risk" : level >= 45 ? "Moderate" : "Low";
+function FatigueGauge({ decline, isAr }) {
+  // `decline` is points of within-session posture loss (first third vs last),
+  // or null when no session was long enough to measure it. A null must not
+  // render as a green zero — that reads as "measured, no fatigue".
+  const unmeasured = decline == null;
+  const level = unmeasured ? 0 : Math.max(0, Math.min(100, decline * 4)); // arc fill only
+  const color = unmeasured ? "#64748b" : decline >= 15 ? "#ef4444" : decline >= 5 ? "#f59e0b" : "#10b981";
+  const label = unmeasured ? (isAr ? "مش متقاس" : "Not measured")
+              : decline >= 15 ? (isAr ? "تراجع كبير" : "Marked decline")
+              : decline >= 5  ? (isAr ? "تراجع بسيط" : "Mild drift")
+              : (isAr ? "بتحافظ على وضعيتك" : "Holds position");
   const r = 38, circ = 2 * Math.PI * r;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
@@ -184,8 +201,8 @@ function FatigueGauge({ level }) {
             style={{ transition: "stroke-dasharray 800ms cubic-bezier(.4,0,.2,1)" }} />
         </svg>
         <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontFamily: "Syne,sans-serif", fontSize: 20, fontWeight: 800, color, lineHeight: 1 }}>{level}%</span>
-          <span style={{ fontSize: 8, color: "#6b82a6", marginTop: 2, fontWeight: 600, textTransform: "uppercase" }}>Fatigue</span>
+          <span style={{ fontFamily: "Syne,sans-serif", fontSize: unmeasured ? 15 : 20, fontWeight: 800, color, lineHeight: 1 }}>{unmeasured ? "—" : decline}</span>
+          <span style={{ fontSize: 8, color: "#6b82a6", marginTop: 2, fontWeight: 600, textTransform: "uppercase" }}>{unmeasured ? (isAr ? "غير متاح" : "no data") : (isAr ? "نقطة/جلسة" : "pts / session")}</span>
         </div>
       </div>
       <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: "0.04em", textTransform: "uppercase" }}>{label}</span>
@@ -345,29 +362,20 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   // ── Derived session analytics ──────────────────────────────────
   const allScores  = sessions.map(s => s.avg_score || 0).filter(Boolean);
   const avgScore   = avg(allScores);
-  const thisWeek   = sessions.filter(s => {
-    const d = s.created_at?.toDate?.() || new Date(s.created_at || 0);
-    return (Date.now() - d) < 7 * 86400000;
-  });
-  const lastWeek   = sessions.filter(s => {
-    const d = s.created_at?.toDate?.() || new Date(s.created_at || 0);
-    const ms = Date.now() - d;
-    return ms >= 7 * 86400000 && ms < 14 * 86400000;
-  });
-  const weekScores     = thisWeek.map(s => s.avg_score || 0);
-  const lastWeekScores = lastWeek.map(s => s.avg_score || 0);
-  const weekAvg        = avg(weekScores);
-  const lastWeekAvg    = avg(lastWeekScores);
-  // avg([]) is 0 — "no sessions logged this week" was indistinguishable
-  // from "a literal 0/100 score," which fed a fabricated "-100% trend" /
-  // "crashed to 0" narrative into the AI prompts below whenever a user
-  // simply hadn't done a session yet this week. pct() itself already
-  // treats "no last week data" as neutral (returns 0 when !lastWeekAvg);
-  // extend the same neutral-when-missing convention to "no this-week
-  // data" instead of feeding it a real 0 score. (trendPct stays numeric
-  // everywhere else in this file relies on that — do not switch it to a
-  // "—" string here.)
-  const trendPct       = thisWeek.length ? pct(weekAvg, lastWeekAvg) : 0;
+  // avg([]) is 0, and "no sessions this week" was therefore indistinguishable
+  // from "a literal 0/100 score". The earlier fix guarded trendPct but left the
+  // two averages themselves, so the SCREEN honestly rendered "—" while the
+  // prompt beside it asserted `This week: 0/100 | Last week: 0/100` to a
+  // physiotherapist persona — and the trends prompt converted that absence into
+  // a specific kilogram load on the cervical spine.
+  //
+  // These are now null when the week had no sessions, and trendPct is null when
+  // either endpoint is missing: "no comparison possible" rather than 0%, which
+  // reads as "measured, unchanged". Every consumer below handles null.
+  const _wk            = weekWindows(sessions);
+  const weekAvg        = _wk.thisWeek.avg;
+  const lastWeekAvg    = _wk.lastWeek.avg;
+  const trendPct       = _wk.trendPct;
 
   const last30Scores = sessions.slice(0, 30).map(s => s.avg_score || 0).filter(Boolean).reverse();
 
@@ -376,10 +384,31 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   // weekAvg=0 read as "score crashed to zero," which alone could push
   // fatigueScore/burnoutRisk into "HIGH RISK — refer for physiotherapy"
   // territory purely from a quiet week, not any real fatigue signal.
-  const fatigueScore = Math.min(100, Math.max(0, Math.round(
-    sessions.length === 0 || thisWeek.length === 0 ? 0 :
-    (100 - weekAvg) * 0.6 + (sessions.length < 5 ? 30 : 10)
-  )));
+  // Fatigue, measured. Every session stores score_history, so the decline from
+  // its first third to its last third is an actual observation of posture
+  // degrading while the user sat there — which is what the word means.
+  //
+  // The old expression measured nothing of the sort: (100 - weekAvg) * 0.6 was
+  // the weekly posture average inverted, the `sessions.length < 5 ? 30 : 10`
+  // term made "fatigue" a function of how many rows the query returned (a user
+  // with four sessions and a perfect week read 30%, and dropped to 10% on their
+  // fifth session with no change in posture), and the floor of 10 meant a
+  // flawless week still reported fatigue. The `thisWeek.length === 0 ? 0` guard
+  // that was added for the no-data case made it worse in a different direction:
+  // it rendered a confident green "0% — LOW" gauge and told the prompt
+  // "Fatigue: 0%" for a user we had simply not observed.
+  const _fatigue = sessionFatigue(sessions);
+  const fatigueDecline = _fatigue?.declinePoints ?? null;   // pts, or null
+  const fatigueFrom    = _fatigue?.from ?? 0;
+
+  // The engine's own Hansraj (2014) implementation: pitch from MEASURED
+  // forward-head displacement, load = 4.5/cos(pitch) - 4.5. This is what the
+  // four hardcoded `avgScore < 55 ? "18-27 kg"` tables were imitating while the
+  // real figure sat unread on every session document.
+  const cervLoadKg   = cervicalLoadKg(sessions);
+  const cervFlexDeg  = neckFlexionDeg(sessions);
+  const reliability  = readingReliability(sessions);
+  const lifetime     = lifetimeSessions(profile, sessions);
 
   // ── Risk scores ────────────────────────────────────────────────
   // Cervical risk from the CERVICAL MEASUREMENT, not from the overall score.
@@ -395,15 +424,21 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   // Every session stores the engine's own neck_lean score. Averaged over the
   // recent ones that recorded a reliable reading; null when none did, so the
   // prompt can say "not measured" instead of naming a vertebra.
-  const _neckScores = sessions.slice(0, 10)
-    .map(s => s?.metrics?.neck_lean)
-    .filter(m => m && m.reliable !== false && Number.isFinite(m.score))
-    .map(m => m.score);
-  const neckRisk = _neckScores.length
-    ? Math.max(0, Math.min(100, Math.round(100 - _neckScores.reduce((a,b)=>a+b,0)/_neckScores.length)))
-    : null;
-  const burnoutRisk = Math.min(100, Math.round(fatigueScore * 0.8 + (thisWeek.length > 5 ? 15 : 0)));
-  const overallRisk = neckRisk == null ? burnoutRisk : Math.round((neckRisk + burnoutRisk) / 2);
+  const _neckSc = metricScore(sessions, "neck_lean");
+  const neckRisk = _neckSc == null ? null : Math.max(0, Math.min(100, 100 - _neckSc));
+  // Burnout is removed rather than repaired. It was
+  //   fatigueScore * 0.8 + (thisWeek.length > 5 ? 15 : 0)
+  // which unrolls to 0.48 x (100 - weekAvg): the posture score, printed a third
+  // time under the name of an ICD-11 occupational syndrome. The second term
+  // RAISED a user's burnout risk for using the posture app more than five times
+  // a week. Nothing in this product observes hours, workload, sleep or mood, so
+  // there is no honest version of this number.
+  //
+  // overallRisk previously averaged the real neckRisk with that synthetic
+  // figure, which laundered it into a headline "N% — High" badge; and when
+  // neckRisk was null the badge showed pure burnout, discarding the null
+  // handling entirely. It is now just the cervical measurement, named as such.
+  const overallRisk = neckRisk;
 
   // Recurring alert causes across recent sessions — was never computed
   // here, so ctx.topAlerts was always undefined everywhere below (the
@@ -428,20 +463,35 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
     weekAvg,
     lastWeekAvg,
     trendPct,
-    totalSessions: sessions.length,
-    thisWeekSessions: thisWeek.length,
-    fatigueScore,
+    // sessions.length saturates at the query's limit(50), so this told a
+    // 300-session user they had 50 — and, because the AI cache key is built
+    // from it, the key stopped changing once the array saturated and the cached
+    // report was served forever regardless of new sessions.
+    totalSessions: lifetime.count,
+    sessionsExact: lifetime.exact,
+    thisWeekSessions: _wk.thisWeek.n,
+    lastWeekSessions: _wk.lastWeek.n,
+    fatigueDecline,
+    fatigueFrom,
     neckRisk,
-    burnoutRisk,
+    cervLoadKg,
+    cervFlexDeg,
+    reliabilityPct: reliability?.pct ?? null,
     overallRisk,
     streak: profile?.streak_days || 0,
     calibrated: !!calibration,
     topAlerts,
     lang,
-  }), [profile, sessions, avgScore, weekAvg, fatigueScore, topAlerts, lang]);
+    // calibration and effectiveTier were missing from the deps, so a
+    // calibration that resolved after mount left `calibrated` false forever.
+  }), [profile, sessions, avgScore, weekAvg, lastWeekAvg, trendPct, fatigueDecline,
+       neckRisk, cervLoadKg, topAlerts, lang, calibration, effectiveTier, lifetime.count]);
 
   const ctx = buildContext();
-  const _scoreL = ctx.avgScore>=85?"Excellent":ctx.avgScore>=70?"Good":ctx.avgScore>=55?"Fair":"Needs Attention";
+  // These cut-points must match the card's `sub` label below and sc()'s colour
+  // bands, or the card reads "Excellent" while the AI paragraph beneath it says
+  // "Good" for the same 78/100. Single source of truth: scoreBand().
+  const _scoreL = scoreBand(ctx.avgScore, false);
   // 45 matches the cutoff every risk badge/color in this file's UI already
   // uses (fatigueScore/overallRisk below) — this and the two other "40"
   // comparisons in this prompt used to disagree with it, so e.g. a score
@@ -454,24 +504,31 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   const systemPrompt = `You are Dr. Corvus — a senior clinical physiotherapist and ergonomics specialist with 15 years of MSK experience.
 
 ## PATIENT CLINICAL PROFILE: ${ctx.name}
-- Overall score: ${ctx.avgScore}/100 (${_scoreL}) | This week: ${ctx.weekAvg}/100 | Last week: ${ctx.lastWeekAvg}/100
-- Week trend: ${ctx.trendPct>0?"+":""}${ctx.trendPct}% | Sessions: ${ctx.totalSessions} | This week: ${ctx.thisWeekSessions}
-- Cervical risk: ${_neckV} (${_neckL}) | Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}%
-- Calibration: ${ctx.calibrated?"Personalized — accurate thresholds":"Generic — ±15% error margin"}
+- Overall score: ${ctx.avgScore}/100 (${_scoreL}) | This week: ${ctx.weekAvg==null?`no sessions (${ctx.thisWeekSessions} recorded) — do NOT report this as 0/100`:`${ctx.weekAvg}/100`} | Last week: ${ctx.lastWeekAvg==null?"no sessions — do NOT report this as 0/100":`${ctx.lastWeekAvg}/100`}
+- Week trend: ${ctx.trendPct==null?"no comparison possible (a week has no sessions)":`${ctx.trendPct>0?"+":""}${ctx.trendPct}%`} | Sessions: ${ctx.totalSessions}${ctx.sessionsExact?"":"+"} | This week: ${ctx.thisWeekSessions}
+- Cervical risk: ${_neckV} (${_neckL})
+- ${ctx.cervLoadKg==null?"Cervical load: NOT MEASURED — do not estimate a flexion angle or quote kilograms":`Cervical load, MEASURED: ${ctx.cervLoadKg} kg above the 4.5 kg neutral${ctx.cervFlexDeg!=null?` at ${ctx.cervFlexDeg}° flexion`:""}`}
+- ${ctx.fatigueDecline==null?"Within-session decline: NOT MEASURED — do not describe fatigue as measured":`Within-session posture decline: ${ctx.fatigueDecline} pts (first vs last third of a session, n=${ctx.fatigueFrom})`}
+- Occupational burnout is NOT measured by this product and must not be reported as a level or a risk multiplier
+- Calibration: ${ctx.calibrated?"Personalized thresholds":"NOT calibrated — population thresholds, not fitted to this user"}${ctx.reliabilityPct!=null?` | ${ctx.reliabilityPct}% of recent metric readings were reliable`:""}
 - Recurring issues: ${ctx.topAlerts?.join(", ")||"none recorded"}
 
-## CLINICAL INTERPRETATION GUIDE (use these in every report):
-**Cervical loading (Hansraj 2014):**
-Score ${ctx.avgScore}/100 → estimated cervical angle: ${ctx.avgScore<55?"35-50°":ctx.avgScore<70?"20-35°":"<20°"} → load: ${ctx.avgScore<55?"18-27kg":ctx.avgScore<70?"12-18kg":"4-12kg"} (neutral=4.5kg)
+## CLINICAL INTERPRETATION GUIDE
+**Cervical loading (Hansraj 2014):** the published table maps a MEASURED head-flexion angle to load — 0°=4.5kg, 15°=12kg, 30°=18kg, 45°=22kg, 60°=27kg.
+${ctx.cervLoadKg==null
+  ? "This patient has NO cervical measurement. Do not estimate their angle or load from the posture score — that score is a composite of thirteen metrics including elbow angle and monitor height, and has no fixed relationship to neck flexion."
+  : `This patient MEASURES ${ctx.cervLoadKg} kg above neutral${ctx.cervFlexDeg!=null?` at ${ctx.cervFlexDeg}° flexion`:""}. Cite that figure; do not re-derive one from the score.`}
 
-**Disc pressure (Nachemson):** Sitting baseline=140%, slouching=185%, forward lean=220%
 **Risk interpretation:** ${ctx.neckRisk==null
   ? "No reliable neck measurement in the recent sessions. Do NOT describe cervical loading, name a spinal segment, or estimate a risk level — say the reading is unavailable and why it might be (head or shoulders out of frame)."
   : `${ctx.neckRisk}% cervical risk = ${ctx.neckRisk>=70?"C5-C7 facet joints under chronic overload — herniation risk elevated":ctx.neckRisk>=45?"Sustained loading approaching clinical threshold":"Within safe loading range"}`}
 
-**Janda patterns detected:**
-${ctx.topAlerts?.some(a=>a.toLowerCase().includes("shoulder"))?"• Upper Crossed Syndrome likely: tight pecs/upper traps ↔ weak deep neck flexors/rhomboids":""}
-${ctx.topAlerts?.some(a=>a.toLowerCase().includes("back")||a.toLowerCase().includes("hip"))?"• Lower Crossed Syndrome likely: tight hip flexors/erectors ↔ weak glutes/abdominals":""}
+**Disc pressure:** not measured. This product observes posture from a webcam; it does not measure intradiscal pressure. Do not quote a disc-pressure percentage for this patient.
+
+**Postural patterns:** ${ctx.topAlerts?.some(a=>a.toLowerCase().includes("rounded"))
+  ? "Rounded shoulders recur in this patient's alerts, which is consistent with — but not diagnostic of — an upper-crossed pattern: tight pecs and upper traps against weak deep neck flexors and rhomboids. Present it as a pattern worth assessing, not a diagnosis."
+  : "No recurring alert supports a named postural syndrome for this patient. Do not name one."}
+This product measures nothing below the trunk, so a lower-crossed pattern cannot be assessed from this data at all — previously a substring match on "back" or "hip" claimed to screen for it, against alert keys that can never contain either word.
 
 ## REPORT STANDARDS:
 - Use ## for sections, **bold** clinical terms, numbered protocols
@@ -483,7 +540,7 @@ ${ctx.topAlerts?.some(a=>a.toLowerCase().includes("back")||a.toLowerCase().inclu
 
 ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية مصرية). Medical terms + immediate simple explanation." : "LANGUAGE: Clear, precise professional English."}
 
-[CTXDATA:${JSON.stringify({avg:ctx.avgScore||0, sessions:ctx.totalSessions||0, weekAvg:ctx.weekAvg||0, weekSessions:ctx.thisWeekSessions||0, trendPct:ctx.trendPct||0, neckRisk:ctx.neckRisk, fatigue:ctx.fatigueScore||0, burnout:ctx.burnoutRisk||0, calibrated:!!ctx.calibrated, alerts:(ctx.topAlerts||[]).join("; "), lang})}]`;
+[CTXDATA:${JSON.stringify({avg:ctx.avgScore??null, sessions:ctx.totalSessions??null, sessionsExact:!!ctx.sessionsExact, weekAvg:ctx.weekAvg??null, lastWeekAvg:ctx.lastWeekAvg??null, weekSessions:ctx.thisWeekSessions??0, trendPct:ctx.trendPct??null, neckRisk:ctx.neckRisk??null, cervicalLoadKg:ctx.cervLoadKg??null, neckFlexionDeg:ctx.cervFlexDeg??null, fatigueDecline:ctx.fatigueDecline??null, reliabilityPct:ctx.reliabilityPct??null, calibrated:!!ctx.calibrated, alerts:(ctx.topAlerts||[]).join("; "), lang})}]`;
   // ^ Without this marker, if the primary LLM path ever failed here, the
   // rule-based fallback in localAI.js (parseData()) would regex-match this
   // free-form prose and get every field wrong — its patterns expect
@@ -491,7 +548,140 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
   // above — silently reporting fabricated data instead of erroring. Same
   // fix already applied to AICoach.jsx and aiPreloader.js.
 
-  const tabPrompts = {    executive: (ctx) => {      const load = ctx.avgScore<55?"18-27 kg":ctx.avgScore<70?"12-18 kg":ctx.avgScore<85?"6-12 kg":"4-6 kg";      const ang  = ctx.avgScore<55?"35-50":ctx.avgScore<70?"20-35":ctx.avgScore<85?"10-20":"<10";      return `Write a clinical executive report for ${ctx.name||"Patient"}.DATA (reference ALL):Score: ${ctx.avgScore}/100 → cervical angle ~${ang}° → load ~${load} (Hansraj 2014)This week: ${ctx.weekAvg}/100 | Last week: ${ctx.lastWeekAvg}/100 | Trend: ${ctx.trendPct>0?"+":""}${ctx.trendPct}%Sessions: ${ctx.totalSessions} total, ${ctx.thisWeekSessions} this week | Streak: ${ctx.streak} daysCervical risk: ${ctx.neckRisk==null?"not measured — do not describe cervical loading":`${ctx.neckRisk}%`} | Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}%Calibration: ${ctx.calibrated?"Personalized":"Generic (±15% error)"}Alerts: ${ctx.topAlerts?.join(", ")||"none recorded"}## Performance Snapshot[Interpret ${ctx.avgScore}/100 as cervical load (${load}) — which structures at risk? Trend clinical significance.]## Primary Risk Factors1. [Most urgent: exact %, anatomical structure, consequence if ignored]2. [Second risk: same format]3. [Third risk or positive indicator]## This Week's Protocol1. [Exercise: name, sets×reps, hold time, target muscle, why helps ${ctx.name||"this patient"}]2. [Exercise: same format]3. [Ergonomic/behavioral change: specific, measurable]Max 240 words. Zero generic statements.`;    },    trends: (ctx) => {      const lNow  = ctx.weekAvg<55?"~22kg":ctx.weekAvg<70?"~15kg":"~8kg";      const lLast = ctx.lastWeekAvg<55?"~22kg":ctx.lastWeekAvg<70?"~15kg":"~8kg";      return `Clinical trend analysis for ${ctx.name||"Patient"}.DATA:This week: ${ctx.weekAvg}/100 (${lNow} cervical load) | Last week: ${ctx.lastWeekAvg}/100 (${lLast})Change: ${ctx.trendPct>0?"+":""}${ctx.trendPct}% | 30-day avg: ${ctx.avgScore}/100 | Sessions: ${ctx.thisWeekSessions}/weekAlerts: ${ctx.topAlerts?.join(", ")||"none"}## MSK Load Change[${ctx.trendPct}% score change = specific cervical load change. What does this trajectory mean in 4 weeks?]## Root Cause[Link to actual alerts: ${ctx.topAlerts?.slice(0,2).join(", ")||"postural patterns"}. Behavioral + anatomical mechanism — NOT "poor habits".]## Forecast[Predicted score range next 2 weeks. What variable changes the trajectory most.]## Acceleration Protocol1. [Targets root cause: mechanism + timeline]2. [Different approach: mechanism + timeline]Max 210 words.`;    },    fatigue: (ctx) => `Clinical fatigue assessment for ${ctx.name||"Patient"}.DATA:Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}% | Score: ${ctx.avgScore}/100Sessions: ${ctx.thisWeekSessions}/week | Streak: ${ctx.streak} daysBurnout ${ctx.burnoutRisk}% → ${ctx.burnoutRisk>=70?"2.3×":ctx.burnoutRisk>=45?"1.4×":"1.1×"} elevated MSK injury risk (Holtermann 2018)## Fatigue Profile[Acute or chronic? At ${ctx.fatigueScore}% + ${ctx.avgScore}/100 — which muscles are in guarding/inhibition? Physiological state.]## Warning Signs1. [Specific to this patient's data — fatigue + posture + burnout → clinical outcome]2. [Different mechanism]3. [Recovery window estimate]## Recovery Protocol1. [Intervention + duration + frequency + days/weeks to improvement]2. [Different modality]3. [Lifestyle/recovery factor]${ctx.fatigueScore>=70||ctx.burnoutRisk>=70?"⚕️ HIGH RISK: Refer for in-person physiotherapy this week.":"⚕️ Monitor weekly. Seek evaluation if fatigue >75% or score <45/100."}Max 230 words.`,    recommendations: (ctx) => {      const ang  = ctx.avgScore<55?"35-50":ctx.avgScore<70?"20-35":"<20";      const load = ctx.avgScore<55?"18-27 kg":ctx.avgScore<70?"12-18 kg":"<12 kg";      return `Personalized intervention plan for ${ctx.name||"Patient"}.STARTING POINT:Score: ${ctx.avgScore}/100 | Cervical angle: ~${ang}° | Load: ~${load}Cervical risk: ${ctx.neckRisk==null?"not measured — do not describe cervical loading":`${ctx.neckRisk}%`} | Fatigue: ${ctx.fatigueScore}% | Alerts: ${ctx.topAlerts?.slice(0,3).join(", ")||"none"}Calibration: ${ctx.calibrated?"Personalized — use precise measurements":"Generic — use standard population norms"}## Immediate Interventions (Days 1-7)1. **[Exercise]** — targets: [specific alert or deficit] | sets×reps: ___ | hold: ___s | ___×/day | mechanism: [why this specifically]2. **[Exercise]** — same format, different muscle group3. **[Ergonomic fix]** — monitor height, chair angle, keyboard distance (specific measurements)## Progressive Protocol (Weeks 2-4)[Week-by-week progression. Score target before advancing each week.]## Workstation Setup${ctx.calibrated?"Personalized:":"Standard ISO 11226:"}- Monitor: top at eye level | Chair: 0-5° forward tilt | Keyboard: elbows 90-100°## Expected Milestones- Week 1: target ${Math.min(ctx.avgScore+5,100)}/100- Week 2: target ${Math.min(ctx.avgScore+10,100)}/100- Week 4: target ${Math.min(ctx.avgScore+18,100)}/100Max 290 words. Specific to ${ctx.name||"this patient"}'s actual data.`;    },  };
+  // ── Tab prompts ─────────────────────────────────────────────────
+  //
+  // These were one 6,000-character line, which is part of how the following
+  // survived review for so long. Every clinical figure in them was fabricated:
+  //
+  //   load = ctx.avgScore < 55 ? "18-27 kg" : ...        (Hansraj 2014)
+  //   ang  = ctx.avgScore < 55 ? "35-50"    : ...
+  //
+  // Hansraj's table is a function of MEASURED head flexion. avgScore is a
+  // composite of up to thirteen metrics including elbow angle, screen distance
+  // and monitor height — so a user with a perfect neck and a bad desk landed at
+  // 50/100 and was told "cervical angle ~35-50°, load ~18-27 kg", after which
+  // the prompt asked the model to name the structures at risk. Worse, four
+  // different bucket tables lived in this object and DISAGREED: the executive
+  // and system prompts, sent in the same request, told the model a 90/100 user
+  // was at both "<20°/4-12kg" and "<10°/4-6kg".
+  //
+  // The engine has measured the real figure on every session all along
+  // (fhp_index.extra_load_kg, from actual forward-head displacement), so that
+  // is what goes in now — and when it is absent, the prompt says so and forbids
+  // the estimate rather than falling back to a bucket.
+  //
+  // Also removed: the Holtermann 2018 "2.3x / 1.4x / 1.1x elevated MSK injury
+  // risk" ladder, which attached hazard-ratio-shaped numbers to a citation and
+  // keyed them off a burnout score that was 0.48 x (100 - weekAvg). Its lowest
+  // branch was 1.1x, so every user including a flawless one was told their
+  // injury risk was elevated. Nothing here can support a relative risk, so no
+  // multiplier is quoted at all.
+  const _fmtWeek = (v, n) => v == null ? `no sessions (${n} recorded) — do NOT report this as a score of 0` : `${v}/100`;
+  const _fmtTrend = (t) => t == null ? "no comparison possible (a week has no sessions)" : `${t > 0 ? "+" : ""}${t}%`;
+  const _cervLine = (ctx) => ctx.cervLoadKg == null
+    ? "Cervical load: NOT MEASURED. Do not estimate a flexion angle, quote a kilogram figure, or name a spinal level."
+    : `Cervical load, MEASURED (Hansraj 2014 applied to measured forward-head displacement): ${ctx.cervLoadKg} kg above the 4.5 kg neutral${ctx.cervFlexDeg != null ? `, at ${ctx.cervFlexDeg}° flexion` : ""}. Use these exact figures; do not re-derive them from the posture score.`;
+  const _fatigueLine = (ctx) => ctx.fatigueDecline == null
+    ? "Within-session decline: NOT MEASURED (no session long enough to compare its start and end). Do not describe fatigue as measured or assign it a percentage."
+    : `Within-session posture decline: ${ctx.fatigueDecline} pts from the first third of a session to the last, across ${ctx.fatigueFrom} sessions. This is the only fatigue signal available — there is no separate fatigue index and no burnout measurement.`;
+  const _sessLine = (ctx) => `Sessions: ${ctx.totalSessions}${ctx.sessionsExact ? "" : "+ (query truncated)"} total, ${ctx.thisWeekSessions} this week | Streak: ${ctx.streak} days`;
+  const _calibLine = (ctx) => ctx.calibrated
+    ? "Calibration: personalized thresholds"
+    : `Calibration: NOT done — population thresholds, not fitted to this user${ctx.reliabilityPct != null ? ` | ${ctx.reliabilityPct}% of recent metric readings were reliable` : ""}`;
+
+  const tabPrompts = {
+    executive: (ctx) => `Write a clinical executive report for ${ctx.name || "Patient"}.
+
+DATA (reference ALL of it; never invent a figure that is not here):
+Overall score (all recorded sessions): ${ctx.avgScore}/100
+This week: ${_fmtWeek(ctx.weekAvg, ctx.thisWeekSessions)} | Last week: ${_fmtWeek(ctx.lastWeekAvg, ctx.lastWeekSessions)} | Trend: ${_fmtTrend(ctx.trendPct)}
+${_sessLine(ctx)}
+Cervical risk: ${ctx.neckRisk == null ? "not measured — do not describe cervical loading" : `${ctx.neckRisk}%`}
+${_cervLine(ctx)}
+${_fatigueLine(ctx)}
+${_calibLine(ctx)}
+Alerts: ${ctx.topAlerts?.join(", ") || "none recorded"}
+
+## Performance Snapshot
+[Interpret the score and the trend. If a cervical load was measured, interpret THAT figure — which structures it loads. If it was not, say the measurement is unavailable and why (head or shoulders out of frame) rather than estimating one.]
+## Primary Risk Factors
+1. [Most urgent, tied to a figure above: structure involved, consequence if unaddressed]
+2. [Second]
+3. [Third, or a positive indicator]
+## This Week's Protocol
+1. [Exercise: name, sets×reps, hold time, target muscle, why it helps ${ctx.name || "this patient"} specifically]
+2. [Exercise: same format]
+3. [Ergonomic change: specific and measurable]
+Max 240 words. No generic statements. No figure that is not in the DATA block.`,
+
+    trends: (ctx) => `Clinical trend analysis for ${ctx.name || "Patient"}.
+
+DATA:
+This week: ${_fmtWeek(ctx.weekAvg, ctx.thisWeekSessions)} | Last week: ${_fmtWeek(ctx.lastWeekAvg, ctx.lastWeekSessions)}
+Change: ${_fmtTrend(ctx.trendPct)} | All-session average: ${ctx.avgScore}/100 | ${ctx.thisWeekSessions} sessions this week
+${_cervLine(ctx)}
+Alerts: ${ctx.topAlerts?.join(", ") || "none"}
+
+## What Changed
+[Interpret the score movement. A percent change in a bounded composite index has no kilogram equivalent — do NOT convert the trend into a cervical load figure. If a load was measured, you may compare it to the neutral 4.5 kg baseline directly.]
+## Root Cause
+[Link to the actual alerts: ${ctx.topAlerts?.slice(0, 2).join(", ") || "postural patterns"}. Behavioural + anatomical mechanism, not "poor habits".]
+## What To Watch
+[Which variable most changes the trajectory. State plainly if there is not enough data to project — do not produce a predicted score range unless the trend above is a real comparison.]
+## Acceleration Protocol
+1. [Targets the root cause: mechanism + timeline]
+2. [Different approach: mechanism + timeline]
+Max 210 words.`,
+
+    fatigue: (ctx) => `Clinical fatigue assessment for ${ctx.name || "Patient"}.
+
+DATA:
+${_fatigueLine(ctx)}
+Overall score: ${ctx.avgScore}/100 | ${ctx.thisWeekSessions} sessions this week | Streak: ${ctx.streak} days
+${_cervLine(ctx)}
+
+IMPORTANT: this product measures posture from a webcam. It does not observe hours worked, sleep, workload or mood, so it cannot assess occupational burnout — do not report a burnout level, and do not quote a relative injury risk multiplier. If asked about burnout, say plainly that it is not measured here and what would be needed to assess it.
+
+## Fatigue Profile
+[${ctx.fatigueDecline == null
+  ? "No within-session decline could be measured. Explain what that means and what would produce the measurement (longer sessions), rather than describing a physiological state."
+  : `Posture drops ${ctx.fatigueDecline} pts across a session. Which muscles fail to hold position first, and what that pattern indicates.`}]
+## Warning Signs
+1. [Specific to the data above]
+2. [Different mechanism]
+3. [Recovery window estimate, only if the decline was measured]
+## Recovery Protocol
+1. [Intervention + duration + frequency + weeks to improvement]
+2. [Different modality]
+3. [Lifestyle/recovery factor]
+${ctx.fatigueDecline != null && ctx.fatigueDecline >= 15
+  ? "⚕️ Marked within-session decline — suggest an in-person physiotherapy assessment."
+  : "⚕️ Re-assess weekly. Seek evaluation for pain that radiates, numbness, or one-sided weakness."}
+Max 230 words.`,
+
+    recommendations: (ctx) => `Personalized intervention plan for ${ctx.name || "Patient"}.
+
+STARTING POINT:
+Score: ${ctx.avgScore}/100
+${_cervLine(ctx)}
+Cervical risk: ${ctx.neckRisk == null ? "not measured — do not describe cervical loading" : `${ctx.neckRisk}%`}
+${_fatigueLine(ctx)}
+Alerts: ${ctx.topAlerts?.slice(0, 3).join(", ") || "none"}
+${_calibLine(ctx)}
+
+## Immediate Interventions (Days 1-7)
+1. **[Exercise]** — targets: [a specific alert or deficit above] | sets×reps: ___ | hold: ___s | ___×/day | mechanism: [why this one]
+2. **[Exercise]** — same format, different muscle group
+3. **[Ergonomic fix]** — monitor height, chair angle, keyboard distance, with measurements
+## Progressive Protocol (Weeks 2-4)
+[Week-by-week progression, each gated on an observable change rather than a fixed score target.]
+## Workstation Setup
+${ctx.calibrated ? "Personalized:" : "Standard ISO 11226:"}
+- Monitor: top at eye level | Chair: 0-5° forward tilt | Keyboard: elbows 90-100°
+## What Progress Looks Like
+[Describe what improvement will look like in the alerts and measurements above. Do NOT promise specific weekly score targets — the previous version of this prompt hardcoded +5/+10/+18 points regardless of the patient's actual trajectory, which is not a clinical milestone.]
+Max 290 words. Specific to ${ctx.name || "this patient"}'s actual data.`,
+  };
   // Tracks which tab is actually selected right now, read inside the async
   // continuations below. Without this, switching tabs while a request is
   // still in flight didn't cancel it — loadInsight fires a fresh call on
@@ -507,7 +697,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
     if (!sessions.length) return;
 
     // ── L1: Check memory + sessionStorage first (instant) ────────
-    const memCached = uid ? getCached(uid, tabKey, lang, sessions.length) : null;
+    const memCached = uid ? getCached(uid, tabKey, lang, lifetime.count) : null;
     if (memCached) { if (activeTabRef.current===tabKey){ setData(memCached); setLoading(false); } return; }
 
     // Show loading while checking Firestore
@@ -518,7 +708,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
     // ── L2: Check Firestore (persistent across reloads) ───────────
     if (uid) {
       try {
-        const fsCached = await getCachedAsync(uid, tabKey, lang, sessions.length);
+        const fsCached = await getCachedAsync(uid, tabKey, lang, lifetime.count);
         if (activeTabRef.current!==tabKey) return; // tab changed while awaiting — drop this result
         if (fsCached) {
           setData(fsCached);
@@ -535,10 +725,10 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
       if (!prompt) return;
       const text = await callGemini(prompt, systemPrompt);
       if (text && uid) {
-        setCache(uid, tabKey, lang, text, sessions.length);
+        setCache(uid, tabKey, lang, text, lifetime.count);
         // Also persist to Firestore for next reload
         try {
-          await setFirestoreCache(uid, tabKey, lang, text, sessions.length);
+          await setFirestoreCache(uid, tabKey, lang, text, lifetime.count);
         } catch {}
       }
       if (activeTabRef.current===tabKey) setData(text);
@@ -547,7 +737,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
     } finally {
       if (activeTabRef.current===tabKey) setLoading(false);
     }
-  }, [buildContext, sessions.length, profile, lang, uid]);
+  }, [buildContext, lifetime.count, profile, lang, uid]);
 
   // Auto-load when tab changes
   useEffect(() => {
@@ -647,9 +837,11 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
             {[
               { lbl:isAr?"المتوسط":"Avg",   val:`${avgScore}`, unit:"/100", col:sc(avgScore) },
-              { lbl:isAr?"هذا الأسبوع":"Week", val:weekAvg||"—", unit:weekAvg?"/100":"", col:sc(weekAvg||0) },
-              { lbl:isAr?"الاتجاه":"Trend", val:weekAvg&&lastWeekAvg?(trendPct>0?"+":"")+trendPct+"%":"—", unit:"", col:trendPct>=0?D.c.success:D.c.danger },
-              { lbl:isAr?"الإرهاق":"Fatigue", val:`${fatigueScore}`, unit:"%", col:fatigueScore>=70?D.c.danger:fatigueScore>=45?D.c.warning:D.c.success },
+              { lbl:isAr?"هذا الأسبوع":"Week", val:weekAvg??"—", unit:weekAvg!=null?"/100":"", col:sc(weekAvg) },
+              { lbl:isAr?"الاتجاه":"Trend", val:trendPct==null?"—":(trendPct>0?"+":"")+trendPct+"%", unit:"", col:trendPct==null?D.c.muted:trendPct>=0?D.c.success:D.c.danger },
+              // Was a percentage computed from the weekly posture average. Now
+              // the measured points of decline across a session, or an em-dash.
+              { lbl:isAr?"تراجع الجلسة":"Session decline", val:fatigueDecline==null?"—":`${fatigueDecline}`, unit:fatigueDecline==null?"":isAr?" نقطة":" pts", col:fatigueDecline==null?D.c.muted:fatigueDecline>=15?D.c.danger:fatigueDecline>=5?D.c.warning:D.c.success },
             ].map((m,i)=>(
               <div key={i} style={{ background:"rgba(255,255,255,.04)", border:`1px solid ${D.c.border}`, borderRadius:10, padding:"8px 10px" }}>
                 <div style={{ ...D.t.label, color:D.c.muted, marginBottom:5 }}>{m.lbl}</div>
@@ -702,10 +894,10 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
                 <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"مؤشرات الأداء الرئيسية":"Key Performance Indicators"}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                   {[
-                    { icon:"🎯", lbl:isAr?"المتوسط الكلي":"Overall Avg",     val:`${avgScore}/100`, sub: avgScore>=75?(isAr?"ممتاز":"Excellent"):avgScore>=50?(isAr?"مقبول":"Fair"):(isAr?"يحتاج تحسين":"Needs work"), col:sc(avgScore) },
-                    { icon:"📅", lbl:isAr?"جلسات هذا الأسبوع":"Sessions/Week", val:`${thisWeek.length}`,    sub:isAr?"هذا الأسبوع":"this week", col:"#60a5fa" },
-                    { icon:"📈", lbl:isAr?"التغير الأسبوعي":"Weekly Change",  val:weekAvg&&lastWeekAvg?(trendPct>0?"+":"")+trendPct+"%":"—", sub:isAr?"مقارنة بالأسبوع الماضي":"vs last week", col:trendPct>=0?D.c.success:D.c.danger },
-                    { icon:"⚡", lbl:isAr?"مؤشر الإرهاق":"Fatigue Index",    val:`${fatigueScore}%`, sub:fatigueScore>=70?(isAr?"مرتفع":"High"):fatigueScore>=45?(isAr?"متوسط":"Moderate"):(isAr?"منخفض":"Low"), col:fatigueScore>=70?D.c.danger:fatigueScore>=45?D.c.warning:D.c.success },
+                    { icon:"🎯", lbl:isAr?"متوسط كل الجلسات":"All-session avg", val:`${avgScore}/100`, sub: scoreBand(avgScore, isAr), col:sc(avgScore) },
+                    { icon:"📅", lbl:isAr?"جلسات هذا الأسبوع":"Sessions/Week", val:`${_wk.thisWeek.n}`,    sub:isAr?"هذا الأسبوع":"this week", col:"#60a5fa" },
+                    { icon:"📈", lbl:isAr?"التغير الأسبوعي":"Weekly Change",  val:trendPct==null?"—":(trendPct>0?"+":"")+trendPct+"%", sub:trendPct==null?(isAr?"محتاج جلسات في الأسبوعين":"needs sessions in both weeks"):(isAr?"مقارنة بالأسبوع الماضي":"vs last week"), col:trendPct==null?D.c.muted:trendPct>=0?D.c.success:D.c.danger },
+                    { icon:"⚡", lbl:isAr?"تراجع داخل الجلسة":"Within-session decline", val:fatigueDecline==null?"—":`${fatigueDecline}${isAr?" نقطة":" pts"}`, sub:fatigueDecline==null?(isAr?"مش متقاس":"Not measured"):fatigueDecline>=15?(isAr?"تراجع كبير":"Marked"):fatigueDecline>=5?(isAr?"تراجع بسيط":"Mild"):(isAr?"بتحافظ على وضعيتك":"Holds position"), col:fatigueDecline==null?D.c.muted:fatigueDecline>=15?D.c.danger:fatigueDecline>=5?D.c.warning:D.c.success },
                   ].map((m,i)=>(
                     <div key={i} style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:14, padding:"14px 16px" }}>
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
@@ -722,11 +914,11 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
               {/* 30-day sparkline */}
               {last30Scores.length>1 && (
                 <div>
-                  <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?"مسار 30 يوم":"30-Day Trend"}</div>
+                  <div style={{ ...D.t.label, color:D.c.muted, marginBottom:12 }}>{isAr?`آخر ${last30Scores.length} جلسة`:`Last ${last30Scores.length} sessions`}</div>
                   <div style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:14, padding:"16px 18px" }}>
                     <Sparkline scores={last30Scores} color={D.c.accent} h={52}/>
                     <div style={{ display:"flex", justifyContent:"space-between", marginTop:10 }}>
-                      <span style={{ ...D.t.label, color:D.c.muted }}>{isAr?"30 يوم مضت":"30 days ago"}</span>
+                      <span style={{ ...D.t.label, color:D.c.muted }}>{isAr?"الأقدم":"Oldest"}</span>
                       <span style={{ ...D.t.label, color:D.c.muted }}>{isAr?"اليوم":"Today"}</span>
                     </div>
                   </div>
@@ -752,9 +944,9 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
                 {/* Week-over-week */}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
                   {[
-                    { lbl:isAr?"هذا الأسبوع":"This week",  val:weekAvg||"—",     col:sc(weekAvg||0) },
-                    { lbl:isAr?"الأسبوع الماضي":"Last week", val:lastWeekAvg||"—", col:sc(lastWeekAvg||0) },
-                    { lbl:isAr?"التغير":"Change",           val:weekAvg&&lastWeekAvg?(trendPct>0?"+":"")+trendPct+"%":"—", col:trendPct>=0?D.c.success:D.c.danger },
+                    { lbl:isAr?"هذا الأسبوع":"This week",  val:weekAvg??"—",     col:sc(weekAvg) },
+                    { lbl:isAr?"الأسبوع الماضي":"Last week", val:lastWeekAvg??"—", col:sc(lastWeekAvg) },
+                    { lbl:isAr?"التغير":"Change",           val:trendPct==null?"—":(trendPct>0?"+":"")+trendPct+"%", col:trendPct==null?D.c.muted:trendPct>=0?D.c.success:D.c.danger },
                   ].map((m,i)=>(
                     <div key={i} style={{ background:D.c.card, border:`1px solid ${D.c.border}`, borderRadius:12, padding:"12px 14px", textAlign:"center" }}>
                       <div style={{ ...D.t.label, color:D.c.muted, marginBottom:8 }}>{m.lbl}</div>
@@ -771,7 +963,7 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
           {tab==="fatigue" && sessions.length>0 && (
             <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
               <div style={{ display:"flex", justifyContent:"center" }}>
-                <FatigueGauge level={fatigueScore}/>
+                <FatigueGauge decline={fatigueDecline} isAr={isAr}/>
               </div>
               {/* Fatigue breakdown bars */}
               <div>
@@ -799,10 +991,16 @@ ${lang === "ar" ? "LANGUAGE: Respond ENTIRELY in Egyptian Arabic (عامية م�
           {/* ── Recommendations Tab ────────────────────────────────── */}
           {tab==="recommendations" && sessions.length>0 && (
             <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              {overallRisk > 0 && (
-                <div style={{ background:`${overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success}12`, border:`1px solid ${overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success}30`, borderRadius:14, padding:"14px 16px" }}>
-                  <div style={{ ...D.t.label, color:overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success, marginBottom:8 }}>{isAr?"مستوى الخطر الإجمالي":"Overall Risk Level"}</div>
-                  <div style={{ ...D.t.numSm, color:overallRisk>=70?D.c.danger:overallRisk>=45?D.c.warning:D.c.success }}>{overallRisk}% — {overallRisk>=70?(isAr?"مرتفع":"High"):overallRisk>=45?(isAr?"متوسط":"Moderate"):(isAr?"منخفض":"Low")}</div>
+              {/* Was "Overall Risk Level" = mean(neckRisk, burnoutRisk) — half of
+                  it fabricated, which laundered the invented half into a headline
+                  badge; and when neckRisk was null it showed pure burnout. It is
+                  the cervical measurement, so it is labelled as the cervical
+                  measurement, and says "not measured" instead of disappearing. */}
+              {(
+                <div style={{ background:`${sc(overallRisk==null?null:100-overallRisk)}12`, border:`1px solid ${sc(overallRisk==null?null:100-overallRisk)}30`, borderRadius:14, padding:"14px 16px" }}>
+                  <div style={{ ...D.t.label, color:sc(overallRisk==null?null:100-overallRisk), marginBottom:8 }}>{isAr?"خطر الرقبة (مقاس)":"Cervical risk (measured)"}</div>
+                  <div style={{ ...D.t.numSm, color:sc(overallRisk==null?null:100-overallRisk) }}>{overallRisk==null?(isAr?"مش متقاس — مفيش قراءة رقبة موثوقة في الجلسات الأخيرة":"Not measured — no reliable neck reading in recent sessions"):`${overallRisk}% — ${overallRisk>=70?(isAr?"مرتفع":"High"):overallRisk>=45?(isAr?"متوسط":"Moderate"):(isAr?"منخفض":"Low")}`}</div>
+                  {cervLoadKg!=null && <div style={{ ...D.t.label, color:D.c.muted, marginTop:6 }}>{isAr?`حمل مقاس: ${cervLoadKg} كجم فوق المحايد`:`Measured load: ${cervLoadKg} kg above neutral`}{cervFlexDeg!=null?(isAr?` عند ${cervFlexDeg}°`:` at ${cervFlexDeg}°`):""}</div>}
                 </div>
               )}
               <AITextSection loading={loading} data={data} error={error} onRetry={()=>loadInsight(tab)} isAr={isAr} D={D}/>

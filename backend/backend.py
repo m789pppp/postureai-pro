@@ -13485,10 +13485,18 @@ def coach_chat():
         # the average posture score wearing a cervical label, which the prompt
         # below turns into a clinical risk band.
         _neck_risk   = context.get("neck_risk")
-        _fatigue     = context.get("fatigue_score", 0)
-        _burnout     = context.get("burnout_risk", 0)
-        _week_avg    = context.get("week_avg", avg_score)
-        _trend_pct   = context.get("trend_pct", 0)
+        # fatigue_score and burnout_risk are no longer sent by any client: both
+        # were (100 - week_avg) x an invented coefficient, i.e. the posture score
+        # under clinical names. Defaulting them to 0 here would print
+        # "Fatigue: 0% | Burnout: 0%" — a confident measurement of "none" for
+        # something never measured. The client now sends a MEASURED
+        # within-session decline instead, or nothing.
+        _decline     = context.get("fatigue_decline")
+        _decline_n   = context.get("fatigue_from", 0)
+        _load_kg     = context.get("cervical_load_kg")
+        _flex_deg    = context.get("neck_flexion_deg")
+        _week_avg    = context.get("week_avg")           # None = no sessions that week
+        _trend_pct   = context.get("trend_pct")          # None = no comparison possible
         _streak      = context.get("streak_days", 0)
         _week_sess   = context.get("week_sessions", 0)
 
@@ -13506,10 +13514,12 @@ CLINICAL EXPERTISE:
 
 PATIENT CLINICAL DATA (authoritative — always reference these numbers):
 - Overall posture score: {avg_score}/100 ({_score_label})
-- This week average: {_week_avg}/100 | Trend: {('+' if _trend_pct > 0 else '')}{_trend_pct}% vs last week
+- This week average: {'no sessions this week — do NOT report this as a score of 0' if _week_avg is None else f'{_week_avg}/100'} | Trend: {'no comparison possible (a week has no sessions)' if _trend_pct is None else f"{'+' if _trend_pct > 0 else ''}{_trend_pct}% vs last week"}
 - Total sessions: {sessions_n} | This week: {_week_sess} | Streak: {_streak} days
 - Cervical risk score: {'not measured — do not describe cervical loading or name a spinal level' if _neck_risk is None else f"{_neck_risk}% ({'HIGH' if _neck_risk >= 70 else 'MODERATE' if _neck_risk >= 40 else 'LOW'})"}
-- Fatigue index: {_fatigue}% | Burnout risk: {_burnout}%
+- Cervical load: {'NOT MEASURED — do not estimate a flexion angle or quote a kilogram figure' if _load_kg is None else f"MEASURED {_load_kg} kg above the 4.5 kg neutral" + (f" at {_flex_deg}deg flexion" if _flex_deg is not None else "") + " (Hansraj 2014 against measured forward-head displacement) — use this figure, do not re-derive one from the score"}
+- Within-session posture decline: {'NOT MEASURED — do not describe fatigue as measured' if _decline is None else f'{_decline} pts from the first third of a session to the last (n={_decline_n})'}
+- Occupational burnout is NOT measured by this product — it observes posture from a webcam, not hours, workload, sleep or mood. Do not report a burnout level or an injury-risk multiplier.
 - Worst posture window: {worst_time if worst_time and worst_time != 'unknown' else 'Not yet identified'}
 - Anthropometric calibration: {'COMPLETE — personalized thresholds active' if calib else 'NOT DONE — generic population thresholds in use'}
 - Recurring postural alerts: {_alerts_str}
@@ -13702,15 +13712,27 @@ def coach_daily_checkin():
         avg_score  = context.get("avg_score", 0)
         top_alerts = context.get("top_alerts", [])
         streak     = context.get("streak_days", 0)
-        neck_risk  = context.get("neck_risk", 0)
+        # None means the client had no reliable neck reading. The default of 0
+        # printed "cervical risk 0%" — a confident measurement of "none" — for
+        # every user whose neck was simply never measured.
+        neck_risk  = context.get("neck_risk")
+        _load_kg   = context.get("cervical_load_kg")
+        _flex_deg  = context.get("neck_flexion_deg")
         pain_area  = context.get("pain_area")
+        _neck_line = ("cervical risk not measured (do not mention a cervical figure)"
+                      if neck_risk is None else f"cervical risk {neck_risk}%")
+        if _load_kg is not None:
+            _neck_line += f", measured cervical load {_load_kg} kg above neutral"
+            if _flex_deg is not None:
+                _neck_line += f" at {_flex_deg}deg flexion"
+
         _alerts_str = ", ".join(top_alerts[:3]) if top_alerts else "none recorded"
         _pain_line  = f"\nSelf-reported pain area: {pain_area}." if pain_area and pain_area != "none" else ""
 
         sys_prompt = f"""You are Dr. Corvus, the AI physiotherapist in Corvus PostureAI Pro, running a
 30-second DAILY CHECK-IN (not a free-form chat).
 
-PATIENT DATA: posture score {avg_score}/100, streak {streak} days, cervical risk {neck_risk}%,
+PATIENT DATA: posture score {avg_score}/100, streak {streak} days, {_neck_line},
 recurring alerts: {_alerts_str}.{_pain_line}
 
 Output STRICT JSON only, no markdown fences, no extra text, in this exact shape:
@@ -15150,21 +15172,30 @@ def _compute_posture_stats(sessions: list) -> dict:
                     "date":   str(s.get("created_at", ""))[:10],
                 })
 
-    # Burnout risk score (0–100)
-    # Factors: declining trend, low avg, high anomaly rate, declining consistency
-    burnout_risk = 0
+    # Postural instability score (0-100) — renamed from "burnout_risk".
+    #
+    # The inputs are real (trend slope, anomaly rate, recent dip) but the label
+    # was not: nothing in this product observes hours worked, workload, sleep or
+    # mood, which is what occupational burnout is assessed from. Calling a blend
+    # of posture-score statistics "burnout risk" — with a High/Medium/Low band
+    # that reached an employer-facing screen — asserted a clinical finding the
+    # data cannot support. The `avg < 55` term also made it partly the posture
+    # score restated, so that term is gone; what remains describes instability
+    # and variability in the posture signal, which is what it actually measures.
+    #
+    # The 30/15/20/10 weights remain unvalidated, so this is reported as an
+    # index of the posture signal's instability, never as a clinical risk.
+    instability = 0
     if scores:
-        avg = sum(scores) / len(scores)
-        if trend_slope < -1:    burnout_risk += 30   # declining trend
-        if avg < 55:            burnout_risk += 25   # chronically low
-        if trend_slope < -2:    burnout_risk += 15   # steep decline
+        if trend_slope < -1:    instability += 30   # declining trend
+        if trend_slope < -2:    instability += 15   # steep decline
         anom_rate = len(anomalies) / max(len(scores), 1)
-        if anom_rate > 0.2:     burnout_risk += 20   # >20% anomaly rate
+        if anom_rate > 0.2:     instability += 20   # >20% anomaly rate
         if len(scores) >= 5:
             recent_avg = sum(scores[-5:]) / 5
             older_avg  = sum(scores[:-5]) / max(len(scores)-5, 1)
-            if recent_avg < older_avg - 8: burnout_risk += 10  # recent dip
-        burnout_risk = min(100, max(0, burnout_risk))
+            if recent_avg < older_avg - 8: instability += 10  # recent dip
+        instability = min(100, max(0, instability))
 
     # Posture risk score
     risk_score = max(0, min(100, 100 - (sum(scores)/len(scores) if scores else 50)))
@@ -15195,8 +15226,14 @@ def _compute_posture_stats(sessions: list) -> dict:
         "hourly_scores":   hourly,
         "anomalies":       anomalies[:5],
         "anomaly_count":   len(anomalies),
-        "burnout_risk":    burnout_risk,
-        "burnout_label":   "High" if burnout_risk >= 60 else "Medium" if burnout_risk >= 30 else "Low",
+        # Kept under the old keys for wire compatibility with existing clients,
+        # but the value is now the posture-instability index described above and
+        # the label says what it measures. Occupational burnout is not assessed
+        # by this product.
+        "burnout_risk":    instability,
+        "instability":     instability,
+        "burnout_label":   "Unstable" if instability >= 60 else "Variable" if instability >= 30 else "Steady",
+        "burnout_note":    "Posture-signal instability, not an occupational burnout assessment.",
         "posture_risk":    round(risk_score),
         "streak_days":     streak,
         "consistency_pct": round(len(days_with_session)/max(30,1)*100),

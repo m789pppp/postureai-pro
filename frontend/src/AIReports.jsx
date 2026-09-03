@@ -4,6 +4,10 @@
  * Manager insights · Department comparisons
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  cervicalLoadKg, neckFlexionDeg, sessionFatigue,
+  weekWindows, lifetimeSessions, readingReliability,
+} from "./lib/clinicalMetrics.js";
 import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
 import { getLocalAIStatus } from "./localAI.js";
 import { featureTier, qualityFor } from "./lib/tierQuality.js";
@@ -13,9 +17,9 @@ import { weekKey } from "./lib/exercisePlanLib.js";
 
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
-const sc   = v => v >= 80 ? "#10b981" : v >= 60 ? "#f59e0b" : "#ef4444";
+const sc   = v => v == null ? "#6b82a6" : v >= 80 ? "#10b981" : v >= 60 ? "#f59e0b" : "#ef4444";
 const grade = (v, ar) => v >= 80 ? (ar ? "ممتاز" : "Excellent") : v >= 60 ? (ar ? "جيد" : "Good") : (ar ? "يحتاج تحسين" : "Needs Improvement");
-const pct  = (a, b) => b ? `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%` : "—";
+const pct  = (a, b) => (a == null || b == null || !b) ? "—" : `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%`;
 const fmt  = d => { try { return new Date(d?.toDate?.() || d).toLocaleDateString(); } catch { return "—"; } };
 // Escapes any string before it's interpolated into the report HTML
 // (profile names, AI-generated text, session fields are all untrusted).
@@ -39,172 +43,15 @@ function inlineR(t) {  return linkifyR((t||"")    .replace(/&/g,"&amp;").replace
 // stats) or "full" (Elite tier — last 10 sessions + footer detail note).
 // Callers must check qualityFor(tier).pdfDetail !== "none" before calling
 // this — "none" tiers (standard/basic) are gated out in exportPDF().
-function buildPDFHTML({ reportTitle, profile, sessions, summaryText, lang, pdfDetail = "standard", tier = "standard", reportType = "all" }) {
-  const isAr = lang === "ar";
-  const isFull = pdfDetail === "full";
-  const allScores = sessions.map(s => s.avg_score || 0).filter(Boolean);
-  const avgScore  = avg(allScores);
+// buildPDFHTML() lived here — 166 lines, no call site anywhere in the repo.
+// exportPDF() below uses exportPDFReport() from lib/pdfReports.js instead.
+// It was deleted rather than left in place: it computed its headline KPIs
+// over ALL sessions while its header said "This Week's Sessions", and it
+// still used the raw-tier string map that the comment block inside it
+// claimed had been replaced by featureTier() — so it would have shipped a
+// blank plan badge for b2b_enterprise. Two divergent PDF builders in one
+// file, one of them unreachable, is a trap for whoever wires it up next.
 
-  // ── Date-range filter (Fix: was always sessions.slice(0,N) regardless of report type)
-  const now_ms = Date.now();
-  const toMs   = s => s.created_at?.toDate?.()?.getTime?.() || new Date(s.created_at || 0).getTime();
-  const rangeMs = reportType === "monthly" ? 30*86400000 : reportType === "weekly" ? 7*86400000 : null;
-  const filteredSessions = rangeMs ? sessions.filter(s => now_ms - toMs(s) <= rangeMs) : sessions;
-  const rowLimit   = isFull ? 10 : 5;
-  const tableRows  = filteredSessions.slice(0, rowLimit);
-
-  const thisWeek = sessions.filter(s => now_ms - toMs(s) <= 7*86400000);
-  const weekAvg  = avg(thisWeek.map(s => s.avg_score || 0));
-  const color    = avgScore >= 80 ? "#10b981" : avgScore >= 60 ? "#f59e0b" : "#ef4444";
-  const now      = new Date().toLocaleDateString(isAr ? "ar-EG" : "en-US", { year:"numeric", month:"long", day:"numeric" });
-  const _cleanName = (profile?.name || (isAr ? "المستخدم" : "User")).replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
-  const safeName  = escapeHtml(_cleanName);
-  const safeTitle = escapeHtml(reportTitle);
-  const planLabel = escapeHtml(qualityFor(tier).label[isAr ? "ar" : "en"]);
-
-  // ── Dynamic tier label (Fix: was hardcoded "Pro")
-  // BUG FIX: these string-literal checks only ever matched the literal B2C
-  // tier strings — a B2B user (tier="b2b_enterprise" etc.) matched none of
-  // them, so the PDF badge silently rendered blank with the wrong (non-elite)
-  // color despite paying for Elite-equivalent access. Routed through the
-  // canonical featureTier() ladder used everywhere else in this codebase.
-  const featLevel = featureTier(tier);
-  const tierLabel = featLevel === "elite" ? "Elite" : featLevel === "professional" ? "Pro" : featLevel === "basic" ? "Basic" : "";
-  const tierColor = featLevel === "elite" ? "#10b981" : "#0891b2";
-
-  const safeSummaryHtml = (() => {
-  let raw = summaryText || "";
-  // Escape HTML first
-  raw = escapeHtml(raw);
-  // Then parse markdown (safe now since HTML entities are escaped)
-  raw = raw
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/^### (.+)$/gm, "<h4 style='margin:10px 0 4px;font-size:13px;font-weight:700;color:#1a56db'>$1</h4>")
-    .replace(/^## (.+)$/gm, "<h3 style='margin:12px 0 6px;font-size:14px;font-weight:800;color:#1a56db'>$1</h3>")
-    .replace(/^- (.+)$/gm, "<li style='margin:4px 0;line-height:1.6'>$1</li>")
-    .replace(/(<li[\s\S]+?<\/li>)/g, "<ul style='padding-left:18px;margin:8px 0'>$1</ul>")
-    .replace(/\n\n/g, "<br/><br/>")
-    .replace(/\n/g, "<br/>");
-  return raw;
-})();
-
-  const rangeLabelEn = reportType === "weekly" ? "This Week's Sessions" : reportType === "monthly" ? "This Month's Sessions" : `Sessions (showing ${tableRows.length} of ${filteredSessions.length})`;
-  const rangeLabelAr = reportType === "weekly" ? "جلسات هذا الأسبوع" : reportType === "monthly" ? "جلسات هذا الشهر" : `الجلسات (${tableRows.length} من ${filteredSessions.length})`;
-
-  return `<!DOCTYPE html>
-<html dir="${isAr ? "rtl" : "ltr"}" lang="${lang}">
-<head>
-<meta charset="UTF-8"/>
-<title>${reportTitle}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&family=Cairo:wght@400;600;700&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: ${isAr ? "'Cairo','DM Sans'" : "'DM Sans'"}, sans-serif; background:#fff; color:#0d1b35; padding:48px; font-size:13px; line-height:1.6; direction:${isAr?"rtl":"ltr"}; }
-  .header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #1a56db; padding-bottom:24px; margin-bottom:32px; }
-  .logo { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; color:#1a56db; }
-  .logo span { color:${tierColor}; }
-  .meta { text-align:${isAr?"left":"right"}; font-size:11px; color:#7890b0; }
-  .meta strong { color:#334d6e; font-size:12px; }
-  h1 { font-family:${isAr?"'Cairo'":"'Syne'"},sans-serif; font-size:26px; font-weight:800; color:#0d1b35; margin-bottom:6px; }
-  h2 { font-family:${isAr?"'Cairo'":"'Syne'"},sans-serif; font-size:16px; font-weight:700; color:#0d1b35; margin:28px 0 12px; border-${isAr?"right":"left"}:3px solid #1a56db; padding-${isAr?"right":"left"}:12px; }
-  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:24px 0; }
-  .kpi { background:#f0f4fb; border-radius:12px; padding:16px; text-align:center; border-top:3px solid; }
-  .kpi-label { font-size:9px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:#7890b0; margin-bottom:8px; }
-  .kpi-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; line-height:1; }
-  .kpi-sub { font-size:10px; color:#7890b0; margin-top:5px; font-weight:500; }
-  .ai-box { background:#f8faff; border:1px solid #dde5f5; border-radius:12px; padding:20px; margin:16px 0; }
-  .ai-label { font-size:10px; font-weight:700; color:#1a56db; letter-spacing:.08em; text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-  .session-table { width:100%; border-collapse:collapse; margin:12px 0; }
-  .session-table th { background:#f0f4fb; padding:9px 14px; font-size:10px; font-weight:700; color:#7890b0; letter-spacing:.06em; text-transform:uppercase; text-align:${isAr?"right":"left"}; border-bottom:1px solid #dde5f5; }
-  .session-table td { padding:10px 14px; font-size:12px; border-bottom:1px solid #f0f4fb; }
-  .score-pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:10px; font-weight:700; }
-  .footer { margin-top:48px; padding-top:16px; border-top:1px solid #dde5f5; display:flex; justify-content:space-between; font-size:10px; color:#7890b0; }
-  @media print { body { padding:24px; } @page { margin:1cm; } }
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    <div class="logo">Corvus <span>${{elite:"Elite",professional:"Pro",standard:"",basic:""}[tier]||""}</span></div>
-    <div style="font-size:11px;color:#7890b0;margin-top:4px;">${isAr ? "تقرير الأداء التنفيذي" : "Executive Performance Report"}</div>
-  </div>
-  <div class="meta">
-    <strong>${safeName}</strong><br/>
-    ${isAr ? "التاريخ:" : "Date:"} ${now}<br/>
-    ${isAr ? "الخطة:" : "Plan:"} ${planLabel}<br/>
-    ${isAr ? "إجمالي الجلسات:" : "Total sessions:"} ${sessions.length}
-    ${filteredSessions.length !== sessions.length ? `<br/>${isAr?"الجلسات في النطاق:":"In range:"} ${filteredSessions.length}` : ""}
-    ${rangeMs ? `<br/>${isAr?"نطاق التقرير:":"Range:"} ${reportType === "weekly" ? (isAr?"أسبوع":"1 week") : (isAr?"شهر":"1 month")} (${tableRows.length} ${isAr?"جلسة":"sessions"})` : ""}
-  </div>
-</div>
-
-<h1>${safeTitle}</h1>
-
-<div class="kpi-grid">
-  <div class="kpi" style="border-color:${color}">
-    <div class="kpi-label">${isAr ? "المتوسط الكلي" : "Avg Score"}</div>
-    <div class="kpi-value" style="color:${color}">${avgScore}</div>
-    <div class="kpi-sub">${grade(avgScore, isAr)}</div>
-  </div>
-  <div class="kpi" style="border-color:#1a56db">
-    <div class="kpi-label">${isAr ? "الجلسات" : "Sessions"}</div>
-    <div class="kpi-value" style="color:#1a56db">${sessions.length}</div>
-    <div class="kpi-sub">${isAr ? "إجمالي" : "total"}</div>
-  </div>
-  <div class="kpi" style="border-color:#0891b2">
-    <div class="kpi-label">${isAr ? "هذا الأسبوع" : "This Week"}</div>
-    <div class="kpi-value" style="color:#0891b2">${weekAvg || "—"}</div>
-    <div class="kpi-sub">${thisWeek.length} ${isAr ? "جلسة" : "sessions"}</div>
-  </div>
-  <div class="kpi" style="border-color:#f59e0b">
-    <div class="kpi-label">${isAr ? "السلسلة" : "Streak"}</div>
-    <div class="kpi-value" style="color:#f59e0b">${(() => { const dates = [...new Set(sessions.map(s => { try { const d = s.created_at?.toDate?.() || new Date(s.created_at || 0); return d.toISOString().slice(0,10); } catch { return null; } }).filter(Boolean))].sort(); if (dates.length < 2) return 0; let streak = 1; for (let i = dates.length - 2; i >= 0; i--) { const diff = (new Date(dates[i+1]) - new Date(dates[i])) / 86400000; if (diff <= 1.5) streak++; else break; } return streak; })()}</div>
-    <div class="kpi-sub">${isAr ? "يوم" : "days"}</div>
-  </div>
-</div>
-
-<h2>${isAr ? "🧠 التحليل الذكي — Corvus AI" : "🧠 AI Analysis — Corvus AI"}</h2>
-<div class="ai-box">
-  <div class="ai-label">🧠 Corvus Intelligence</div>
-  <div style="font-size:13px;color:#334d6e;line-height:1.75;">${safeSummaryHtml}</div>
-</div>
-
-<h2>${isAr ? `📅 ${rangeLabelAr}` : `📅 ${rangeLabelEn}`}</h2>
-<table class="session-table">
-  <thead><tr>
-    <th>#</th>
-    <th>${isAr ? "التاريخ" : "Date"}</th>
-    <th>${isAr ? "المدة" : "Duration"}</th>
-    <th>${isAr ? "النتيجة" : "Score"}</th>
-    <th>${isAr ? "التقييم" : "Grade"}</th>
-  </tr></thead>
-  <tbody>
-    ${tableRows.length === 0
-      ? `<tr><td colspan="5" style="text-align:center;color:#7890b0;padding:20px;">${isAr?"لا توجد جلسات في هذه الفترة":"No sessions in this date range"}</td></tr>`
-      : tableRows.map((s, i) => {
-        const scoreVal = s.avg_score || 0;
-        const col = sc(scoreVal);
-        const durSec = s.duration_s || s.duration_sec || s.duration_min * 60 || 0;
-        const dur = durSec > 0 ? `${Math.floor(durSec/60)}:${String(Math.round(durSec%60)).padStart(2,'0')}` : "—";
-        return `<tr>
-          <td>${i + 1}</td>
-          <td>${escapeHtml(fmt(s.created_at))}</td>
-          <td>${dur}</td>
-          <td><span class="score-pill" style="background:${col}22;color:${col}">${scoreVal}/100</span></td>
-          <td>${grade(scoreVal, isAr)}</td>
-        </tr>`;
-      }).join("")}
-  </tbody>
-</table>
-
-<div class="footer">
-  <span>Corvus${tierLabel ? " " + tierLabel : ""} — ${isAr ? "تقرير سري" : "Confidential Report"}${isFull ? (isAr ? " · تفصيل كامل (Elite)" : " · Full Detail (Elite)") : ""}</span>
-  <span>${isAr ? "أُنشئ بواسطة Corvus AI" : "Generated by Corvus AI"} · ${now}</span>
-</div>
-</body>
-</html>`;
-}
 
 // ── Department comparison chart ───────────────────────────────────
 function DeptBar({ name, score, color, max = 100 }) {
@@ -312,11 +159,23 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
 
   const allScores  = sessions.map(s => s.avg_score || 0).filter(Boolean);
   const avgScore   = avg(allScores);
-  const thisWeek   = sessions.filter(s => (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000);
-  const lastWeek   = sessions.filter(s => { const ms = Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0)); return ms >= 7 * 86400000 && ms < 14 * 86400000; });
-  const weekAvg    = avg(thisWeek.map(s => s.avg_score || 0));
-  const lastWeekAvg = avg(lastWeek.map(s => s.avg_score || 0));
+  // avg([]) is 0, so a week with no sessions was passed to the clinical LLM as
+  // a literal "Last week: 0/100" — a user who took a week off was described to
+  // a senior-physiotherapist persona as having scored zero out of a hundred,
+  // and that produced "Trend: -100%" in alarm red plus the report's decline and
+  // overuse language. The UI tiles already rendered an honest em-dash; only the
+  // prompt asserted the zero.
+  const _wk        = weekWindows(sessions);
+  // Counts come from the same windows as the averages, so the two can never
+  // disagree about which sessions are in a week.
+  const thisWeek   = { length: _wk.thisWeek.n };
+  const lastWeek   = { length: _wk.lastWeek.n };
+  const weekAvg    = _wk.thisWeek.avg;      // null when no sessions this week
+  const lastWeekAvg = _wk.lastWeek.avg;     // null when none last week
   const trendPct   = pct(weekAvg, lastWeekAvg);
+  const lifetime   = lifetimeSessions(profile, sessions);
+  const reliability = readingReliability(sessions);
+  const _fatigue   = sessionFatigue(sessions);
   // pct() returns a display-formatted STRING like "+20%"/"-15%"/"—" (used
   // correctly below at trendPct.startsWith("+") for the UI trend chips).
   // The clinical-narrative interpretation further down was comparing that
@@ -325,31 +184,58 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   // silently collapsed every trend interpretation to "Plateau" and meant
   // the "declining score = overuse/fatigue" safety flag could never fire.
   // Use a real number for those comparisons instead.
-  const trendPctNum = lastWeekAvg ? Math.round(((weekAvg - lastWeekAvg) / lastWeekAvg) * 100) : 0;
+  // null, not 0, when either week is missing: "no comparison possible" rather
+  // than "measured, unchanged". Every consumer below now checks for null.
+  const trendPctNum = _wk.trendPct;
 
   const _name = profile?.name?.split(" ")[0] || (isAr ? "المستخدم" : "Patient");
   const _scoreL = avgScore>=85?"Excellent":avgScore>=70?"Good":avgScore>=55?"Fair":"Needs Attention";
-  const _wkL    = weekAvg>=85?"Excellent":weekAvg>=70?"Good":weekAvg>=55?"Fair":"Needs Attention";
-  const cervAngle = avgScore<55?"35-50":avgScore<70?"20-35":avgScore<85?"10-20":"<10";
-  const cervLoad  = avgScore<55?"18-27 kg":avgScore<70?"12-18 kg":avgScore<85?"6-12 kg":"4-6 kg";
-  const discLoad  = avgScore<55?"185-220%":avgScore<70?"150-185%":"140-150%";
+  const _wkL    = weekAvg==null?"no sessions":weekAvg>=85?"Excellent":weekAvg>=70?"Good":weekAvg>=55?"Fair":"Needs Attention";
+
+  // MEASURED cervical load, from the engine's own Hansraj (2014) implementation
+  // against real forward-head displacement.
+  //
+  // What was here:
+  //   cervAngle = avgScore<55 ? "35-50"    : ...
+  //   cervLoad  = avgScore<55 ? "18-27 kg" : ...
+  //   discLoad  = avgScore<55 ? "185-220%" : ...
+  // Three hardcoded lookup tables keyed on the composite score, rendered into
+  // the prompt as "Cervical loading (Hansraj 2014)" and "Disc pressure
+  // (Nachemson)" — real citations wrapped around numbers that were not
+  // measurements. Hansraj maps a MEASURED flexion angle to load; avgScore is a
+  // weighted blend of thirteen metrics including elbow angle, monitor height
+  // and screen distance, so a user with a perfect neck and a bad desk was
+  // reported at "20-35° flexion, 12-18 kg". Nachemson's figures are per posture,
+  // not a function of any score — and `discLoad` had no branch above 85, so a
+  // user scoring 100/100 was still told their disc pressure was 140-150% of
+  // standing. The report could never say it was normal.
+  //
+  // These reports become PDFs that go to doctors.
+  const cervLoad  = cervicalLoadKg(sessions);
+  const cervAngle = neckFlexionDeg(sessions);
 
   const system = `You are Dr. Corvus — senior physiotherapist and occupational health specialist, 15 years MSK clinical experience.
 
 PATIENT: ${_name} | Tier: ${_tier}
-Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Last week: ${lastWeekAvg}/100
-Trend: ${trendPct} | Sessions: ${sessions.length} total, ${thisWeek.length} this week, ${lastWeek.length} last week
+Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg==null?`no sessions (${thisWeek.length} recorded) — do NOT report this as 0/100`:`${weekAvg}/100`} | Last week: ${lastWeekAvg==null?"no sessions — do NOT report this as 0/100":`${lastWeekAvg}/100`}
+Trend: ${trendPct} | Sessions: ${lifetime.count}${lifetime.exact?"":"+ (query truncated)"} total, ${thisWeek.length} this week, ${lastWeek.length} last week
+${reliability!=null?`Reading reliability: ${reliability.pct}% of recent metric readings were reliable`:""}
 
 CLINICAL INTERPRETATION FOR THIS REPORT:
-Cervical loading (Hansraj 2014): Score ${avgScore}/100 → ~${cervAngle}° flexion → ~${cervLoad} load (neutral = 4.5 kg)
-${avgScore<55?"C5-C7 facet joint chronic overload — disc dehydration risk elevated — URGENT":avgScore<70?"Approaching cumulative load threshold — preventive intervention indicated":avgScore<85?"Moderate load — ergonomic adjustment sufficient":"Within safe loading parameters"}
+${cervLoad==null
+  ? "Cervical load: NOT MEASURED for this patient. Do not estimate a flexion angle, quote a kilogram figure, cite Hansraj against this patient, or name a spinal level — say the measurement is unavailable and why (head or shoulders out of frame)."
+  : `Cervical loading, MEASURED (Hansraj 2014 applied to measured forward-head displacement): ~${cervLoad} kg above the 4.5 kg neutral${cervAngle!=null?` at ~${cervAngle}° flexion`:""}. Use this figure; do not re-derive one from the posture score.
+${cervLoad>=15?"Sustained loading at this magnitude warrants clinical assessment.":cervLoad>=8?"Elevated loading — ergonomic correction indicated.":"Within a manageable loading range."}`}
 
-Disc pressure (Nachemson): ${discLoad} vs standing baseline
-${avgScore<60?"⚠️ Sustained high disc pressure — annular breakdown risk":"Disc pressure manageable"}
+Disc pressure: NOT MEASURED. This product observes posture from a webcam and does not measure intradiscal pressure — do not quote a disc-pressure percentage for this patient.
 
-Trend: ${trendPctNum>5?"Meaningful improvement — reinforce what changed":trendPctNum>0?"Marginal progress — consider protocol upgrade":trendPctNum<-5?"⚠️ Significant decline — immediate corrective action":trendPctNum<0?"Slight decline — early intervention recommended":"Plateau — progression protocol needed"}
+${_fatigue
+  ? `Within-session posture decline: ${_fatigue.declinePoints} pts from the first third of a session to the last, across ${_fatigue.from} sessions. This is the only fatigue signal available; there is no fatigue index and no burnout measurement.`
+  : "Within-session decline: NOT MEASURED — do not describe fatigue as measured."}
+
+Trend: ${trendPctNum==null?"no week-over-week comparison possible (a week has no sessions) — do not describe a decline or an improvement":trendPctNum>5?"Meaningful improvement — reinforce what changed":trendPctNum>0?"Marginal progress — consider protocol upgrade":trendPctNum<-5?"⚠️ Significant decline — immediate corrective action":trendPctNum<0?"Slight decline — early intervention recommended":"Plateau — progression protocol needed"}
 Adherence: ${thisWeek.length}/week sessions ${thisWeek.length>=5?"(Excellent)":thisWeek.length>=3?"(Good)":thisWeek.length>=1?"(Below optimal — target 4-5/week)":"(None this week — re-engagement needed)"}
-${trendPctNum<-5&&thisWeek.length>4?"⚠️ High frequency + declining score = overuse/fatigue pattern":""}
+${trendPctNum!=null&&trendPctNum<-5&&thisWeek.length>4?"⚠️ High frequency + declining score = overuse/fatigue pattern":""}
 
 STANDARDS:
 1. Every section must use ${_name}'s actual numbers — zero generic statements
@@ -360,7 +246,7 @@ STANDARDS:
 6. Start immediately — no preamble
 ${isAr?"LANGUAGE: Egyptian Arabic (عامية مصرية) — medical terms + simple explanation.":"LANGUAGE: Professional clinical English."}
 
-[CTXDATA:${JSON.stringify({avg:avgScore||0, sessions:sessions.length||0, weekAvg:weekAvg||0, weekSessions:thisWeek.length||0, trendPct:trendPctNum||0, lang:isAr?"ar":"en"})}]`;
+[CTXDATA:${JSON.stringify({avg:avgScore??null, sessions:lifetime.count??null, sessionsExact:lifetime.exact, weekAvg:weekAvg??null, lastWeekAvg:lastWeekAvg??null, weekSessions:thisWeek.length??0, trendPct:trendPctNum??null, cervicalLoadKg:cervLoad??null, neckFlexionDeg:cervAngle??null, fatigueDecline:_fatigue?.declinePoints??null, reliabilityPct:reliability?.pct??null, lang:isAr?"ar":"en"})}]`;
   // ^ Without this marker, if the primary LLM path ever failed here, the
   // rule-based fallback in localAI.js (parseData()) would regex-match this
   // free-form prose and get every field wrong or default to 0 — same fix
@@ -370,7 +256,9 @@ ${isAr?"LANGUAGE: Egyptian Arabic (عامية مصرية) — medical terms + si
     summary: () => `Generate a weekly clinical posture summary for ${_name}.
 
 ## Executive Summary — ${_name}
-[2-3 sentences: interpret ${weekAvg}/100 this week vs ${lastWeekAvg}/100 last week (${trendPct} trend). What does this mean clinically for MSK load?]
+[2-3 sentences: ${weekAvg==null||lastWeekAvg==null
+  ? "one of these weeks has NO sessions, so there is no week-over-week comparison to interpret. Say that plainly and describe the weeks that do have data — do not treat a missing week as a score of zero or as a decline."
+  : `interpret ${weekAvg}/100 this week vs ${lastWeekAvg}/100 last week (${trendPct} trend). What does this mean clinically for MSK load?`}]
 
 ## Performance vs Last Week
 [Specific comparison with clinical interpretation. Reference session count: ${thisWeek.length} this week vs last week.]
@@ -380,8 +268,8 @@ ${isAr?"LANGUAGE: Egyptian Arabic (عامية مصرية) — medical terms + si
 
     manager: () => `Generate a manager insights report:
 Patient: ${_name} | Tier: ${_tier}
-Avg score: ${avgScore}/100 | This week: ${weekAvg}/100 | Sessions/week: ${thisWeek.length} | Total: ${sessions.length}
-Trend: ${trendPct} week-over-week
+Avg score: ${avgScore}/100 | This week: ${weekAvg==null?"no sessions":`${weekAvg}/100`} | Sessions/week: ${thisWeek.length} | Total: ${lifetime.exact ? lifetime.count : `${lifetime.count}+`}
+Trend: ${trendPctNum==null?"no comparison possible — a week has no sessions":`${trendPct} week-over-week`}
 
 ## Employee Posture Health Assessment
 ## Risk Indicators (if any)
@@ -390,8 +278,9 @@ Trend: ${trendPct} week-over-week
 
     department: () => `Generate a department health comparison report.
 Available user data: ${allUsers.length} team members
-Average team score: ${allUsers.length ? avg(allUsers.map(u => u.avg_score || 0)) : avgScore}/100
-Top performer score: ${allUsers.length ? Math.max(...allUsers.map(u => u.avg_score || 0)) : avgScore}/100
+Average team score: ${deptData.length ? `${avg(deptData.map(d => d.score))}/100 (across ${deptData.length} members who have recorded sessions${_myDept ? ` in ${_myDept}` : ""})` : "not available — no colleagues have recorded sessions"}
+Top score on the team: ${deptData.length ? `${Math.max(...deptData.map(d => d.score))}/100` : "not available"}
+NOTE: team figures are lifetime averages from each member's profile. This patient's ${avgScore}/100 above is the mean of their most recent sessions, so the two are not exactly like-for-like — do not present a small gap between them as a meaningful ranking.
 This user score: ${avgScore}/100
 
 ## Department Health Overview
@@ -480,8 +369,27 @@ This user score: ${avgScore}/100
   // id carries the Firestore users/{uid} doc id (see getAllUsers in
   // firebase.js) so "Your Rank" below can identify the current user by
   // identity instead of by score value, which broke on ties.
-  const deptData = allUsers.length > 0
-    ? allUsers.slice(0, 6).map(u => ({ id: u.id, name: u.name || u.email?.split("@")[0] || "User", score: u.avg_score || 0 }))
+  // getAllUsers() is `orderBy("created_at","desc") limit(500)`, so
+  // `allUsers.slice(0,6)` was THE SIX NEWEST SIGNUPS — labelled "Department",
+  // badged "6 members", and its mean labelled "Team Avg". For a 40-person org
+  // that was the average of whoever joined most recently.
+  //
+  // Two further problems came with it: `u.avg_score || 0` rendered a colleague
+  // who signed up and never ran a session as "0/100 — Needs Improvement" in a
+  // manager-visible ranking (and dragged the team average down), and "Your
+  // Rank" searched those six for the current user, so any established user got
+  // "—" essentially always.
+  //
+  // Now: the actual department when the profile carries one, members who have
+  // actually recorded a session, and a disclosed count.
+  const _deptOf = u => u.department || u.dept || null;
+  const _myDept = profile?.department || profile?.dept || null;
+  const _deptMembers = allUsers.filter(u =>
+    Number.isFinite(u.avg_score) && (u.sessions_count ?? 1) > 0 &&
+    (!_myDept || _deptOf(u) === _myDept)
+  );
+  const deptData = _deptMembers.length > 0
+    ? _deptMembers.map(u => ({ id: u.id, name: u.name || u.email?.split("@")[0] || "User", score: u.avg_score }))
     : [];
 
   return (
@@ -595,7 +503,7 @@ This user score: ${avgScore}/100
               // rendered in alarm-red, as if their posture were declining,
               // instead of neutral.
               { l: isAr ? "الاتجاه" : "Trend",      v: trendPct,             c: trendPct.startsWith("+") ? "#10b981" : trendPct === "—" ? "#6b82a6" : "#ef4444" },
-              { l: isAr ? "الجلسات" : "Sessions",   v: sessions.length,      c: "#60a5fa" },
+              { l: isAr ? "الجلسات" : "Sessions",   v: lifetime.exact ? lifetime.count : `${lifetime.count}+`,      c: "#60a5fa" },
             ].map((m, i) => (
               <div key={i} style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 8, padding: "6px 12px" }}>
                 <div style={{ fontSize: 9, color: "#6b82a6", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{m.l}</div>
@@ -682,7 +590,7 @@ This user score: ${avgScore}/100
                   {[
                     { l: isAr ? "الاسم" : "Name",          v: profile?.name || "—" },
                     { l: isAr ? "الخطة" : "Plan",           v: _tier },
-                    { l: isAr ? "إجمالي الجلسات" : "Total", v: sessions.length },
+                    { l: isAr ? "إجمالي الجلسات" : "Total", v: lifetime.exact ? lifetime.count : `${lifetime.count}+` },
                     { l: isAr ? "آخر جلسة" : "Last Session", v: sessions[0] ? fmt(sessions[0].created_at) : "—" },
                     { l: isAr ? "المعدل الكلي" : "Avg Score", v: `${avgScore}/100` },
                     { l: isAr ? "الاتجاه" : "Trend",         v: trendPct },
@@ -723,7 +631,7 @@ This user score: ${avgScore}/100
                     {isAr ? "مقارنة الأداء" : "Performance Comparison"}
                   </div>
                   <div style={{ background: "rgba(5,150,105,.12)", border: "1px solid rgba(5,150,105,.22)", borderRadius: 99, padding: "3px 10px", fontSize: 9, fontWeight: 700, color: "#34d399", textTransform: "uppercase" }}>
-                    {deptData.length} {isAr ? "عضو" : "members"}
+                    {deptData.length} {isAr ? (_myDept ? `عضو في ${_myDept}` : "عضو سجّلوا جلسات") : (_myDept ? `in ${_myDept}` : "members with sessions")}
                   </div>
                 </div>
                 {deptData.sort((a, b) => b.score - a.score).map((d, i) => (
@@ -741,7 +649,13 @@ This user score: ${avgScore}/100
                   // a coworker's rank if the current user wasn't in
                   // allUsers at all. Falls back to the score/"You" match
                   // for the mock dataset above, which has no ids.
-                  { l: isAr ? "أنت" : "Your Rank",            v: `#${deptData.sort((a, b) => b.score - a.score).findIndex(d => (uid && d.id) ? d.id === uid : (d.score === avgScore || d.name === (isAr ? "أنت" : "You"))) + 1 || "—"}`, c: "#60a5fa" },
+                  (() => {
+                    const ranked = [...deptData].sort((a, b) => b.score - a.score);
+                    const i = uid ? ranked.findIndex(d => d.id === uid) : -1;
+                    return { l: isAr ? "ترتيبك" : "Your Rank",
+                             v: i >= 0 ? `#${i + 1} ${isAr ? `من ${ranked.length}` : `of ${ranked.length}`}` : "—",
+                             c: "#60a5fa" };
+                  })(),
                 ].map((m, i) => (
                   <div key={i} style={{ background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 12, padding: "12px 14px", textAlign: "center" }}>
                     <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#6b82a6", marginBottom: 6 }}>{m.l}</div>

@@ -2,10 +2,11 @@
  * Corvus — WorkforceAnalytics v1.0
  * Phase 7: Advanced Analytics
  * Workforce Analytics: productivity trends · focus · fatigue · engagement · risk heatmaps
- * Executive KPIs: company wellness · dept comparison · productivity index · burnout · monthly insights
+ * Executive KPIs: company wellness - dept comparison - session regularity - posture stability - monthly insights
  * Powered by Corvus AI — runs locally in the browser, free, no API key
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { sessionFatigue } from "./lib/clinicalMetrics.js";
 import { geminiAnalysis } from "./gemini.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
@@ -133,16 +134,20 @@ function Gauge({value,size=90,sw=8,label,sublabel}) {
 }
 
 /* ── Risk progress ────────────────────────────────────────────────── */
-function RiskRow({label,value,max=100,color}) {
-  const c=color||sc(value);
+// `display` lets a row show a real unit (or "Not measured") instead of forcing
+// every quantity into a percentage. `value` is the bar geometry only; null
+// means there is nothing to draw and the bar stays empty rather than full.
+function RiskRow({label,value,max=100,color,display}) {
+  const has=Number.isFinite(value);
+  const c=color||(has?sc(value):"#64748b");
   return (
     <div style={{marginBottom:10}}>
       <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
         <span style={{fontSize:12,color:"var(--wa-text2)",fontWeight:500}}>{label}</span>
-        <span style={{fontSize:12,fontWeight:700,color:c}}>{value}%</span>
+        <span style={{fontSize:12,fontWeight:700,color:c}}>{display??(has?`${value}%`:"—")}</span>
       </div>
       <div style={{height:5,borderRadius:99,background:"rgba(148,163,184,.1)",overflow:"hidden"}}>
-        <div style={{height:"100%",width:`${Math.min(value,100)}%`,background:c,borderRadius:99,transition:"width 700ms cubic-bezier(.4,0,.2,1)"}}/>
+        <div style={{height:"100%",width:`${has?Math.max(0,Math.min(value,100)):0}%`,background:c,borderRadius:99,transition:"width 700ms cubic-bezier(.4,0,.2,1)"}}/>
       </div>
     </div>
   );
@@ -218,17 +223,27 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
     return {label:`${d.getDate()}/${d.getMonth()+1}`, score:ss.length?avg(ss.map(s=>s.avg_score||0)):null, count:ss.length, day:d};
   });
 
-  // Fatigue model: inverse of score + variance
-  const fatigueScore = Math.min(100, Math.round(
-    (100 - weekAvg) * 0.55 +
-    (week.length > 6 ? 18 : 0) +
-    (avgScore < 55 ? 22 : 0)
-  ));
+  // Fatigue, measured. Every session stores score_curve — the score sampled
+  // across the whole session — so the drop from its first third to its last is
+  // an actual observation of posture degrading while the person sat there.
+  //
+  // What was here: (100 - weekAvg) * 0.55 + (week.length > 6 ? 18 : 0) +
+  // (avgScore < 55 ? 22 : 0). The dominant term is the weekly posture average
+  // inverted, so "Fatigue Index" was the posture score under another name and
+  // could never disagree with it; `week.length > 6` ADDED 18 points for using
+  // the product daily; and with no sessions this week avg([]) = 0 floored the
+  // whole thing at 55%. This is an HR screen: that number is shown against a
+  // named employee.
+  const _fatigue = sessionFatigue(sessions);
+  const fatigueDecline = _fatigue?.declinePoints ?? null;   // pts, or null
 
-  // Productivity index (0-100): score * session_regularity
+  // "Productivity" was avgScore * 0.65 + regularityScore * 0.35 — a posture
+  // score and a session count, rendered to an employer as a productivity
+  // percentage next to a person's name. Nothing here observes output, quality,
+  // hours or task completion. The two inputs are real, so they are reported as
+  // themselves under their own names.
   const sessPerWeekTarget = 4;
   const regularityScore = Math.min(100, Math.round((week.length / sessPerWeekTarget) * 100));
-  const productivityIndex = Math.round((avgScore * 0.65) + (regularityScore * 0.35));
 
   // Time-of-day averages, computed from the user's own sessions.
   //
@@ -299,12 +314,13 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
     Math.min(30, Math.round((sessions.length / 30) * 30))
   ));
 
-  // Burnout risk
-  const burnoutRisk = Math.min(100, Math.round(
-    (100 - weekAvg) * 0.45 +
-    fatigueScore * 0.35 +
-    (prevAvg > weekAvg ? pct(prevAvg, weekAvg) : 0) * 0.2
-  ));
+  // Burnout is removed, not recalculated. It was 0.45 x (100 - weekAvg) plus a
+  // share of a fatigue index that was itself 0.55 x (100 - weekAvg) — the same
+  // posture score a third time, presented to an employer as an occupational
+  // syndrome with "intervention recommended" attached. A webcam cannot observe
+  // hours, workload, sleep or mood, and an employer acting on a fabricated
+  // burnout figure about a named employee is the worst outcome this codebase
+  // could produce.
 
   // Weekly heatmap (7×4 grid — last 4 weeks × 7 days)
   const heatmap = Array.from({length:4},(_,week)=>
@@ -342,7 +358,7 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
   });
 
   return {avgScore,weekAvg,monthAvg,prevAvg,scores,daily30,monthly6,timeOfDay,zoneRisk,
-    fatigueScore,productivityIndex,focusTrend,engagementScore,burnoutRisk,
+    fatigueDecline,fatigueFrom:_fatigue?.from??0,regularityScore,focusTrend,engagementScore,
     heatmap,depts,streak,week,month,prevMonth};
 }
 
@@ -354,7 +370,7 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
 function CompanyScore({data,isAr,loading}) {
   const kpis = [
     {icon:"🎯",label:isAr?"متوسط الصحة":"Wellness Avg",  value:`${data.avgScore}/100`,  color:sc(data.avgScore),  accent:data.avgScore, delay:0},
-    {icon:"⚡",label:isAr?"الإنتاجية":"Productivity",    value:`${data.productivityIndex}%`, color:sc(data.productivityIndex), accent:data.productivityIndex, delay:70},
+    {icon:"⚡",label:isAr?"انتظام الجلسات":"Session regularity", value:`${data.regularityScore}%`, color:sc(data.regularityScore), accent:data.regularityScore, delay:70},
     {icon:"🎯",label:isAr?"التركيز":"Focus Rate",        value:`${data.focusTrend}%`,   color:sc(data.focusTrend),  accent:data.focusTrend, delay:140},
     {icon:"💪",label:isAr?"التفاعل":"Engagement",        value:`${data.engagementScore}%`, color:sc(data.engagementScore), accent:data.engagementScore, delay:210},
   ];
@@ -372,7 +388,7 @@ function CompanyScore({data,isAr,loading}) {
         </div>
         <div style={{display:"flex",gap:8}}>
           <Gauge value={loading?0:data.avgScore} size={84} sw={7} label="/100" sublabel={isAr?"الصحة":"Wellness"}/>
-          <Gauge value={loading?0:data.productivityIndex} size={84} sw={7} label="/100" sublabel={isAr?"الإنتاجية":"Productivity"}/>
+          <Gauge value={loading?0:data.regularityScore} size={84} sw={7} label="/100" sublabel={isAr?"الانتظام":"Regularity"}/>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:16}}>
@@ -484,19 +500,25 @@ function FocusTrends({data,isAr,loading}) {
 function FatiguePatterns({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
   const weekDays = isAr?["أح","إث","ثل","أر","خم","جم","سب"]:["Su","Mo","Tu","We","Th","Fr","Sa"];
   const hourBuckets = [isAr?"صباح":"AM",isAr?"ظهر":"Noon",isAr?"بعد الظهر":"PM",isAr?"مساء":"Eve"];
-  const burnColor = data.burnoutRisk>=70?"#ef4444":data.burnoutRisk>=45?"#f59e0b":"#10b981";
+  const fd = data.fatigueDecline;
+  const burnColor = fd==null?"#64748b":fd>=15?"#ef4444":fd>=5?"#f59e0b":"#10b981";
   return (
-    <Sec title={isAr?"أنماط الإرهاق":"Fatigue Patterns"} sub={isAr?"توزيع الإرهاق والإنهاك":"Fatigue & burnout distribution"} accent="#ef4444">
+    <Sec title={isAr?"أنماط الإجهاد":"Fatigue Patterns"} sub={isAr?"تراجع الوضعية خلال الجلسة":"How posture holds up across a session"} accent="#ef4444">
       {loading ? <CardSkeleton h={100}/> : (
         <>
           <div style={{display:"flex",gap:16,alignItems:"flex-start",marginBottom:16,flexWrap:"wrap"}}>
             <div style={{flex:1,minWidth:120}}>
-              <Gauge value={data.fatigueScore} size={80} sw={7} label={isAr?"إرهاق":"Fatigue"}/>
+              {/* Gauge arc is scaled for legibility; the figure beneath it is
+                  the measured points of decline, not a percentage of anything. */}
+              <Gauge value={fd==null?0:Math.max(0,Math.min(100,fd*4))} size={80} sw={7} label={fd==null?(isAr?"—":"—"):`${fd}`} sublabel={isAr?"نقطة/جلسة":"pts/session"}/>
             </div>
             <div style={{flex:2,minWidth:160}}>
-              <RiskRow label={isAr?"مؤشر الإرهاق":"Fatigue Index"} value={data.fatigueScore}/>
-              <RiskRow label={isAr?"خطر الإنهاك":"Burnout Risk"} value={data.burnoutRisk}/>
-              <RiskRow label={isAr?"مؤشر الإجهاد":"Strain Index"} value={Math.min(100,Math.round((data.fatigueScore+data.burnoutRisk)/2))}/>
+              {/* "Fatigue Index", "Burnout Risk" and a "Strain Index" that was
+                  their mean were all the weekly posture average rescaled. The one
+                  measured quantity is the within-session decline. */}
+              <RiskRow label={isAr?"تراجع داخل الجلسة":"Within-session decline"} value={fd==null?null:Math.max(0,Math.min(100,fd*4))}
+                       display={fd==null?(isAr?"مش متقاس":"Not measured"):`${fd}${isAr?" نقطة":" pts"}`}/>
+              <RiskRow label={isAr?"جلسات اتقاست":"Sessions measured"} value={null} display={`${data.fatigueFrom}`}/>
             </div>
           </div>
           {/* Weekly fatigue heatmap */}
@@ -528,14 +550,17 @@ function FatiguePatterns({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
           </div>
           <div style={{background:`${burnColor}10`,border:`1px solid ${burnColor}28`,borderRadius:10,padding:"10px 12px"}}>
             <div style={{fontSize:11,fontWeight:700,color:burnColor,marginBottom:4}}>
-              {data.burnoutRisk>=70?(isAr?"⚠️ خطر إنهاك مرتفع — يُنصح بالتدخل":"⚠️ High burnout risk — intervention recommended"):
-               data.burnoutRisk>=45?(isAr?"⚡ خطر متوسط — راقب الأنماط":"⚡ Moderate risk — monitor patterns"):
-               (isAr?"✅ مستوى صحي — استمر":"✅ Healthy level — keep it up")}
+              {fd==null?(isAr?"مش متقاس":"Not measured"):
+               fd>=15?(isAr?"⚠️ الوضعية بتتراجع بوضوح خلال الجلسة":"⚠️ Posture degrades markedly over a session"):
+               fd>=5?(isAr?"⚡ تراجع بسيط خلال الجلسة":"⚡ Mild drift within sessions"):
+               (isAr?"✅ الوضعية ثابتة طول الجلسة":"✅ Posture holds through a session")}
             </div>
             <div style={{fontSize:11,color:"var(--wa-text2)",lineHeight:1.6}}>
-              {data.burnoutRisk>=70
-                ?(isAr?"مستويات الإرهاق مرتفعة بشكل غير معتاد. راجع عبء العمل وضع استراحات أكثر.":"Fatigue levels are unusually high. Review workload and add more frequent breaks.")
-                :(isAr?"المؤشرات ضمن النطاق الطبيعي. استمر في الجلسات المنتظمة.":"Indicators are within normal range. Continue regular sessions.")}
+              {fd==null
+                ?(isAr?"محتاج جلسات طويلة كفاية عشان نقارن أولها بآخرها. ملحوظة: التطبيق بيقيس الوضعية بس — مش ساعات الشغل ولا الحِمل، فمينفعش يقيّم الإنهاك المهني.":"Needs sessions long enough to compare their start and end. Note: this measures posture only — not hours worked or workload — so it cannot assess occupational burnout.")
+                :fd>=15
+                ?(isAr?"الوضعية بتسوء بمقدار "+fd+" نقطة من أول الجلسة لآخرها. ده بيرجّح إن الاستراحات قليلة أو إعداد المكتب محتاج تعديل.":`Posture drops ${fd} points between the start and end of a session, which points to break frequency or workstation setup.`)
+                :(isAr?"الوضعية ثابتة خلال الجلسة.":"Posture is holding steady across sessions.")}
             </div>
           </div>
         </>
@@ -723,15 +748,20 @@ function DeptComparison({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
   );
 }
 
-/* ── Burnout Alerts ─────────────────────────────────────────────── */
+/* ── Posture-stability alerts ───────────────────────────────────── */
+// Was "Burnout Alerts", banding a fabricated burnout score into "Critical
+// fatigue — immediate intervention" against a named employee on an employer's
+// screen. The bands now describe the one thing that is measured: whether
+// posture holds up across a session.
 function BurnoutAlerts({data,isAr,loading}) {
+  const fd = data.fatigueDecline;
   const alerts = [
-    {level:"high",   color:"#ef4444", icon:"🔴", label:isAr?"خطر مرتفع":"High risk",   score:data.burnoutRisk, active:data.burnoutRisk>=70, desc:isAr?"مستوى إرهاق خطير — تدخّل فوري":"Critical fatigue — immediate intervention"},
-    {level:"medium", color:"#f59e0b", icon:"🟡", label:isAr?"خطر متوسط":"Moderate",    score:data.fatigueScore, active:data.fatigueScore>=45&&data.fatigueScore<70, desc:isAr?"إرهاق ملحوظ — تابع عن كثب":"Notable fatigue — monitor closely"},
-    {level:"low",    color:"#10b981", icon:"🟢", label:isAr?"وضع طبيعي":"Healthy",     score:100-data.burnoutRisk, active:data.burnoutRisk<45, desc:isAr?"مستوى صحي — استمر!":"Healthy level — keep going!"},
+    {level:"high",   color:"#ef4444", icon:"🔴", label:isAr?"تراجع كبير":"Marked decline",  score:fd==null?null:Math.min(100,fd*4), active:fd!=null&&fd>=15, desc:isAr?"الوضعية بتسوء بوضوح خلال الجلسة":"Posture degrades markedly within a session"},
+    {level:"medium", color:"#f59e0b", icon:"🟡", label:isAr?"تراجع بسيط":"Mild drift",      score:fd==null?null:Math.min(100,fd*4), active:fd!=null&&fd>=5&&fd<15, desc:isAr?"تراجع محدود — تابع":"Some drift — worth watching"},
+    {level:"low",    color:"#10b981", icon:"🟢", label:isAr?"ثابتة":"Steady",               score:fd==null?null:Math.max(0,100-fd*4), active:fd!=null&&fd<5, desc:isAr?"الوضعية ثابتة طول الجلسة":"Posture holds through a session"},
   ];
   return (
-    <Sec title={isAr?"تنبيهات الإنهاك الوظيفي":"Burnout Alerts"} sub={isAr?"رصد الوقت الفعلي — Corvus AI":"Real-time monitoring — Corvus AI"} accent="#ef4444">
+    <Sec title={isAr?"ثبات الوضعية":"Posture Stability"} sub={isAr?"التراجع داخل الجلسة — مش تقييم إنهاك مهني":"Within-session decline — not an occupational burnout assessment"} accent="#ef4444">
       {loading ? <CardSkeleton h={100}/> : (
         <>
           <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
@@ -750,7 +780,7 @@ function BurnoutAlerts({data,isAr,loading}) {
           {/* Trend mini */}
           <div style={{background:"var(--wa-surf)",border:"1px solid var(--wa-border)",borderRadius:11,padding:"12px 14px"}}>
             <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
-              {isAr?"اتجاه الإنهاك — آخر 14 يوم":"Burnout trend — last 14 days"}
+              {isAr?"اتجاه ثبات الوضعية — آخر 14 يوم":"Posture stability trend — last 14 days"}
             </div>
             <Spark data={data.daily30.slice(16).map(d=>d.score?Math.min(100,100-d.score):0)} color="#ef4444" h={40}/>
           </div>
@@ -828,16 +858,18 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
 
   const AI_PROMPTS = {
     productivity: () =>
-      `Analyse productivity trends: avg score ${data.avgScore}/100, this week ${data.weekAvg}/100, last week ${data.prevAvg}/100, monthly ${data.monthAvg}/100, productivity index ${data.productivityIndex}%, focus rate ${data.focusTrend}%.
-## Key Productivity Insights
-## What's Driving Performance
-## Recommendations to Boost Productivity`,
+      `Analyse posture trends: avg score ${data.avgScore}/100, this week ${data.weekAvg??"no sessions"}, last week ${data.prevAvg??"no sessions"}, monthly ${data.monthAvg}/100, session regularity ${data.regularityScore}% (of a 4-sessions-per-week target), focus rate ${data.focusTrend}%.
+This product measures posture and session frequency. It does NOT measure productivity, output, or work quality — do not describe any figure here as a productivity measurement, and do not infer one.
+## What the posture data shows
+## What's driving it
+## Recommendations`,
 
     fatigue: () =>
-      `Analyse fatigue patterns: fatigue index ${data.fatigueScore}%, burnout risk ${data.burnoutRisk}%, avg score ${data.avgScore}/100, sessions this week ${data.week.length}.
-## Fatigue Pattern Assessment
-## Warning Signs (3 bullets)
-## Recovery Recommendations`,
+      `Analyse posture-stability patterns: ${data.fatigueDecline==null?"within-session decline NOT MEASURED (no session long enough)":`posture declines ${data.fatigueDecline} points from the first third of a session to the last, across ${data.fatigueFrom} sessions`}, avg score ${data.avgScore}/100, sessions this week ${data.week.length}.
+This product measures posture from a webcam. It does NOT observe hours worked, workload, sleep or mood, so it cannot assess occupational burnout — do not report a burnout level or risk. This is an employer-facing screen: do not characterise an individual's wellbeing or capacity beyond what the posture data supports.
+## What the within-session pattern shows
+## What to watch (3 bullets)
+## Recommendations`,
 
     department: () =>
       `Department comparison: ${data.depts.map(d=>`${d.name}: ${d.avg}/100 (${d.count} members, risk ${d.risk}%)`).join(", ")}.
@@ -913,10 +945,9 @@ Respond in ${isAr?"Arabic":"English"}. Use markdown (** bold, ## sections, - bul
           <div style={{display:"flex",gap:8,marginTop:14,flexWrap:"wrap"}}>
             {[
               {l:isAr?"متوسط الصحة":"Wellness", v:`${data.avgScore}/100`, c:sc(data.avgScore)},
-              {l:isAr?"الإنتاجية":"Productivity", v:`${data.productivityIndex}%`, c:sc(data.productivityIndex)},
+              {l:isAr?"انتظام الجلسات":"Session regularity", v:`${data.regularityScore}%`, c:sc(data.regularityScore)},
               {l:isAr?"التركيز":"Focus", v:`${data.focusTrend}%`, c:sc(data.focusTrend)},
-              {l:isAr?"الإرهاق":"Fatigue", v:`${data.fatigueScore}%`, c:data.fatigueScore>=70?"#ef4444":data.fatigueScore>=45?"#f59e0b":"#10b981"},
-              {l:isAr?"خطر الإنهاك":"Burnout", v:`${data.burnoutRisk}%`, c:data.burnoutRisk>=70?"#ef4444":data.burnoutRisk>=45?"#f59e0b":"#10b981"},
+              {l:isAr?"تراجع داخل الجلسة":"Within-session decline", v:data.fatigueDecline==null?"—":`${data.fatigueDecline}${isAr?" نقطة":" pts"}`, c:data.fatigueDecline==null?"#64748b":data.fatigueDecline>=15?"#ef4444":data.fatigueDecline>=5?"#f59e0b":"#10b981"},
             ].map((m,i)=>(
               <div key={i} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:9,padding:"7px 13px"}}>
                 <div style={{fontSize:9,color:"var(--wa-muted)",fontWeight:700,letterSpacing:".06em",textTransform:"uppercase"}}>{m.l}</div>

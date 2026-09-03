@@ -155,8 +155,20 @@ function parseData(sp) {
       const d = JSON.parse(markerMatch[1]);
       return {
         name:         str(t, /Name:\s*([A-Za-z][A-Za-z ]{1,20})/, /User:\s*([A-Za-z]{2,20})/),
-        avg: d.avg||0, weekAvg: d.weekAvg||0, sessions: d.sessions||0, weekSessions: d.weekSessions||0,
-        trendPct: d.trendPct||0, fatigue: d.fatigue||0, burnout: d.burnout||0, neckRisk: d.neckRisk||0,
+        // `||0` collapsed null ("we did not measure this") into 0 ("we
+        // measured it and it is none") — on the green end of every scale. The
+        // emitters now send null deliberately, so it has to survive the parse.
+        avg: d.avg??null, avgRecent: d.avgRecent??null, recentN: d.recentN??0,
+        weekAvg: d.weekAvg??null, lastWeekAvg: d.lastWeekAvg??null,
+        sessions: d.sessions??null, sessionsExact: d.sessionsExact!==false,
+        weekSessions: d.weekSessions??0,
+        trendPct: d.trendPct??null, neckRisk: d.neckRisk??null,
+        cervicalLoadKg: d.cervicalLoadKg??null, neckFlexionDeg: d.neckFlexionDeg??null,
+        fatigueDecline: d.fatigueDecline??null, reliabilityPct: d.reliabilityPct??null,
+        // These are emitted by PredictiveAI but were absent from this list, so
+        // every consumer of them saw undefined and silently fell through.
+        riskScore: d.riskScore??null, anomalyCount: d.anomalyCount??null,
+        forecast: d.forecast??null,
         worstTime: "", alerts: d.alerts||"", calibrated: !!d.calibrated,
         lang: d.lang === "ar" ? "ar" : "en",
       };
@@ -169,8 +181,11 @@ function parseData(sp) {
     sessions:     num(t, /[Tt]otal sessions?:\s*(\d+)/, /[Ss]essions?:\s*(\d+)/),
     weekSessions: num(t, /[Tt]his week.*?:\s*(\d+)\s*session/),
     trendPct:     num(t, /Trend:\s*([+-]?\d+)%/),
-    fatigue:      num(t, /[Ff]atigue index:\s*(\d+)%/),
-    burnout:      num(t, /[Bb]urnout risk.*?:\s*(\d+)/),
+    // Was `fatigue index` / `burnout risk` — both computed as (100 - week_avg)
+    // x a coefficient upstream, so scraping them back out of prose re-imported
+    // the posture score under two clinical names. Neither is emitted any more.
+    fatigueDecline: num(t, /[Ww]ithin-session posture decline:\s*(-?\d+)/),
+    cervicalLoadKg: num(t, /[Cc]ervical load, MEASURED:\s*([\d.]+)/),
     neckRisk:     num(t, /[Nn]eck risk:\s*(\d+)%/),
     worstTime:    str(t, /[Ww]orst time.*?:\s*([^\s,]+)/),
     alerts:       str(t, /[Cc]ommon alerts?.*?:\s*([^\n.]+)/),
@@ -851,52 +866,85 @@ function runAnalysis(prompt,sp) {
   const topic=detectTopic(combined);
   const d=parseData(combined);
   const ar=d.lang==="ar";
-  const s=d.avg??0, w=d.weekAvg??s, lw=d.lastWeekAvg??Math.round(s*.92);
-  const t=d.trendPct??Math.round(((w-lw)/Math.max(lw,1))*100);
-  const f=d.fatigue??0, b=d.burnout??0, nr=d.neckRisk??0;
-  const se=d.sessions??0, ws=d.weekSessions??0, ac=d.anomalyCount??0;
+  // Every one of these was defaulted into a confident number when the real
+  // value was absent. The worst was `lw = d.lastWeekAvg ?? Math.round(s*.92)`:
+  // the emitter computed last week's average and then failed to put it in the
+  // payload, so this printed 92% of the LIFETIME average as "Last week:
+  // 68/100" — a measurement-shaped figure that came from a multiplication.
+  // This is the routine degraded path, not an edge case: any cloud failure or
+  // 28s timeout lands here.
+  const s=d.avg??null, w=d.weekAvg??null, lw=d.lastWeekAvg??null;
+  const t=d.trendPct??null;
+  const fd=d.fatigueDecline??null, nr=d.neckRisk??null;
+  const load=d.cervicalLoadKg??null;
+  const se=d.sessions??null, ws=d.weekSessions??0, ac=d.anomalyCount??null;
+  const nd=(v,u)=>v==null?(ar?"غير متاح":"not measured"):`${v}${u||""}`;
+  const seTxt=se==null?(ar?"غير متاح":"n/a"):(d.sessionsExact===false?`${se}+`:`${se}`);
   const n=d.name||(ar?"المستخدم":"User");
 
   switch(topic){
     case "executive": return ar
-      ?`## ملخص تنفيذي — ${n}\n\n**📊 الأداء الحالي**\n- المتوسط: **${s}/100** (${sl(s,true)}) | هذا الأسبوع: **${w}/100**\n- التغيير: **${t>0?"+":""}${t}%** | الجلسات: **${se}** | الإجهاد: **${f}%**\n\n**⚠️ المخاطر الرئيسية**\n${b>=70?"- 🔴 خطر إرهاق مرتفع":b>=40?"- 🟡 خطر إرهاق متوسط":"- 🟢 إرهاق منخفض"}\n${nr>=50?`- ⚠️ خطر رقبة ${nr}%`:""}\n${s<60?"- ⚠️ نقاط وضعية منخفضة":""}\n\n**🎯 أولويات الأسبوع**\n${s<60?"1. ارفع الشاشة لمستوى العين\n2. استراحة كل 45 دقيقة\n3. أكمل المعايرة":s<80?`1. ركّز على وضعية الرقبة${nr>=40?` (${nr}%)`:""}\n2. هدف 5 جلسات أسبوعياً\n3. Chin Tuck يومياً`:"1. حافظ على الانتظام\n2. هدف: 90+\n3. فعّل التنبيهات"}`
-      :`## Executive Summary — ${n}\n\n**📊 Performance**\n- Avg: **${s}/100** (${sl(s)}) | This week: **${w}/100**\n- Change: **${t>0?"+":""}${t}%** | Sessions: **${se}** | Fatigue: **${f}%**\n\n**⚠️ Key Risks**\n${b>=70?"- 🔴 High burnout risk":b>=40?"- 🟡 Moderate burnout":"- 🟢 Low burnout"}\n${nr>=50?`- ⚠️ Neck risk ${nr}%`:""}\n${s<60?"- ⚠️ Below-average posture score":""}\n\n**🎯 Priority Actions**\n${s<60?"1. Raise monitor to eye level\n2. Break every 45 min\n3. Complete calibration":s<80?`1. Focus on neck position${nr>=40?` (${nr}%)`:""}\n2. Target 5 sessions/week\n3. Daily chin tucks`:"1. Maintain consistency\n2. Target 90+\n3. Enable alerts"}`;
+      ?`## ملخص تنفيذي — ${n}\n\n**📊 الأداء الحالي**\n- المتوسط: **${nd(s,"/100")}** ${s!=null?`(${sl(s,true)})`:""} | هذا الأسبوع: **${w==null?"مافيش جلسات":`${w}/100`}**\n- التغيير: **${t==null?"مافيش مقارنة":`${t>0?"+":""}${t}%`}** | الجلسات: **${seTxt}** | التراجع داخل الجلسة: **${nd(fd," نقطة")}**\n\n**⚠️ المخاطر الرئيسية**\n${nr!=null&&nr>=50?`- ⚠️ خطر رقبة ${nr}%`:nr==null?"- خطر الرقبة مش متقاس في الجلسات الأخيرة":""}\n${load!=null?`- حمل الرقبة المقاس: ${load} كجم فوق المحايد`:""}\n${s!=null&&s<60?"- ⚠️ نقاط وضعية منخفضة":""}\n\n**🎯 أولويات الأسبوع**\n${s==null?"1. اعمل أول جلسة عشان نقدر نقيس\n2. أكمل المعايرة":s<60?"1. ارفع الشاشة لمستوى العين\n2. استراحة كل 45 دقيقة\n3. أكمل المعايرة":s<80?`1. ركّز على وضعية الرقبة${nr!=null&&nr>=40?` (${nr}%)`:""}\n2. هدف 5 جلسات أسبوعياً\n3. Chin Tuck يومياً`:"1. حافظ على الانتظام\n2. هدف: 90+\n3. فعّل التنبيهات"}`
+      :`## Executive Summary — ${n}\n\n**📊 Performance**\n- Avg: **${nd(s,"/100")}** ${s!=null?`(${sl(s)})`:""} | This week: **${w==null?"no sessions":`${w}/100`}**\n- Change: **${t==null?"no comparison":`${t>0?"+":""}${t}%`}** | Sessions: **${seTxt}** | Within-session decline: **${nd(fd," pts")}**\n\n**⚠️ Key Risks**\n${nr!=null&&nr>=50?`- ⚠️ Neck risk ${nr}%`:nr==null?"- Neck risk not measured in recent sessions":""}\n${load!=null?`- Measured cervical load: ${load} kg above neutral`:""}\n${s!=null&&s<60?"- ⚠️ Below-average posture score":""}\n\n**🎯 Priority Actions**\n${s==null?"1. Run a session so there is something to measure\n2. Complete calibration":s<60?"1. Raise monitor to eye level\n2. Break every 45 min\n3. Complete calibration":s<80?`1. Focus on neck position${nr!=null&&nr>=40?` (${nr}%)`:""}\n2. Target 5 sessions/week\n3. Daily chin tucks`:"1. Maintain consistency\n2. Target 90+\n3. Enable alerts"}`;
 
     case "trends": return ar
-      ?`## تحليل الاتجاهات\n\n**${td(t,true)} — ${Math.abs(t)}% أسبوعياً**\n- هذا الأسبوع: **${w}/100** | الأسبوع الماضي: **${lw}/100**\n- الجلسات: **${ws}**\n\n**🔍 التفسير**\n${t>5?"زخم إيجابي — لا تغير ما يعمل.":t>0?"تحسن بطيء — زد الاستراحات.":t<-5?"تراجع ملحوظ — راجع بيئة العمل.":"ثابت — جلسات إضافية ستحسّنه."}\n\n**🔮 التوقع**\n${t>0?`متوقع **${Math.min(100,w+Math.round(t*.5))}/100** الأسبوع القادم.`:`لعكس الاتجاه: ${Math.max(4,ws+1)} جلسات أسبوعياً.`}`
-      :`## Trend Analysis\n\n**${td(t)} — ${Math.abs(t)}% week-over-week**\n- This week: **${w}/100** | Last week: **${lw}/100**\n- Sessions: **${ws}**\n\n**🔍 What's Driving This**\n${t>5?"Positive momentum — don't change what's working.":t>0?"Slow progress — increase break frequency.":t<-5?"Notable decline — review workstation.":"Stable — add sessions to push forward."}\n\n**🔮 Forecast**\n${t>0?`Projected **${Math.min(100,w+Math.round(t*.5))}/100** next week.`:`To reverse: target ${Math.max(4,ws+1)} sessions/week.`}`;
+      ?`## تحليل الاتجاهات\n\n${t==null?"**مافيش مقارنة أسبوعية** — محتاج جلسات في الأسبوعين عشان نقارن.":`**${td(t,true)} — ${Math.abs(t)}% أسبوعياً**`}\n- هذا الأسبوع: **${w==null?"مافيش جلسات":`${w}/100`}** | الأسبوع الماضي: **${lw==null?"مافيش جلسات":`${lw}/100`}**\n- الجلسات: **${ws}**\n\n**🔍 التفسير**\n${t==null?"لما يبقى فيه جلسات في الأسبوعين هقدر أقولك الاتجاه.":t>5?"زخم إيجابي — لا تغير ما يعمل.":t>0?"تحسن بطيء — زد الاستراحات.":t<-5?"تراجع ملحوظ — راجع بيئة العمل.":"ثابت — جلسات إضافية ستحسّنه."}\n\n**🎯 الخطوة الجاية**\n${t!=null&&t>0?"كمّل على نفس النظام — اللي بتعمله شغّال.":`هدف ${Math.max(4,ws+1)} جلسات أسبوعياً.`}`
+      // The "🔮 Forecast — Projected X/100 next week" line was
+      // `w + Math.round(t * 0.5)`: an invented damping coefficient applied to a
+      // trend that was itself derived from an invented last-week figure,
+      // presented as a prediction. There is no model here, so there is no
+      // forecast — the section now states the next action instead.
+      :`## Trend Analysis\n\n${t==null?"**No week-over-week comparison** — needs sessions in both weeks.":`**${td(t)} — ${Math.abs(t)}% week-over-week**`}\n- This week: **${w==null?"no sessions":`${w}/100`}** | Last week: **${lw==null?"no sessions":`${lw}/100`}**\n- Sessions: **${ws}**\n\n**🔍 What's Driving This**\n${t==null?"Once both weeks have sessions I can tell you the direction.":t>5?"Positive momentum — don't change what's working.":t>0?"Slow progress — increase break frequency.":t<-5?"Notable decline — review workstation.":"Stable — add sessions to push forward."}\n\n**🎯 Next Step**\n${t!=null&&t>0?"Keep the current routine — it is working.":`Target ${Math.max(4,ws+1)} sessions/week.`}`;
 
     case "fatigue": return ar
-      ?`## تقييم الإجهاد\n\n**إجهاد: ${rl(f,true)} (${f}%)** | **إرهاق: ${rl(b,true)} (${b}/100)**\n\n${f>=70?"- 🔴 إجهاد بدني مرتفع — جسمك يحتاج راحة":"- مستوى الإجهاد مقبول"}\n${b>=60?"- 🔴 خطر إرهاق مهني — قلّل العمل المتواصل":""}\n\n**خطة التعافي:**\n${f>=60?"1. استراحة 10 دقائق كل ساعة\n2. تنفس عميق 3 مرات يومياً":"1. استراحة 5 دقائق كل ساعة\n2. نوم 7-8 ساعات"}`
-      :`## Fatigue Assessment\n\n**Fatigue: ${rl(f)} (${f}%)** | **Burnout: ${rl(b)} (${b}/100)**\n\n${f>=70?"- 🔴 High fatigue — body needs rest":"- Fatigue at acceptable level"}\n${b>=60?"- 🔴 High burnout risk — reduce continuous work":""}\n\n**Recovery:**\n${f>=60?"1. 10-min break every hour\n2. Deep breathing 3×/day":"1. 5-min break every hour\n2. 7-8 hours sleep"}`;
+      ?`## تقييم الإجهاد\n\n${fd==null?"**مش متقاس** — محتاج جلسات طويلة كفاية عشان نقيس التراجع جواها.":`**وضعيتك بتتراجع ${fd} نقطة خلال الجلسة** ${fd>=10?"🔴":fd>0?"🟡":"🟢"}`}\n\n${fd!=null&&fd>=10?"- 🔴 التراجع كبير — جسمك مش قادر يحافظ على الوضعية طول الجلسة":fd!=null&&fd>0?"- تراجع بسيط خلال الجلسة":fd!=null?"- بتحافظ على وضعيتك طول الجلسة":""}\n\n**خطة التعافي:**\n${fd!=null&&fd>=10?"1. استراحة 10 دقائق كل ساعة\n2. تنفس عميق 3 مرات يومياً":"1. استراحة 5 دقائق كل ساعة\n2. نوم 7-8 ساعات"}`
+      // Was `Fatigue: HIGH (90%)` and `Burnout: HIGH (72/100)` — both computed
+      // from (100 - week_avg), i.e. the posture score printed twice more under
+      // clinical names. Fatigue is now the measured within-session decline;
+      // burnout is gone, because nothing here observes workload or mood.
+      :`## Fatigue Assessment\n\n${fd==null?"**Not measured** — needs sessions long enough to compare their start and end.":`**Posture declines ${fd} pts over a session** ${fd>=10?"🔴":fd>0?"🟡":"🟢"}`}\n\n${fd!=null&&fd>=10?"- 🔴 Marked decline — you are not holding position through a session":fd!=null&&fd>0?"- Mild drift within sessions":fd!=null?"- You hold position through a session":""}\n\n**Recovery:**\n${fd!=null&&fd>=10?"1. 10-min break every hour\n2. Deep breathing 3×/day":"1. 5-min break every hour\n2. 7-8 hours sleep"}`;
 
     case "recommendations": return ar
-      ?`## خطة العمل\n\n**🔧 فوري:**\n${s<60?"- 🔴 ارفع الشاشة لمستوى العين\n- 🔴 الكرسي: ركبتان 90°":"- ✅ إعداد مكان العمل جيد"}\n${nr>=50?`- 🚨 خطر رقبة ${nr}% — ارفع الشاشة الآن`:""}\n${!d.calibrated?"- ⚠️ أكمل المعايرة":"- ✅ المعايرة مكتملة"}\n\n**📅 العادات:**\n1. قاعدة 20-20-20\n2. وقف كل 45 دقيقة\n3. Chin Tuck + Wall Angels يومياً`
-      :`## Action Plan\n\n**🔧 Immediate:**\n${s<60?"- 🔴 Raise monitor to eye level\n- 🔴 Chair: knees 90°":"- ✅ Workstation looks good"}\n${nr>=50?`- 🚨 Neck risk ${nr}% — raise monitor now`:""}\n${!d.calibrated?"- ⚠️ Complete calibration":"- ✅ Calibration complete"}\n\n**📅 Habits:**\n1. 20-20-20 rule\n2. Stand every 45 min\n3. Chin Tuck + Wall Angels daily`;
+      ?`## خطة العمل\n\n**🔧 فوري:**\n${s==null?"- اعمل أول جلسة عشان أقدر أظبط الخطة على قياساتك":s<60?"- 🔴 ارفع الشاشة لمستوى العين\n- 🔴 الكرسي: ركبتان 90°":"- ✅ إعداد مكان العمل جيد"}\n${nr!=null&&nr>=50?`- 🚨 خطر رقبة ${nr}% — ارفع الشاشة الآن`:""}${load!=null&&load>=10?`\n- 🚨 حمل الرقبة المقاس ${load} كجم فوق المحايد`:""}\n${!d.calibrated?"- ⚠️ أكمل المعايرة":"- ✅ المعايرة مكتملة"}\n\n**📅 العادات:**\n1. قاعدة 20-20-20\n2. وقف كل 45 دقيقة\n3. Chin Tuck + Wall Angels يومياً`
+      :`## Action Plan\n\n**🔧 Immediate:**\n${s==null?"- Run a session so the plan can be based on your measurements":s<60?"- 🔴 Raise monitor to eye level\n- 🔴 Chair: knees 90°":"- ✅ Workstation looks good"}\n${nr!=null&&nr>=50?`- 🚨 Neck risk ${nr}% — raise monitor now`:""}${load!=null&&load>=10?`\n- 🚨 Measured cervical load ${load} kg above neutral`:""}\n${!d.calibrated?"- ⚠️ Complete calibration":"- ✅ Calibration complete"}\n\n**📅 Habits:**\n1. 20-20-20 rule\n2. Stand every 45 min\n3. Chin Tuck + Wall Angels daily`;
 
+    // The burnout "score" this used to print was fatigue * 0.8 + a bonus for
+    // using the app often — 0.48 x (100 - week_avg) once unrolled, i.e. the
+    // posture score relabelled as an occupational syndrome. A webcam cannot
+    // observe workload, hours, sleep or mood, so the honest answer is that this
+    // is not measured, plus the general guidance that does not need a number.
     case "burnout": return ar
-      ?`## تحليل خطر الإرهاق\n\n**النتيجة: ${rl(b,true)} — ${b}/100**\n\n${b>=70?"🔴 خطر مرتفع جداً — تدخل فوري":b>=40?"🟡 خطر متوسط — راقب أسبوعياً":"🟢 مستوى آمن"}\n\n**الوقاية:**\n${b>=60?"1. أقصى 90 دقيقة عمل متواصل\n2. يوم راحة أسبوعياً":"1. استراحة كل ساعة\n2. وقت محدد للتوقف عن العمل"}`
-      :`## Burnout Risk\n\n**Score: ${rl(b)} — ${b}/100**\n\n${b>=70?"🔴 Very high — immediate intervention needed":b>=40?"🟡 Moderate — monitor weekly":"🟢 Safe level"}\n\n**Prevention:**\n${b>=60?"1. Max 90 min continuous work\n2. Full rest day weekly":"1. Break every hour\n2. Firm end-of-work time"}`;
+      ?`## الإرهاق المهني\n\n**مش بنقيسه.** الكاميرا بتشوف وضعيتك بس — مش ساعات شغلك ولا نومك ولا حِملك النفسي، وده اللي الإرهاق بيتقاس بيه.\n\n${fd!=null?`اللي بنقدر نقوله: وضعيتك بتتراجع **${fd} نقطة** خلال الجلسة الواحدة.\n\n`:""}**الوقاية العامة:**\n1. أقصى 90 دقيقة عمل متواصل\n2. يوم راحة أسبوعياً\n3. وقت محدد للتوقف عن العمل\n\nلو حاسس بإرهاق مستمر، ده محتاج تقييم من مختص مش من تطبيق وضعية.`
+      :`## Occupational Burnout\n\n**Not measured.** The camera sees your posture — not your hours, sleep, or workload, which is what burnout is actually assessed from.\n\n${fd!=null?`What can be said: your posture declines **${fd} pts** over the course of a session.\n\n`:""}**General prevention:**\n1. Max 90 min continuous work\n2. One full rest day weekly\n3. A firm end-of-work time\n\nIf you are experiencing persistent burnout, that needs assessment by a professional rather than a posture app.`;
 
     case "risk": return ar
-      ?`## ملف المخاطر\n\n**خطر إجمالي: ${rl(d.riskScore||b,true)} (${d.riskScore||b}/100)**\n\n- وضعية: ${sl(s,true)} (${s}/100) | شواذ: ${ac}\n\n${s<60?"1. 🔴 وضعية ضعيفة — خطر ألم مزمن":"1. 🟢 وضعية جيدة"}\n${ac>3?"2. 🟡 تذبذب متكرر":"2. 🟢 وضعية متسقة"}`
-      :`## Risk Profile\n\n**Overall: ${rl(d.riskScore||b)} (${d.riskScore||b}/100)**\n\n- Posture: ${sl(s)} (${s}/100) | Anomalies: ${ac}\n\n${s<60?"1. 🔴 Poor posture — chronic pain risk":"1. 🟢 Good posture"}\n${ac>3?"2. 🟡 Frequent variability":"2. 🟢 Consistent"}`;
+      // `d.riskScore || b` fell back to the burnout number, so "Overall risk"
+      // was the posture score arriving by a third route. With no composite to
+      // report, the components are listed as themselves.
+      ?`## ملف المخاطر\n\n${d.riskScore!=null?`**خطر إجمالي: ${rl(d.riskScore,true)} (${d.riskScore}/100)**\n\n`:""}- وضعية: ${s==null?"مش متقاسة":`${sl(s,true)} (${s}/100)`} | شواذ: ${ac==null?"غير متاح":ac}\n- خطر الرقبة: ${nr==null?"مش متقاس":`${nr}%`}${load!=null?` | حمل مقاس: ${load} كجم`:""}\n\n${s!=null&&s<60?"1. 🔴 وضعية ضعيفة — خطر ألم مزمن":s!=null?"1. 🟢 وضعية جيدة":""}\n${ac==null?"":ac>3?"2. 🟡 تذبذب متكرر":"2. 🟢 وضعية متسقة"}`
+      :`## Risk Profile\n\n${d.riskScore!=null?`**Overall: ${rl(d.riskScore)} (${d.riskScore}/100)**\n\n`:""}- Posture: ${s==null?"not measured":`${sl(s)} (${s}/100)`} | Anomalies: ${ac==null?"not available":ac}\n- Neck risk: ${nr==null?"not measured":`${nr}%`}${load!=null?` | Measured load: ${load} kg`:""}\n\n${s!=null&&s<60?"1. 🔴 Poor posture — chronic pain risk":s!=null?"1. 🟢 Good posture":""}\n${ac==null?"":ac>3?"2. 🟡 Frequent variability":"2. 🟢 Consistent"}`;
 
     case "forecast":{
       const fc=d.forecast?d.forecast.split(",").map(x=>parseInt(x.trim())).filter(n=>!isNaN(n)):[];
-      const avg7=fc.length?Math.round(fc.reduce((a,b)=>a+b,0)/fc.length):Math.round(s+t*.5);
+      // Only report a projection when the caller actually sent one. The
+      // fallback was `Math.round(s + t * 0.5)` — the lifetime average plus half
+      // of a trend that was itself derived from an invented last-week figure —
+      // printed under the heading "Projected avg" as though a model produced it.
+      const avg7=fc.length?Math.round(fc.reduce((a,b)=>a+b,0)/fc.length):null;
       return ar
-        ?`## توقعات 7 أيام\n\n**المتوسط المتوقع: ${avg7}/100**\n${fc.length?`النقاط: ${fc.join(" → ")}`:""}\n\n${t>2?"الزخم الإيجابي سيستمر مع الانتظام.":t<-2?"الانخفاض يحتاج تدخل.":"أداء ثابت."}\n\n**لتحسين التوقع:**\n1. ${avg7<75?"ارفع الشاشة":"حافظ على الاستراحات"}\n2. ${Math.max(5,(ws||3)+2)} جلسات هذا الأسبوع`
-        :`## 7-Day Forecast\n\n**Projected avg: ${avg7}/100**\n${fc.length?`Scores: ${fc.join(" → ")}`:""}\n\n${t>2?"Positive momentum — consistency key.":t<-2?"Decline needs intervention.":"Stable performance."}\n\n**To improve forecast:**\n1. ${avg7<75?"Raise monitor":"Maintain breaks"}\n2. Target ${Math.max(5,(ws||3)+2)} sessions this week`;
+        ?`## توقعات 7 أيام\n\n${avg7==null?"**مفيش توقع متاح** — التوقع بيتحسب من جلسات كفاية على مدى أيام، ولسه مش متوفرة.":`**المتوسط المتوقع: ${avg7}/100**\n${fc.length?`النقاط: ${fc.join(" → ")}`:""}`}\n\n${t==null?"":t>2?"الزخم الإيجابي سيستمر مع الانتظام.":t<-2?"الانخفاض يحتاج تدخل.":"أداء ثابت."}\n\n**الخطوات:**\n1. ${avg7!=null&&avg7<75?"ارفع الشاشة":"حافظ على الاستراحات"}\n2. ${Math.max(5,(ws||3)+2)} جلسات هذا الأسبوع`
+        :`## 7-Day Forecast\n\n${avg7==null?"**No forecast available** — a projection needs enough sessions spread over several days, and there aren't yet.":`**Projected avg: ${avg7}/100**\n${fc.length?`Scores: ${fc.join(" → ")}`:""}`}\n\n${t==null?"":t>2?"Positive momentum — consistency key.":t<-2?"Decline needs intervention.":"Stable performance."}\n\n**Next steps:**\n1. ${avg7!=null&&avg7<75?"Raise monitor":"Maintain breaks"}\n2. Target ${Math.max(5,(ws||3)+2)} sessions this week`;
     }
 
     case "anomaly": return ar
-      ?`## تحليل الشواذ\n\n**${ac} شذوذ** من متوسط ${s}/100\n\n${ac===0?"✅ لا شواذ — وضعية متسقة!":ac<=2?"شواذ قليلة — طبيعية":ac<=5?"شواذ متوسطة — تستحق المراقبة":"شواذ مرتفعة — راجع بيئة العمل"}\n\n1. راجع أوقات الشواذ\n2. تحقق من الإعداد في تلك الأوقات`
-      :`## Anomaly Analysis\n\n**${ac} anomalies** from ${s}/100 baseline\n\n${ac===0?"✅ No anomalies — excellent consistency!":ac<=2?"Few — very normal":ac<=5?"Moderate — monitor for patterns":"High — likely environmental issue"}\n\n1. Check when anomalies occur\n2. Review workstation at those times`;
+      ?`## تحليل الشواذ\n\n${ac==null?"**مش متاح** — مفيش بيانات شواذ في السياق ده.":`**${ac} شذوذ**${s==null?"":` من متوسط ${s}/100`}`}\n\n${ac==null?"":ac===0?"✅ لا شواذ — وضعية متسقة!":ac<=2?"شواذ قليلة — طبيعية":ac<=5?"شواذ متوسطة — تستحق المراقبة":"شواذ مرتفعة — راجع بيئة العمل"}\n\n1. راجع أوقات الشواذ\n2. تحقق من الإعداد في تلك الأوقات`
+      :`## Anomaly Analysis\n\n${ac==null?"**Not available** — no anomaly data was provided in this context.":`**${ac} anomalies**${s==null?"":` from a ${s}/100 baseline`}`}\n\n${ac==null?"":ac===0?"✅ No anomalies — excellent consistency!":ac<=2?"Few — very normal":ac<=5?"Moderate — monitor for patterns":"High — likely environmental issue"}\n\n1. Check when anomalies occur\n2. Review workstation at those times`;
 
     default: return ar
-      ?`📊 درجتك **${s}/100** من **${se}** جلسة.\n${s<70?"أهم خطوة: ارفع الشاشة.":s<85?"وضع جيد — انتظام أكثر.":"ممتاز!"}`
-      :`📊 Score: **${s}/100** from **${se}** sessions.\n${s<70?"Top priority: raise monitor.":s<85?"Good — more consistency.":"Excellent!"}`;
+      ?(s==null?`📊 لسه مفيش جلسات مسجّلة، فمقدرش أقيّم وضعيتك. اعمل جلسة الأول.`
+              :`📊 درجتك **${s}/100** من **${seTxt}** جلسة.\n${s<70?"أهم خطوة: ارفع الشاشة.":s<85?"وضع جيد — انتظام أكثر.":"ممتاز!"}`)
+      :(s==null?`📊 No sessions recorded yet, so there is nothing to score. Run one first.`
+              :`📊 Score: **${s}/100** from **${seTxt}** sessions.\n${s<70?"Top priority: raise monitor.":s<85?"Good — more consistency.":"Excellent!"}`);
   }
 }
 
@@ -1115,14 +1163,24 @@ function buildLLMSystemPrompt(systemPrompt, forAnalysis = false) {
   } catch(_) {}
 
   // Merge: JSON ctx takes priority over regex-parsed d
-  const avg       = ctx.avg_score       ?? d.avg       ?? 0;
-  const weekAvg   = ctx.week_avg        ?? d.weekAvg   ?? avg;
-  const trendPct  = ctx.trend_pct       ?? d.trendPct  ?? 0;
-  const sessions  = ctx.sessions_count  ?? d.sessions  ?? 0;
+  // `?? 0` defeats the point of sending null: it converts "not measured" into
+  // a measured zero, which lands on the reassuring end of every scale below.
+  // Absent stays absent, and the dataLines list simply omits the row.
+  const avg       = ctx.avg_score       ?? d.avg       ?? null;
+  const avgRecent = ctx.recent_avg      ?? d.avgRecent ?? null;
+  const recentN   = ctx.recent_n        ?? d.recentN   ?? 0;
+  // `?? avg` swapped a zero-session week for the lifetime average.
+  const weekAvg   = ctx.week_avg        ?? d.weekAvg   ?? null;
+  const lastWkAvg = ctx.last_week_avg   ?? d.lastWeekAvg ?? null;
+  const trendPct  = ctx.trend_pct       ?? d.trendPct  ?? null;
+  const sessions  = ctx.sessions_count  ?? d.sessions  ?? null;
+  const sessExact = ctx.sessions_exact  ?? d.sessionsExact ?? true;
   const weekSess  = ctx.week_sessions   ?? d.weekSessions ?? 0;
-  const neckRisk  = ctx.neck_risk       ?? d.neckRisk  ?? 0;
-  const fatigue   = ctx.fatigue_score   ?? d.fatigue   ?? 0;
-  const burnout   = ctx.burnout_risk    ?? d.burnout   ?? 0;
+  const neckRisk  = ctx.neck_risk       ?? d.neckRisk  ?? null;
+  const loadKg    = ctx.cervical_load_kg?? d.cervicalLoadKg ?? null;
+  const flexDeg   = ctx.neck_flexion_deg?? d.neckFlexionDeg ?? null;
+  const fatigueDl = ctx.fatigue_decline ?? d.fatigueDecline ?? null;
+  const relPct    = ctx.reliability_pct ?? d.reliabilityPct ?? null;
   const worstTime = ctx.worst_time      ?? d.worstTime ?? null;
   const streak    = ctx.streak_days     ?? 0;
   const calib     = ctx.has_calibration ?? d.calibrated ?? false;
@@ -1132,24 +1190,38 @@ function buildLLMSystemPrompt(systemPrompt, forAnalysis = false) {
 
   const isAr = d.lang === "ar" || (systemPrompt||"").includes("Egyptian Arabic");
 
-  const scoreLabel = avg >= 85 ? "Excellent" : avg >= 70 ? "Good" : avg >= 55 ? "Fair" : "Needs Attention";
+  const scoreLabel = avg == null ? "" : avg >= 85 ? "Excellent" : avg >= 70 ? "Good" : avg >= 55 ? "Fair" : "Needs Attention";
   const neckLabel  = neckRisk >= 70 ? "HIGH 🔴" : neckRisk >= 40 ? "MODERATE 🟡" : "LOW 🟢";
 
+  // `x && line` also drops a legitimate 0 (a real zero trend, zero streak), but
+  // more importantly it USED to be the only thing keeping unmeasured values out
+  // — and it failed at exactly the wrong moment, because the `?? 0` above meant
+  // "unmeasured" and "zero" were the same value by the time they got here.
+  // Explicit null checks now separate the two.
+  const has = v => v != null;
   const dataLines = [
-    name      && `Patient: ${name}`,
-    avg       && `Overall posture score: ${avg}/100 (${scoreLabel})`,
-    weekAvg   && `This week average: ${weekAvg}/100`,
-    trendPct  && `Week-over-week trend: ${trendPct > 0 ? "+" : ""}${trendPct}% (${trendPct > 2 ? "improving" : trendPct < -2 ? "declining" : "stable"})`,
-    sessions  && `Total sessions logged: ${sessions}`,
-    weekSess  && `Sessions this week: ${weekSess}`,
-    streak    && `Streak: ${streak} days`,
-    neckRisk  && `Cervical risk score: ${neckRisk}% (${neckLabel})`,
-    fatigue   && `Fatigue index: ${fatigue}%`,
-    burnout   && `Occupational burnout risk: ${burnout}%`,
-    worstTime && `Peak symptom window: ${worstTime}`,
-    alerts    && `Most frequent postural alerts: ${alerts}`,
-    calib     ? "Calibration: COMPLETE — personalized thresholds active"
-              : "Calibration: NOT DONE — generic population thresholds",
+    name           && `Patient: ${name}`,
+    has(avg)       && `Overall posture score (all sessions): ${avg}/100 (${scoreLabel})`,
+    has(avgRecent) && `Recent average (last ${recentN} sessions): ${avgRecent}/100`,
+    has(weekAvg)   ? `This week average: ${weekAvg}/100`
+                   : `This week: no sessions recorded — do NOT report this as a score of 0`,
+    has(lastWkAvg) && `Last week average: ${lastWkAvg}/100`,
+    has(trendPct)  ? `Week-over-week trend: ${trendPct > 0 ? "+" : ""}${trendPct}% (${trendPct > 2 ? "improving" : trendPct < -2 ? "declining" : "stable"})`
+                   : `Week-over-week trend: no comparison possible (a week has no sessions)`,
+    has(sessions)  && `Total sessions logged: ${sessions}${sessExact ? "" : "+ (list truncated)"}`,
+    weekSess       && `Sessions this week: ${weekSess}`,
+    streak         && `Streak: ${streak} days`,
+    has(neckRisk)  ? `Cervical risk score: ${neckRisk}% (${neckLabel})`
+                   : `Cervical risk: NOT MEASURED — do not describe cervical loading or name a spinal level`,
+    has(loadKg)    ? `Cervical load, MEASURED: ${loadKg} kg above neutral${has(flexDeg) ? ` at ${flexDeg}° flexion` : ""} — use this figure, do not re-derive it from the score`
+                   : `Cervical load: not measured`,
+    has(fatigueDl) ? `Within-session posture decline: ${fatigueDl} pts (first third vs last third of a session)`
+                   : `Within-session decline: not measured — do not describe fatigue as measured`,
+    has(relPct)    && `Reading reliability: ${relPct}% of metrics read reliably`,
+    worstTime      && `Peak symptom window: ${worstTime}`,
+    alerts         && `Most frequent postural alerts: ${alerts}`,
+    calib          ? "Calibration: COMPLETE — personalized thresholds active"
+                   : "Calibration: NOT DONE — population thresholds, not fitted to this user",
   ].filter(Boolean).join("\n");
 
   const langLine = isAr

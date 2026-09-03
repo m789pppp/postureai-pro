@@ -4,6 +4,10 @@ import { getLocalAIStatus, onLocalAIStatus, localChatStream, abortCurrentStream 
 import { qualityFor, featureTier } from "./lib/tierQuality.js";
 import { CoachAPI } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import {
+  metricScore, cervicalLoadKg, neckFlexionDeg, sessionFatigue,
+  weekWindows, lifetimeSessions, readingReliability,
+} from "./lib/clinicalMetrics.js";
 
 // ── Tokens ────────────────────────────────────────────────────────
 // T is built per-render inside FreeChatCoach using the cs prop.
@@ -301,10 +305,33 @@ function buildSystemPrompt(ctx, isAr) {
   // overall score in disguise and wrote clinical-sounding advice about it.
   const nr = ctx.neck_risk;
   const nrTxt = nr == null ? (isAr ? "مش متقاس" : "not measured") : `${nr}%`;
-  const fa = ctx.fatigue_score||0;
-  const bu = ctx.burnout_risk||0;
-  const tr = ctx.trend_pct||0;
-  const wa = ctx.week_avg||ctx.avg_score;
+  // Fatigue is now a MEASURED within-session decline (points lost from the
+  // first third of a session to the last), or null. It used to be
+  // (100 - week_avg) * 0.6 + (sessions.length < 5 ? 30 : 10): the weekly
+  // posture average inverted, plus a step that dropped it 20 points the moment
+  // a fifth session was recorded, and which could never read below 10 — so a
+  // flawless week still reported fatigue, and a week with no sessions reported
+  // 70-90% "HIGH".
+  const fd = ctx.fatigue_decline;              // points of decline, or null
+  const faTxt = fd == null ? (isAr ? "مش متقاس" : "not measured")
+              : (isAr ? `${fd} نقطة خلال الجلسة` : `${fd} pts within-session`);
+
+  // Burnout is gone. It was fatigue * 0.8 + (week_sessions > 5 ? 15 : 0),
+  // i.e. 0.48 x (100 - week_avg) — the posture score a third time under a
+  // third name — plus a term that RAISED a user's burnout risk for using the
+  // app more. Nothing in this product measures workload, hours, sleep or mood,
+  // so there is no honest version of this number to compute.
+
+  const tr = ctx.trend_pct;                    // null when a week is missing
+  const trTxt = tr == null ? (isAr ? "مافيش مقارنة" : "no comparison") : `${tr>0?"+":""}${tr}%`;
+  // `ctx.week_avg || ctx.avg_score` silently swapped a zero-session week for
+  // the LIFETIME average, so the row could read "this week 68/100, -100% trend"
+  // — value and trend from different sources, contradicting each other.
+  const wa = ctx.week_avg;
+  const waTxt = wa == null ? (isAr ? "مافيش جلسات الأسبوع ده" : "no sessions this week") : `${wa}/100`;
+  const load = ctx.cervical_load_kg;           // measured, from fhp_index
+  const flex = ctx.neck_flexion_deg;           // measured, from fhp_index
+  const sessTxt = ctx.sessions_exact ? `${ctx.sessions_count}` : `${ctx.sessions_count}+`;
   const al = (ctx.top_alerts||[]).slice(0,5).join("; ")||"None recorded";
   const nm = ctx.user_name||"Patient";
 
@@ -313,16 +340,20 @@ function buildSystemPrompt(ctx, isAr) {
 أنت دكتور كورفوس — فيزيوثيرابيست سريري وخبير إرجونوميكس داخل Corvus PostureAI Pro. خبرة 15 سنة في الجهاز العضلي الهيكلي.
 
 ## بيانات ${nm} السريرية:
-- درجة الوضعية: **${ctx.avg_score}/100** (${sc}) | هذا الأسبوع: ${wa}/100 (${tr>0?"+":""}${tr}%)
+- درجة الوضعية: **${ctx.avg_score}/100** (${sc}) — متوسط كل الجلسات | آخر ${ctx.recent_n||0} جلسة: ${ctx.recent_avg??"—"}/100
+- هذا الأسبوع: ${waTxt} (${trTxt})
 - خطر الرقبة: **${nrTxt}** — ${nr==null?"ما تتكلمش عن الرقبة كأنك قستها":nr>=70?"🔴 مرتفع":nr>=40?"🟡 متوسط":"🟢 منخفض"}
-- مؤشر الإجهاد: ${fa}% | خطر الإرهاق: ${bu}%
-- الجلسات: ${ctx.sessions_count} إجمالي | ${ctx.week_sessions} هذا الأسبوع | سلسلة ${ctx.streak_days||0} يوم
-- المعايرة: ${ctx.has_calibration?"دقة شخصية ✅":"عامة ⚠️ — دقة أقل 15-20%"}
+- الإجهاد داخل الجلسة: ${faTxt}${fd==null?" — ما تتكلمش عن الإرهاق كأنك قسته":""}
+- حمل الرقبة المقاس: ${load==null?"مش متقاس":`${load} كجم فوق الوضع المحايد`} | زاوية الانحناء المقاسة: ${flex==null?"مش متقاسة":`${flex}°`}
+- الجلسات: ${sessTxt} إجمالي | ${ctx.week_sessions} هذا الأسبوع | سلسلة ${ctx.streak_days||0} يوم
+- المعايرة: ${ctx.has_calibration?"دقة شخصية ✅":"عامة ⚠️ — عتبات عامة مش مظبوطة على جسم المستخدم"}${ctx.reliability_pct!=null?` | ${ctx.reliability_pct}% من القراءات كانت موثوقة`:""}
 - تنبيهات متكررة: ${al}
 
 ## القاعدة السريرية:
 **هانسراج 2014 — حمل الرقبة:** 0°=4.5كجم، 15°=12كجم، 30°=18كجم، 45°=22كجم، 60°=27كجم
-**ناشيمسون — ضغط الأقراص:** جلوس مستقيم=100%، انحناء=185%، ميل أمامي=220%
+${load==null
+  ? "حمل الرقبة لهذا المستخدم مش متقاس — ممنوع تقدّر زاوية أو تقول رقم بالكيلو."
+  : `المقاس فعلياً لـ${nm}: ${load} كجم زيادة${flex!=null?` عند ${flex}° انحناء`:""} — استخدم الرقم ده بالظبط.`}
 
 ## بروتوكول الرد:
 - **ألم:** قيّم (مكان، طبيعة، انتشار، محسّنات/مسيئات) → اشرح البنية التشريحية
@@ -333,26 +364,29 @@ function buildSystemPrompt(ctx, isAr) {
 - 150-220 كلمة محادثة | حتى 400 للخطط الكاملة
 اللغة: عامية مصرية. مصطلحات طبية مع شرح.
 
-[CTXDATA:${JSON.stringify({avg:ctx.avg_score||0, sessions:ctx.sessions_count||0, weekAvg:wa||0, weekSessions:ctx.week_sessions||0, trendPct:tr||0, neckRisk:nr||0, fatigue:fa||0, burnout:bu||0, calibrated:!!ctx.has_calibration, alerts:al, lang:"ar"})}]`;
+[CTXDATA:${JSON.stringify({avg:ctx.avg_score??null, avgRecent:ctx.recent_avg??null, recentN:ctx.recent_n??0, sessions:ctx.sessions_count??null, sessionsExact:!!ctx.sessions_exact, weekAvg:wa??null, lastWeekAvg:ctx.last_week_avg??null, weekSessions:ctx.week_sessions??0, trendPct:tr??null, neckRisk:nr??null, cervicalLoadKg:load??null, neckFlexionDeg:flex??null, fatigueDecline:fd??null, calibrated:!!ctx.has_calibration, reliabilityPct:ctx.reliability_pct??null, alerts:al, lang:"ar"})}]`;
 
   return `You are Dr. Corvus — clinical physiotherapist & ergonomics specialist in Corvus PostureAI Pro. 15 years MSK experience.
 
 ## PATIENT DATA: ${nm}
 | Metric | Value | Status |
 |--------|-------|--------|
-| Posture | ${ctx.avg_score}/100 | ${sc} |
-| This week | ${wa}/100 | ${tr>0?"+":""}${tr}% trend |
+| Posture (all-time) | ${ctx.avg_score}/100 | ${sc} |
+| Recent (last ${ctx.recent_n||0}) | ${ctx.recent_avg??"—"}/100 | what the user sees on screen |
+| This week | ${waTxt} | ${trTxt} |
 | Cervical risk | ${nrTxt} | ${nr==null?"no reliable neck reading in recent sessions — do not describe it as measured":nr>=70?"🔴 HIGH":nr>=40?"🟡 MODERATE":"🟢 LOW"} |
-| Fatigue | ${fa}% | ${fa>=70?"HIGH":fa>=45?"MODERATE":"Normal"} |
-| Burnout risk | ${bu}% | ${bu>=70?"HIGH":bu>=45?"MODERATE":"Low"} |
-| Sessions | ${ctx.sessions_count} total | ${ctx.week_sessions}/wk | ${ctx.streak_days||0}-day streak |
-| Calibration | ${ctx.has_calibration?"Personalized ✅":"Generic ⚠️ (-15% accuracy)"} |
+| Within-session decline | ${faTxt} | ${fd==null?"no session long enough to measure — do not describe fatigue as measured":fd>=10?"posture degrades over a session":fd<=0?"holds or improves":"mild drift"} |
+| Cervical load (measured) | ${load==null?"not measured":`${load} kg above neutral`} | ${flex==null?"":`at ${flex}° flexion`} |
+| Sessions | ${sessTxt} total | ${ctx.week_sessions}/wk | ${ctx.streak_days||0}-day streak |
+| Calibration | ${ctx.has_calibration?"Personalized ✅":"Generic ⚠️ — population thresholds, not fitted to this user"} |${ctx.reliability_pct!=null?`
+| Reading reliability | ${ctx.reliability_pct}% of metrics read reliably | |`:""}
 | Top issues | ${al} |
 
 ## CLINICAL REFS
 **Hansraj 2014 cervical load:** 0°=4.5kg → 15°=12kg → 30°=18kg → 45°=22kg → 60°=27kg
-Est. flexion for ${nm}: ${nr==null?"unavailable — no neck reading recorded":nr>=70?"~35-45°":nr>=40?"~20-30°":"~<15°"}
-**Nachemson disc pressure:** upright=100% → slouch=185% → forward lean=220%
+${load==null
+  ? `No cervical load measurement for ${nm}. Do NOT estimate a flexion angle or quote a kilogram figure — say the reading is unavailable.`
+  : `MEASURED for ${nm}: ${load} kg above neutral${flex!=null?` at ${flex}° flexion`:""}. Use these exact figures; do not re-derive them from the posture score.`}
 
 ## PROTOCOL
 - PAIN → assess (location, character, radiation, provocateurs) + explain structure
@@ -363,7 +397,7 @@ Est. flexion for ${nm}: ${nr==null?"unavailable — no neck reading recorded":nr
 - No "Great question!" openings. Start with the answer.
 - 220w max conversation | 400w max for full plans.
 
-[CTXDATA:${JSON.stringify({avg:ctx.avg_score||0, sessions:ctx.sessions_count||0, weekAvg:wa||0, weekSessions:ctx.week_sessions||0, trendPct:tr||0, neckRisk:nr||0, fatigue:fa||0, burnout:bu||0, calibrated:!!ctx.has_calibration, alerts:al, lang:isAr?"ar":"en"})}]`;
+[CTXDATA:${JSON.stringify({avg:ctx.avg_score??null, avgRecent:ctx.recent_avg??null, recentN:ctx.recent_n??0, sessions:ctx.sessions_count??null, sessionsExact:!!ctx.sessions_exact, weekAvg:wa??null, lastWeekAvg:ctx.last_week_avg??null, weekSessions:ctx.week_sessions??0, trendPct:tr??null, neckRisk:nr??null, cervicalLoadKg:load??null, neckFlexionDeg:flex??null, fatigueDecline:fd??null, calibrated:!!ctx.has_calibration, reliabilityPct:ctx.reliability_pct??null, alerts:al, lang:isAr?"ar":"en"})}]`;
 }
 
 // ── Free-form chat coach (Professional/Elite — plenty of monthly budget
@@ -415,18 +449,15 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
   const context = useMemo(()=>{
     const avg = arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):0;
     const scores = (sessions||[]).map(s=>s.avg_score||0).filter(Boolean);
-    const now = Date.now();
-    const thisWk = (sessions||[]).filter(s=>{
-      const d=s.created_at?.toDate?s.created_at.toDate():new Date(s.created_at||0);
-      return now-d<7*864e5;
-    });
-    const lastWk = (sessions||[]).filter(s=>{
-      const d=s.created_at?.toDate?s.created_at.toDate():new Date(s.created_at||0);
-      const ms=now-d; return ms>=7*864e5&&ms<14*864e5;
-    });
-    const wAvg=avg(thisWk.map(s=>s.avg_score||0));
-    const lAvg=avg(lastWk.map(s=>s.avg_score||0));
-    const trendPct=lAvg>0?Math.round(((wAvg-lAvg)/lAvg)*100):0;
+    // avg([]) returned 0, and that 0 went into the clinical prompt as a
+    // literal "This week: 0/100" with a "-100%" trend — a user who took a week
+    // off was described to a physiotherapist persona as having scored zero.
+    // weekWindows returns null for a week with no sessions, and null for the
+    // trend when either endpoint is missing (no comparison possible, which is
+    // not the same claim as 0%: "measured, unchanged").
+    const wk = weekWindows(sessions);
+    const wAvg=wk.thisWeek.avg, lAvg=wk.lastWeek.avg, trendPct=wk.trendPct;
+    const thisWk={length:wk.thisWeek.n};
     const ac={};
     (sessions||[]).slice(0,20).forEach(s=>{
       // Saved sessions store this under alert_causes (see App.jsx saveSession
@@ -449,7 +480,22 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     const recent = (sessions||[]).slice(0, 7).map(x=>x.avg_score||0).filter(Boolean);
     const recentAvg = avg(recent);
     const avgScore=profile?.avg_score||avg(scores);
-    const fatigue=Math.min(100,Math.max(0,Math.round((100-wAvg)*.6+(sessions?.length<5?30:10))));
+
+    // Fatigue, measured. The engine stores score_history per session, so the
+    // decline from the first third of a session to the last third is an actual
+    // observation of posture degrading while the user sat there — which is what
+    // the word is supposed to mean. The old formula measured nothing of the
+    // kind: (100 - week_avg) * 0.6 + (sessions.length < 5 ? 30 : 10) inverted
+    // the weekly posture average, added a step that dropped 20 points the
+    // moment a fifth session existed, and had a floor of 10 so a flawless week
+    // still reported fatigue. With no sessions this week it read 70-90% HIGH.
+    const fatigueRes = sessionFatigue(sessions);
+
+    // Burnout is deleted rather than fixed. It was fatigue * 0.8 + a term that
+    // ADDED 15 points for using the app more than five times a week — and once
+    // unrolled it was 0.48 x (100 - week_avg), the posture score under a third
+    // name. Nothing here measures workload, hours, sleep or mood, so there is
+    // no honest number to compute and none is emitted.
 
     // Neck risk from the NECK, not from the overall score.
     //
@@ -462,32 +508,92 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     // Averaged over the recent sessions that actually recorded a reliable
     // neck_lean. null when none did, so the pill can say so rather than
     // inventing a percentage.
-    const neckScores = (sessions||[]).slice(0, 10)
-      .map(x => x?.metrics?.neck_lean)
-      .filter(m => m && m.reliable !== false && Number.isFinite(m.score))
-      .map(m => m.score);
-    const neck = neckScores.length ? Math.max(0, Math.min(100, 100 - avg(neckScores))) : null;
-    const burnout=Math.min(100,Math.round(fatigue*.8+(thisWk.length>5?15:0)));
+    const _neckSc = metricScore(sessions, "neck_lean");
+    const neck = _neckSc == null ? null : Math.max(0, Math.min(100, 100 - _neckSc));
+    // sessions.length saturates at the query's limit(50), so a 300-session
+    // user was told "50 sessions total" in the greeting, the pill and the
+    // prompt. The profile carries the true count; when it is missing we say
+    // "50+" rather than a wrong total.
+    const life = lifetimeSessions(profile, sessions);
+    const rel  = readingReliability(sessions);
     return {
-      avg_score:avgScore,recent_avg:recentAvg,recent_n:recent.length,
+      avg_score:avgScore,recent_avg:recent.length?recentAvg:null,recent_n:recent.length,
       week_avg:wAvg,last_week_avg:lAvg,trend_pct:trendPct,
-      sessions_count:profile?.sessions_count||sessions?.length||0,week_sessions:thisWk.length,
+      sessions_count:life.count,sessions_exact:life.exact,week_sessions:thisWk.length,
       has_calibration:!!calibration,tier:_tier,neck_risk:neck,
-      fatigue_score:fatigue,burnout_risk:burnout,streak_days:profile?.streak_days||0,
+      // Measured, from the engine's own Hansraj implementation against real
+      // forward-head displacement — replacing four hardcoded "avg_score < 55
+      // ? '18-27 kg'" tables that quoted the citation without the measurement.
+      cervical_load_kg:cervicalLoadKg(sessions),
+      neck_flexion_deg:neckFlexionDeg(sessions),
+      fatigue_decline:fatigueRes?.declinePoints??null,
+      fatigue_from:fatigueRes?.from??0,
+      reliability_pct:rel?.pct??null,
+      streak_days:profile?.streak_days||0,
       user_name:profile?.name?.split(" ")[0]||"",top_alerts:topAlerts,
     };
+    // calibration and _tier were missing from the deps, so a calibration that
+    // resolved after mount left has_calibration false forever and the user was
+    // permanently told their readings were generic.
   },[sessions,calibration,_tier,profile]);
 
-  // Welcome message
+  // Welcome message — seeded ONCE, and only once there is data to greet with.
+  //
+  // With [] deps this fired before sessions loaded and permanently rendered
+  // "0/100 - needs attention based on 0 sessions": a clinical verdict on
+  // unloaded data. Widening the deps fixed that but introduced a worse problem.
+  // `profile` gets a new object identity on every users/{uid} snapshot (the live
+  // listener does setProfile(prev => ({...prev, ...fresh}))), and saveSession
+  // writes that document after every session — so finishing a session in another
+  // tab re-ran this effect and replaced an in-progress conversation with the
+  // greeting, mid-stream. The ref gate plus `prev.length ? prev` means it seeds
+  // an empty transcript and never touches a live one.
+  // Readiness cannot be inferred from the numbers alone. `recent_n > 0 ||
+  // sessions_count === 0` failed in both directions: a user whose seven most
+  // recent sessions all scored 0 (recent is built with .filter(Boolean), and a
+  // 0-score session is a real saved document) had recent_n === 0 with
+  // sessions_count > 0 and was NEVER greeted; and a 300-session user who opened
+  // the panel before `profile` resolved got {count:0, exact:true}, was greeted
+  // "no sessions recorded yet", and the ref made that permanent.
+  //
+  // `profile` arriving is the actual signal that the data layer has answered.
+  // The timer is the floor for a user with no profile document at all, so the
+  // panel is never silent forever.
+  const greetedRef = useRef(false);
+  const [greetTimeout, setGreetTimeout] = useState(false);
+  useEffect(()=>{ const t=setTimeout(()=>setGreetTimeout(true), 4000); return ()=>clearTimeout(t); },[]);
+  const greetReady = profile != null || sessions.length > 0 || greetTimeout;
   useEffect(()=>{
+    if (greetedRef.current) return;
+    if (!greetReady) return;   // data layer hasn't answered yet — say nothing
     const name=profile?.name?.split(" ")[0]||(isAr?"":"there");
-    const s=context.avg_score;
+    // Was context.avg_score — the LIFETIME cumulative mean — greeted as "your
+    // score right now" / "درجتك دلوقتي", the exact number the pill stopped
+    // showing for being too inert to read as current. The greeting and the
+    // pill two inches away therefore displayed different scores. Use the same
+    // recent figure the pill uses, and say what it is.
+    const s=context.recent_avg, n=context.recent_n;
     const sl=s>=85?"excellent 🌟":s>=70?"good 💪":s>=55?"fair — room to improve":"needs attention ⚠️";
+    const total=context.sessions_exact?`${context.sessions_count}`:`${context.sessions_count}+`;
+    // With [] deps this fired before sessions loaded and permanently rendered
+    // "0/100 — needs attention ⚠️ based on 0 sessions": a clinical verdict on
+    // unloaded data. It now waits for data, and withholds the verdict band
+    // entirely when there are no sessions to base one on.
+    const unscored = !n && (sessions.length > 0 || context.sessions_count > 0);
     const content=isAr
-      ?`أهلاً ${name}! 👋 أنا **Dr. Corvus** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nدرجتك دلوقتي **${s}/100** من **${context.sessions_count}** جلسة. اسألني أي حاجة عن وضعيتك، ألمك، أو إعداد مكان شغلك.`
-      :`Hey${name?" "+name:""}! 👋 I'm **Dr. Corvus**, your AI physiotherapy specialist.\n\nCurrent posture score: **${s}/100** — ${sl}\nBased on **${context.sessions_count} sessions**.\n\nAsk me anything about your posture, pain, or workspace.`;
-    setMessages([{role:"assistant",content,ts:Date.now()}]);
-  },[]);
+      ?(unscored
+        ?`أهلاً ${name}! 👋 أنا **Dr. Corvus** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nعندك جلسات مسجّلة بس مفيش فيها درجات صالحة — غالباً الكاميرا مشافتش جسمك كويس. اسألني أي حاجة، ولو عايز تقييم للوضعية جرّب جلسة والكاميرا شايفاك من الوسط لفوق.`
+        :n
+        ?`أهلاً ${name}! 👋 أنا **Dr. Corvus** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nمتوسط آخر **${n}** جلسة: **${s}/100** (من إجمالي **${total}** جلسة). اسألني أي حاجة عن وضعيتك، ألمك، أو إعداد مكان شغلك.`
+        :`أهلاً ${name}! 👋 أنا **Dr. Corvus** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nلسه مفيش جلسات مسجّلة، فمقدرش أقيّم وضعيتك لحد ما تعمل أول جلسة. اسألني أي حاجة عن الألم أو إعداد مكان شغلك.`)
+      :(unscored
+        ?`Hey${name?" "+name:""}! 👋 I'm **Dr. Corvus**, your AI physiotherapy specialist.\n\nYou have sessions recorded but none produced a usable score — usually that means the camera couldn't see enough of you. Ask me anything, and for a posture assessment try a session with your head and shoulders in frame.`
+        :n
+        ?`Hey${name?" "+name:""}! 👋 I'm **Dr. Corvus**, your AI physiotherapy specialist.\n\nYour last **${n}** sessions average **${s}/100** — ${sl}\nOut of **${total}** sessions total.\n\nAsk me anything about your posture, pain, or workspace.`
+        :`Hey${name?" "+name:""}! 👋 I'm **Dr. Corvus**, your AI physiotherapy specialist.\n\nNo sessions recorded yet, so I can't assess your posture until you run one. Ask me anything about pain or your workspace setup in the meantime.`);
+    setMessages(prev => prev.length ? prev : [{role:"assistant",content,ts:Date.now()}]);
+    greetedRef.current = true;
+  },[greetReady,context.recent_avg,context.recent_n,context.sessions_count,context.sessions_exact,profile,sessions.length,isAr]);
 
   // Auto-scroll
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,loading]);
@@ -518,7 +624,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
       const allMsgs=[...history,{role:"user",content}];
 
       try {
-        await localChatStream(allMsgs,systemPrompt,Math.min(quality.max_tokens||500,500),(partial)=>{
+        await localChatStream(allMsgs,systemPrompt,(quality.aiCoach?.maxTokens||500),(partial)=>{
           setMessages(prev=>prev.map(m=>m.ts===streamingId?{...m,content:partial}:m));
         });
         setMessages(prev=>prev.map(m=>m.ts===streamingId?{...m,streaming:false}:m));
@@ -541,7 +647,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
         } catch {}
       } catch(se) {
         console.warn("[CorvusAI] Stream fail, non-stream fallback:",se.message);
-        const reply=await geminiChat(allMsgs,{systemPrompt,lang,maxTokens:Math.min(quality.max_tokens||500,500)});
+        const reply=await geminiChat(allMsgs,{systemPrompt,lang,maxTokens:(quality.aiCoach?.maxTokens||500)});
         setMessages(prev=>prev.map(m=>m.ts===streamingId?{...m,content:reply,streaming:false}:m));
       }
     } catch(e) {
@@ -646,7 +752,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
                 ? {label:`${context.neck_risk}% ${isAr?"رقبة":"neck"}`,
                    color:context.neck_risk>=70?T.red:context.neck_risk>=40?T.amber:T.green}
                 : null,
-              {label:`${context.sessions_count} ${isAr?"جلسة":"sessions"}`,color:T.subtle},
+              {label:`${context.sessions_exact?context.sessions_count:`${context.sessions_count}+`} ${isAr?"جلسة":"sessions"}`,color:T.subtle},
             ].filter(Boolean).map(p=>(
               <div key={p.label} style={{
                 fontSize:9.5,color:p.color,background:`${p.color}12`,
@@ -858,12 +964,13 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
       // a restatement of the overall score labelled as the neck. Read from the
       // metric the engine actually records, or report nothing.
       neck_risk: (() => {
-        const ns = (sessions||[]).slice(0,10)
-          .map(x => x?.metrics?.neck_lean)
-          .filter(m => m && m.reliable !== false && Number.isFinite(m.score))
-          .map(m => m.score);
-        return ns.length ? Math.max(0, Math.min(100, 100 - avg(ns))) : null;
+        const sc = metricScore(sessions, "neck_lean");
+        return sc == null ? null : Math.max(0, Math.min(100, 100 - sc));
       })(),
+      // The measured Hansraj figures, so the server's check-in prompt can cite
+      // the study against a measurement instead of a score bucket.
+      cervical_load_kg: cervicalLoadKg(sessions),
+      neck_flexion_deg: neckFlexionDeg(sessions),
       top_alerts: topAlerts,
       // Free-tier self-report ("Where does it hurt?") — was captured and
       // saved but never actually fed into any personalization until now.
@@ -990,8 +1097,8 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
             {typeof checkin.limit === "number" && checkin.limit > 0 && (
               <div style={{ marginTop:14,fontSize:10,color:T.subtle,textAlign:"center" }}>
                 {isAr
-                  ? `${(checkin.limit-(checkin.used||1))} تشيك-إن متبقي الشهر ده`
-                  : `${checkin.limit-(checkin.used||1)} check-ins left this month`}
+                  ? `${(checkin.limit-(checkin.used??0))} تشيك-إن متبقي الشهر ده`
+                  : `${checkin.limit-(checkin.used??0)} check-ins left this month`}
               </div>
             )}
           </>

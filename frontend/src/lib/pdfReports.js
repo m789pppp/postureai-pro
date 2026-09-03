@@ -5,6 +5,7 @@
  */
 
 import { tierAtLeast } from "./tierQuality.js";
+import { ZONE_METRICS } from "./clinicalMetrics.js";
 import { installArabicText } from "./arabicShaper.js";
 
 // ── Metric labels (used in PDF tables) ───────────────────────────
@@ -393,11 +394,14 @@ export function _metricScore(metrics, k){
 // 100 - (100+100+100)/3 = 0 for every user, in every session, always. A
 // printed "lower back risk: 0" that was a constant wearing a formula, on the
 // Elite clinical report.
-const _ZONES = {
-  cervical: ["neck_lean", "head_tilt", "head_yaw"],
-  thoracic: ["shoulder_level", "rounded_shoulders", "shoulder_elevation"],
-  lumbar:   ["spine_lean", "torso_flexion", "trunk_rotation"],
-};
+// Imported, not redeclared. Three copies of this map existed across
+// pdfReports.js, firebase.js and SharedReportPage.jsx, each naming a different
+// set of metrics — including different PHANTOM ones — so one session yielded
+// different zone risks depending on which document the patient shared. The
+// canonical map now lives in clinicalMetrics.js; `fhp_index` joins cervical
+// there, since forward-head posture is unambiguously cervical and is measured
+// on every session.
+const _ZONES = ZONE_METRICS;
 
 /**
  * Risk per body zone, 0-100, or null for a zone with nothing measured.

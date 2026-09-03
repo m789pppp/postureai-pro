@@ -9,6 +9,7 @@
  *   node src/lib/pdfReports.test.mjs
  */
 import { _metricScore } from "./pdfReports.js";
+import { ZONE_METRICS } from "./clinicalMetrics.js";
 import { analyzeMP, resetProportions } from "../features/analysis/postureEngine.js";
 import { renderSubject } from "../features/analysis/syntheticSubject.mjs";
 import { readFileSync } from "node:fs";
@@ -31,13 +32,15 @@ console.log("\n══ PDF report — metric plumbing ══\n");
 {
   const src = readFileSync(new URL("./pdfReports.js", import.meta.url), "utf8");
   const engineKeys = new Set(Object.keys(metrics));
-  // Only the arrays that are USED as lookups into `metrics`.
-  const lookups = [
-    ...src.matchAll(/_metricScore\(\s*metrics\s*,\s*"([a-z_]+)"\s*\)/g),
-    ...src.matchAll(/_ZONES\s*=\s*\{([\s\S]*?)\};/g),
-  ];
-  const zoneBlock = (src.match(/const _ZONES = \{([\s\S]*?)\};/) || [])[1] || "";
-  const zoneKeys = [...zoneBlock.matchAll(/"([a-z_]+)"/g)].map(m => m[1]);
+  // Zone keys come from the imported module, not from scraping this file.
+  //
+  // They used to be scraped with /const _ZONES = \{([\s\S]*?)\};/ against a
+  // literal declared here. When _ZONES became `= ZONE_METRICS` (one shared
+  // definition instead of three divergent ones) that regex stopped matching,
+  // zoneKeys silently became [], and this check — the only automated defence
+  // against phantom metric names in the zone map — kept printing "ok" while
+  // testing nothing. Importing the actual object cannot go stale that way.
+  const zoneKeys = Object.values(ZONE_METRICS).flat();
   const radarKeys = [...src.matchAll(/const met(?:Keys|K3)=\[([^\]]+)\]/g)]
     .flatMap(m => [...m[1].matchAll(/"([a-z_]+)"/g)].map(x => x[1]));
   const used = [...new Set([...zoneKeys, ...radarKeys])];

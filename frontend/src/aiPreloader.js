@@ -7,6 +7,10 @@
  * Invalidation: only when session count changes (new posture session recorded)
  */
 import { geminiAnalysis } from "./gemini.js";
+import {
+  metricScore, cervicalLoadKg, neckFlexionDeg, sessionFatigue,
+  weekWindows, lifetimeSessions, readingReliability,
+} from "./lib/clinicalMetrics.js";
 import { db } from "./firebase.js";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -154,30 +158,45 @@ function buildCtx(profile, sessions, calibration, effectiveTier) {
   const _avg = arr => arr.length ? Math.round(arr.reduce((a,b)=>a+b,0)/arr.length) : 0;
   const allScores = (sessions||[]).map(s=>s.avg_score||0).filter(Boolean);
   const avgScore = _avg(allScores);
-  const now = Date.now();
-  const thisWeek = (sessions||[]).filter(s => {
-    const d = s.created_at?.toDate?.()||new Date(s.created_at||0);
-    return (now-d)<7*86400000;
-  });
-  const lastWeek = (sessions||[]).filter(s => {
-    const d = s.created_at?.toDate?.()||new Date(s.created_at||0);
-    const ms=now-d; return ms>=7*86400000&&ms<14*86400000;
-  });
-  const weekAvg = _avg(thisWeek.map(s=>s.avg_score||0));
-  const lastWeekAvg = _avg(lastWeek.map(s=>s.avg_score||0));
-  const trendPct = lastWeekAvg>0?Math.round(((weekAvg-lastWeekAvg)/lastWeekAvg)*100):0;
-  const fatigueScore = Math.min(100,Math.max(0,Math.round((100-weekAvg)*0.6+(sessions?.length<5?30:10))));
-  const neckRisk = Math.min(100,Math.round(100-avgScore+(avgScore<60?20:0)));
-  const burnoutRisk = Math.min(100,Math.round(fatigueScore*0.8+(thisWeek.length>5?15:0)));
+  // THIS FILE IS THE CACHE WRITER, so what it builds is what users actually
+  // read — AIInsights serves the preloaded text from cache (L1/L2) and only
+  // reaches its own corrected prompts on a miss. It carried a fourth verbatim
+  // copy of the three fabricated formulas the rest of this change removed:
+  //
+  //   fatigueScore = (100-weekAvg)*0.6 + (sessions.length<5 ? 30 : 10)
+  //   neckRisk     = 100-avgScore + (avgScore<60 ? 20 : 0)
+  //   burnoutRisk  = fatigueScore*0.8 + (thisWeek.length>5 ? 15 : 0)
+  //
+  // and shipped them to the model as "Cervical risk: N% | Fatigue: N% |
+  // Burnout: N%". Fixing the cache key without fixing this would have made the
+  // fabricated text reach MORE users, not fewer.
+  const _wk = weekWindows(sessions);
+  const weekAvg = _wk.thisWeek.avg;          // null when no sessions this week
+  const lastWeekAvg = _wk.lastWeek.avg;
+  const trendPct = _wk.trendPct;             // null when a week is missing
+  const _neckSc = metricScore(sessions, "neck_lean");
+  const neckRisk = _neckSc == null ? null : Math.max(0, Math.min(100, 100 - _neckSc));
+  const _fatigue = sessionFatigue(sessions);
+  const fatigueDecline = _fatigue?.declinePoints ?? null;
+  const cervLoadKg = cervicalLoadKg(sessions);
+  const cervFlexDeg = neckFlexionDeg(sessions);
+  const reliability = readingReliability(sessions);
+  const lifetime = lifetimeSessions(profile, sessions);
   const alertCounts = {};
-  (sessions||[]).slice(0,20).forEach(s=>(s.alerts||[]).forEach(a=>{
-    const k=typeof a==="string"?a:(a?.label||a?.type||""); if(k) alertCounts[k]=(alertCounts[k]||0)+1;
+  // Sessions store this under alert_causes, not alerts — reading `s.alerts`
+  // meant topAlerts was empty for every user, the same defect already fixed in
+  // AIInsights and AICoach.
+  (sessions||[]).slice(0,20).forEach(s=>(s.alert_causes||s.alerts||[]).forEach(a=>{
+    const k=typeof a==="string"?a:(a?.cause||a?.label||a?.type||""); if(k) alertCounts[k]=(alertCounts[k]||0)+1;
   }));
   const topAlerts = Object.entries(alertCounts).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k])=>k);
   const _tier = effectiveTier||profile?.tier||"standard";
   const _name = profile?.name?.split(" ")[0]||"Patient";
-  return { avgScore, weekAvg, lastWeekAvg, trendPct, totalSessions:sessions?.length||0,
-    thisWeekSessions:thisWeek.length, fatigueScore, neckRisk, burnoutRisk,
+  return { avgScore, weekAvg, lastWeekAvg, trendPct,
+    totalSessions:lifetime.count, sessionsExact:lifetime.exact,
+    thisWeekSessions:_wk.thisWeek.n, lastWeekSessions:_wk.lastWeek.n,
+    neckRisk, cervLoadKg, cervFlexDeg, fatigueDecline, fatigueFrom:_fatigue?.from??0,
+    reliabilityPct:reliability?.pct??null,
     calibrated:!!calibration, topAlerts, name:_name, tier:_tier };
 }
 
@@ -186,19 +205,29 @@ function buildPrompts(ctx, lang) {
   const isAr = lang === "ar";
   const scoreLabel = ctx.avgScore>=85?"Excellent":ctx.avgScore>=70?"Good":ctx.avgScore>=55?"Fair":"Needs Attention";
 
+  const wk = v => v==null ? "no sessions — do NOT report this as 0/100" : `${v}/100`;
+  const tr = v => v==null ? "no comparison possible (a week has no sessions)" : `${v>0?"+":""}${v}%`;
+
   const system = `You are Dr. Corvus — the clinical AI physiotherapist inside Corvus PostureAI Pro.
 
 PATIENT — ${ctx.name} | Tier: ${ctx.tier}
-Score: ${ctx.avgScore}/100 (${scoreLabel}) | This week: ${ctx.weekAvg}/100 | Last week: ${ctx.lastWeekAvg}/100
-Trend: ${ctx.trendPct>0?"+":""}${ctx.trendPct}% | Sessions: ${ctx.totalSessions} | This week: ${ctx.thisWeekSessions}
-Cervical risk: ${ctx.neckRisk}% | Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}%
-Calibration: ${ctx.calibrated?"COMPLETE":"NOT DONE"}
+Score: ${ctx.avgScore}/100 (${scoreLabel}) | This week: ${wk(ctx.weekAvg)} | Last week: ${wk(ctx.lastWeekAvg)}
+Trend: ${tr(ctx.trendPct)} | Sessions: ${ctx.totalSessions}${ctx.sessionsExact?"":"+"} | This week: ${ctx.thisWeekSessions}
+Cervical risk: ${ctx.neckRisk==null?"NOT MEASURED — do not describe cervical loading or name a spinal level":`${ctx.neckRisk}%`}
+${ctx.cervLoadKg==null
+  ? "Cervical load: NOT MEASURED. Do not estimate a flexion angle or quote a kilogram figure."
+  : `Cervical load, MEASURED (Hansraj 2014 against measured forward-head displacement): ${ctx.cervLoadKg} kg above the 4.5 kg neutral${ctx.cervFlexDeg!=null?` at ${ctx.cervFlexDeg}° flexion`:""} — use this figure, do not re-derive one from the score.`}
+${ctx.fatigueDecline==null
+  ? "Within-session decline: NOT MEASURED — do not describe fatigue as measured."
+  : `Within-session posture decline: ${ctx.fatigueDecline} pts (first third of a session vs last, n=${ctx.fatigueFrom}).`}
+Occupational burnout is NOT measured by this product and must not be reported as a level or a risk multiplier.
+Calibration: ${ctx.calibrated?"COMPLETE":"NOT DONE — population thresholds, not fitted to this user"}${ctx.reliabilityPct!=null?` | ${ctx.reliabilityPct}% of recent readings were reliable`:""}
 Alerts: ${ctx.topAlerts?.join("; ")||"None"}
 
 ${isAr?"اللغة: عامية مصرية كاملة.":"LANGUAGE: Clear professional English."}
 CONCISE: Max 200 words. Start answer immediately — no preamble.
 
-[CTXDATA:${JSON.stringify({avg:ctx.avgScore||0, sessions:ctx.totalSessions||0, weekAvg:ctx.weekAvg||0, weekSessions:ctx.thisWeekSessions||0, trendPct:ctx.trendPct||0, neckRisk:ctx.neckRisk||0, fatigue:ctx.fatigueScore||0, burnout:ctx.burnoutRisk||0, calibrated:!!ctx.calibrated, alerts:(ctx.topAlerts||[]).join("; "), lang})}]`;
+[CTXDATA:${JSON.stringify({avg:ctx.avgScore??null, sessions:ctx.totalSessions??null, sessionsExact:!!ctx.sessionsExact, weekAvg:ctx.weekAvg??null, lastWeekAvg:ctx.lastWeekAvg??null, weekSessions:ctx.thisWeekSessions??0, trendPct:ctx.trendPct??null, neckRisk:ctx.neckRisk??null, cervicalLoadKg:ctx.cervLoadKg??null, neckFlexionDeg:ctx.cervFlexDeg??null, fatigueDecline:ctx.fatigueDecline??null, reliabilityPct:ctx.reliabilityPct??null, calibrated:!!ctx.calibrated, alerts:(ctx.topAlerts||[]).join("; "), lang})}]`;
   // ^ The prose above is free-form and was never matched by localAI.js's
   // parseData() regex fallback (it expects phrases like "Overall avg
   // score:"/"Neck risk:"/"Fatigue index:" that don't appear here — see
@@ -221,9 +250,9 @@ CONCISE: Max 200 words. Start answer immediately — no preamble.
 Max 200 words.`,
 
     trends: `Clinical trend analysis for ${ctx.name}.
-Scores: ${ctx.avgScore}/100 overall | ${ctx.weekAvg}/100 this week | ${ctx.lastWeekAvg}/100 last week | ${ctx.trendPct>0?"+":""}${ctx.trendPct}% trend
+Scores: ${ctx.avgScore}/100 overall | ${wk(ctx.weekAvg)} this week | ${wk(ctx.lastWeekAvg)} last week | ${tr(ctx.trendPct)}
 ## Trend Direction
-[Interpret the ${ctx.trendPct}% change clinically]
+[${ctx.trendPct==null?"There is no week-over-week comparison — say so plainly and do not describe a decline or an improvement":`Interpret the ${ctx.trendPct}% change clinically`}]
 ## Root Cause
 [What's driving this trend — behavioral/anatomical]
 ## Next Week Protocol
@@ -231,9 +260,10 @@ Scores: ${ctx.avgScore}/100 overall | ${ctx.weekAvg}/100 this week | ${ctx.lastW
 Max 180 words.`,
 
     fatigue: `Fatigue assessment for ${ctx.name}.
-Fatigue: ${ctx.fatigueScore}% | Burnout: ${ctx.burnoutRisk}% | Sessions: ${ctx.thisWeekSessions}/week
+${ctx.fatigueDecline==null?"Within-session decline: NOT MEASURED":`Within-session posture decline: ${ctx.fatigueDecline} pts across a session (n=${ctx.fatigueFrom})`} | Sessions: ${ctx.thisWeekSessions}/week
+This product measures posture from a webcam. It does not observe hours, sleep, workload or mood, so it cannot assess occupational burnout — do not report a burnout level or an injury-risk multiplier.
 ## Fatigue Profile
-[Acute vs chronic — physiological state at ${ctx.fatigueScore}%]
+[${ctx.fatigueDecline==null?"No within-session decline could be measured — explain what that means and what would produce it (longer sessions), without describing a physiological state":`What a ${ctx.fatigueDecline}-point drop across a session indicates — which muscles stop holding position first`}]
 ## Warning Signs
 [3 specific clinical indicators from the data]
 ## Recovery Protocol
@@ -248,8 +278,8 @@ Score: ${ctx.avgScore}/100 | Calibration: ${ctx.calibrated?"personalized":"gener
 [Specific measurements — monitor height, chair angle, keyboard distance]
 ## Exercise Program
 [4 exercises with sets×reps, target muscle, frequency]
-## 30-Day Milestones
-[Week 1/2/4 score targets]
+## What Progress Looks Like
+[Describe improvement in terms of the alerts and measurements above. Do NOT promise specific weekly score targets.]
 Max 250 words.`,
 
     _system: system,
@@ -268,7 +298,14 @@ export async function preloadAIInsights(uid, profile, sessions, calibration, eff
   if (!uid || !sessions?.length || sessions.length < 1) return;
   if (_preloadingUids.has(uid)) return;
 
-  const sessionCount = sessions.length;
+  // MUST match the basis AIInsights.jsx reads with, or the preloaded entries
+  // are written under a key nothing ever looks up. `sessions.length` saturates
+  // at the query's limit(50) while profile.sessions_count is the lifetime
+  // counter, so the two diverge permanently for every user past 50 sessions —
+  // silently: no error, just a dead preload path and a fresh LLM call per tab.
+  const sessionCount = Number.isFinite(profile?.sessions_count)
+    ? profile.sessions_count
+    : sessions.length;
   const tabs = ["executive", "trends", "fatigue", "recommendations"];
 
   // ── Check Firestore cache first (all 3 layers) ────────────────

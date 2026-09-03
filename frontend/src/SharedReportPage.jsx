@@ -5,6 +5,7 @@
  * Expires: 30 days after creation
  */
 import { useEffect, useState, useRef } from "react";
+import { ZONE_METRICS } from "./lib/clinicalMetrics.js";
 import { getSharedReport } from "./firebase.js";
 
 const METRIC_LABELS = {
@@ -99,16 +100,56 @@ function riskLabel(v) {
   if (v < 70) return "High";
   return "Very High";
 }
+/**
+ * Spinal zone risk for the shared report — the page a patient hands to their
+ * physiotherapist.
+ *
+ * WHAT WAS WRONG. Every zone averaged metric names the engine does not emit,
+ * and `sc()` defaulted a missing key to a PERFECT 100:
+ *
+ *   cervical: neck_lean, neck_lean_side, head_tilt, head_yaw, fhp, fhp_side
+ *   thoracic: shoulder, rounded, spine_lean, trunk_lean
+ *   lumbar:   spine_align, hip_angle, spine_lean
+ *
+ * The real keys are neck_lean, head_tilt, shoulder_level, spine_lean, head_yaw,
+ * screen_distance, fhp_index, rounded_shoulders, torso_flexion, trunk_rotation,
+ * shoulder_elevation, elbow_angle, monitor_height. So `neck_lean_side`, `fhp`,
+ * `fhp_side`, `shoulder`, `rounded`, `trunk_lean`, `spine_align` and `hip_angle`
+ * — eight of thirteen names — never matched anything and each contributed a
+ * silent 100.
+ *
+ * The arithmetic consequence: with 3 of 6 cervical, 1 of 4 thoracic and 1 of 3
+ * lumbar names real, the maximum attainable risk was 50%, 25% and 33%. Against
+ * riskLabel's bands (<20 Low, <45 Moderate, <70 High) THORACIC AND LUMBAR COULD
+ * NEVER READ ABOVE "Moderate" AND CERVICAL COULD NEVER READ "Very High", for
+ * any patient at any severity. A patient with rounded_shoulders scoring 15
+ * (severe) got thoracic = 100 - (100+100+85+100)/4 = 4 — printed as "4% — Low"
+ * in a green ring on a clinical document. The one metric that caused the bad
+ * score was the one silently excluded.
+ *
+ * Now: real keys only, unreadable metrics dropped rather than defaulted, and a
+ * zone with no readings returns null so the UI can say so instead of drawing a
+ * reassuring green ring. `from`/`of` lets the report disclose how much of each
+ * zone was actually observed.
+ */
 function zonalRisk(metrics) {
-  const sc = k => {
+  const read = k => {
     const v = metrics?.[k];
-    return typeof v === "number" ? v : (v?.score ?? 100);
+    if (typeof v === "number") return v;
+    if (!v || typeof v !== "object") return null;
+    // Reliability is measured per metric and was dropped at share time; see
+    // the metricSnap fix in firebase.js. Honour it when it survived.
+    if (v.reliable === false) return null;
+    return Number.isFinite(v.score) ? v.score : null;
   };
-  return {
-    cervical: Math.round((100 - (sc("neck_lean")+sc("neck_lean_side")+sc("head_tilt")+sc("head_yaw")+sc("fhp")+sc("fhp_side"))/6)),
-    thoracic: Math.round((100 - (sc("shoulder")+sc("rounded")+sc("spine_lean")+sc("trunk_lean"))/4)),
-    lumbar:   Math.round((100 - (sc("spine_align")+sc("hip_angle")+sc("spine_lean"))/3)),
-  };
+  const out = {};
+  for (const [zone, keys] of Object.entries(ZONE_METRICS)) {
+    const vals = keys.map(read).filter(v => v != null);
+    out[zone] = vals.length
+      ? { risk: Math.round(100 - vals.reduce((a, b) => a + b, 0) / vals.length), from: vals.length, of: keys.length }
+      : null;
+  }
+  return out;
 }
 function fmtDur(s) {
   if (!s) return "—";
@@ -249,26 +290,47 @@ export default function SharedReportPage() {
   };
 
   const METRIC_LABELS_AR = {
-    neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)", head_tilt:"انحناء الرأس",
-    head_yaw:"دوران الرأس", shoulder:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
-    spine_align:"محاذاة العمود الفقري", fhp:"تقدم الرأس للأمام", fhp_side:"تقدم الرأس (جانبي)",
-    rounded:"تقريس الأكتاف", elbow:"زاوية الكوع", monitor:"ارتفاع الشاشة",
-    distance:"مسافة المشاهدة", trunk_lean:"ميل الجذع", hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
+    // Re-keyed onto the names postureEngine actually emits. The previous table
+    // used shoulder/spine_align/fhp/rounded/trunk_lean/hip_angle/knee_angle,
+    // none of which exist, so every Arabic label fell through to the raw key.
+    neck_lean:"ميل الرقبة", head_tilt:"إمالة الرأس", head_yaw:"دوران الرأس",
+    shoulder_level:"توازن الكتفين", spine_lean:"ميل العمود الفقري",
+    fhp_index:"تقدم الرأس للأمام", rounded_shoulders:"تقوّس الأكتاف",
+    torso_flexion:"انحناء الجذع للأمام", trunk_rotation:"دوران الجذع",
+    shoulder_elevation:"رفع الأكتاف", elbow_angle:"زاوية الكوع",
+    monitor_height:"ارتفاع الشاشة", screen_distance:"مسافة الشاشة",
   };
 
   const ZONES_AR = {
-    cervical: {title:"عنق الرحم (الرقبة)", region:"C1–C7", detail:"وضع الرأس، ميل الرقبة، تقدم الرأس والدوران"},
-    thoracic: {title:"الصدر (أعلى الظهر)", region:"T1–T12", detail:"توازن الأكتاف، تقريس الأكتاف، انحناء العمود العلوي"},
-    lumbar:   {title:"القطن (أسفل الظهر)", region:"L1–S1", detail:"محاذاة العمود، زاوية الورك، ميل الجذع"},
+    // "عنق الرحم" is the machine translation of "cervical" as in the uterine
+    // cervix — printed as the neck-zone heading on a clinical document.
+    cervical: {title:"الفقرات العنقية (الرقبة)", region:"C1–C7", detail:"ميل الرقبة، إمالة الرأس، دوران الرأس، تقدم الرأس للأمام"},
+    thoracic: {title:"الفقرات الصدرية (أعلى الظهر)", region:"T1–T12", detail:"توازن الأكتاف، تقوّس الأكتاف، رفع الأكتاف"},
+    lumbar:   {title:"الفقرات القطنية (أسفل الظهر)", region:"L1–S1", detail:"ميل العمود، انحناء الجذع، دوران الجذع (الكاميرا بتشوف الجزء العلوي بس — الحوض مش متقاس)"},
   };
+  // `position_penalty` was not filtered out alongside session_fatigue and
+  // confidence_val, so an internal scoring deduction — value = penalty points,
+  // score = 100 - penalty — rendered on a clinical document as a full posture
+  // metric with a progress bar and a grade.
+  const INTERNAL = new Set(["session_fatigue", "confidence_val", "position_penalty"]);
   const metricEntries = Object.entries(metrics)
-    .filter(([k,v]) => v !== null && v !== undefined && k!=="session_fatigue" && k!=="confidence_val")
+    .filter(([k,v]) => v !== null && v !== undefined && !INTERNAL.has(k))
     .map(([k,v]) => ({
       k,
-      lbl: isAr ? (METRIC_LABELS_AR[k] || METRIC_LABELS[k] || k) : (METRIC_LABELS[k] || k),
+      // firebase.js already writes a resolved `label` into each metric snapshot;
+      // this ignored it and fell through to the raw key, so a clinician saw
+      // "fhp_index", "torso_flexion", "rounded_shoulders" — the METRIC_LABELS
+      // tables are keyed on names the engine does not emit.
+      lbl: (isAr ? METRIC_LABELS_AR[k] : null) || (typeof v === "object" && v?.label) || METRIC_LABELS[k] || k,
       sc:   typeof v === "number" ? v : (v?.score ?? 100),
       val:  typeof v === "number" ? null : v?.value,
       unit: typeof v === "number" ? "" : (v?.unit || ""),
+      // The engine marks a metric unreliable when the measurement is
+      // geometrically invalid (e.g. FHP with the head turned returns a
+      // placeholder score of 90 with reliable:false). That flag was dropped at
+      // share time, so an unmeasurable reading printed as "Forward Head
+      // Posture — 90 — Excellent" to a clinician.
+      unreliable: typeof v === "object" && v?.reliable === false,
     }))
     .sort((a,b) => a.sc - b.sc);
 
@@ -276,15 +338,15 @@ export default function SharedReportPage() {
     { k:"cervical",
       title: isAr ? ZONES_AR.cervical.title : "Cervical (Neck)",
       region: "C1–C7",
-      detail: isAr ? ZONES_AR.cervical.detail : "Head position, neck lean, FHP & rotation" },
+      detail: isAr ? ZONES_AR.cervical.detail : "Neck lean, head tilt, head rotation, forward-head posture" },
     { k:"thoracic",
       title: isAr ? ZONES_AR.thoracic.title : "Thoracic (Upper Back)",
       region: "T1–T12",
-      detail: isAr ? ZONES_AR.thoracic.detail : "Shoulder balance, rounded shoulders, spine lean" },
+      detail: isAr ? ZONES_AR.thoracic.detail : "Shoulder level, rounded shoulders, shoulder elevation" },
     { k:"lumbar",
       title: isAr ? ZONES_AR.lumbar.title : "Lumbar (Lower Back)",
       region: "L1–S1",
-      detail: isAr ? ZONES_AR.lumbar.detail : "Spine alignment, hip angle, trunk lean" },
+      detail: isAr ? ZONES_AR.lumbar.detail : "Spine lean, forward slouch, trunk rotation (seated upper-body view — the hips and pelvis are not observed)" },
   ];
 
   const sharedAt  = data.shared_at?.toDate?.() || new Date(data.shared_at || Date.now());
@@ -306,7 +368,9 @@ export default function SharedReportPage() {
           <div style={SRP_TOKENS.logo}>
             <div style={SRP_TOKENS.logoIcon}>◈</div>
             <span style={SRP_TOKENS.logoText}>Corvus</span>
-            <span style={SRP_TOKENS.logoBadge}>Elite</span>
+            {/* Was a hardcoded "Elite" on every shared report — a claim about
+                the account, rendered to a third party, that no data backs. */}
+            {data.tier_label && <span style={SRP_TOKENS.logoBadge}>{data.tier_label}</span>}
           </div>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:11, color:"#64748b" }}>{isAr ? "تقرير الوضعية المشترك" : "Shared Posture Report"}</div>
@@ -361,9 +425,16 @@ export default function SharedReportPage() {
             <h2 style={SRP_TOKENS.sectionTitle}>Score Timeline</h2>
             <div style={{ background:"#0c1528", borderRadius:8, padding:"12px 8px 4px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                {[50,65,80,95].map(v => (
-                  <span key={v} style={{ fontSize:9, color:"#334155" }}>{v}</span>
-                ))}
+                {/* Was a hardcoded [50,65,80,95] row laid out above the chart,
+                    reading as gridline labels — but Sparkline auto-scales to
+                    [min-5, max+5], so a session ranging 40-55 still showed
+                    "50 65 80 95". Real endpoints of the plotted range instead. */}
+                {(() => {
+                  const lo = Math.max(0, Math.min(...hist) - 5), hi = Math.min(100, Math.max(...hist) + 5);
+                  return [lo, Math.round((lo + hi) / 2), hi].map((v, i) => (
+                    <span key={i} style={{ fontSize:9, color:"#334155" }}>{Math.round(v)}</span>
+                  ));
+                })()}
               </div>
               <Sparkline data={hist} color={col} height={56} />
               <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
@@ -394,8 +465,11 @@ export default function SharedReportPage() {
           </p>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {zones.map(({k,title,region,detail}) => {
-              const risk = zonal[k]||0;
-              const rc   = riskColor(risk);
+              // `zonal[k] || 0` rendered an unmeasured zone as a confident
+              // green "0% — Low" ring on a document a clinician reads.
+              const z    = zonal[k];
+              const risk = z?.risk ?? null;
+              const rc   = risk == null ? "#64748b" : riskColor(risk);
               const open = activeZone === k;
               return (
                 <div
@@ -417,18 +491,18 @@ export default function SharedReportPage() {
                       alignItems:"center", justifyContent:"center",
                       background:`${rc}15`, flexShrink:0,
                     }}>
-                      <span style={{ fontSize:14, fontWeight:800, color:rc }}>{risk}%</span>
+                      <span style={{ fontSize:risk==null?16:14, fontWeight:800, color:rc }}>{risk==null?"—":`${risk}%`}</span>
                     </div>
                     <div style={{ flex:1 }}>
                       <div style={{ display:"flex", justifyContent:"space-between" }}>
                         <span style={{ fontSize:13, fontWeight:600, color:"#f1f5f9" }}>{title}</span>
-                        <span style={{ fontSize:11, fontWeight:600, color:rc }}>{riskLabel(risk)}</span>
+                        <span style={{ fontSize:11, fontWeight:600, color:rc }}>{risk==null?(isAr?"مش متقاس":"Not measured"):riskLabel(risk)}</span>
                       </div>
-                      <div style={{ fontSize:11, color:"#64748b", marginTop:2 }}>{region}</div>
+                      <div style={{ fontSize:11, color:"#64748b", marginTop:2 }}>{region}{z?` · ${isAr?`${z.from} من ${z.of} قياسات`:`${z.from} of ${z.of} metrics read`}`:""}</div>
                       {/* Bar */}
                       <div style={{ height:4, background:"#334155", borderRadius:99, marginTop:8 }}>
                         <div style={{
-                          height:"100%", borderRadius:99, width:`${risk}%`,
+                          height:"100%", borderRadius:99, width:`${risk??0}%`,
                           background:rc, transition:"width .4s",
                         }} />
                       </div>
@@ -450,8 +524,11 @@ export default function SharedReportPage() {
         <div style={{ ...SRP_TOKENS.card, marginBottom:20 }}>
           <h2 style={SRP_TOKENS.sectionTitle}>Posture Metrics Breakdown</h2>
           <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-            {metricEntries.map(({k,lbl,sc,val,unit}) => {
-              const mc = scoreColor(sc);
+            {metricEntries.map(({k,lbl,sc,val,unit,unreliable}) => {
+              // An unreliable reading gets no score, no grade and no colour —
+              // it was printing the engine's placeholder (e.g. FHP returns 90
+              // when the head is turned) as "90 — Excellent" to a clinician.
+              const mc = unreliable ? "#64748b" : scoreColor(sc);
               return (
                 <div key={k} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0",
                   borderBottom:"1px solid #1e293b" }}>
@@ -461,21 +538,21 @@ export default function SharedReportPage() {
                     background:`${mc}22`, display:"flex", alignItems:"center",
                     justifyContent:"center",
                   }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:mc }}>{Math.round(sc)}</span>
+                    <span style={{ fontSize:unreliable?15:13, fontWeight:700, color:mc }}>{unreliable?"—":Math.round(sc)}</span>
                   </div>
                   <div style={{ flex:1 }}>
                     <div style={{ fontSize:13, color:"#f1f5f9", marginBottom:4 }}>{lbl}</div>
                     <div style={{ height:3, background:"#1e293b", borderRadius:99 }}>
-                      <div style={{ height:"100%", width:`${sc}%`, borderRadius:99, background:mc }} />
+                      <div style={{ height:"100%", width:`${unreliable?0:sc}%`, borderRadius:99, background:mc }} />
                     </div>
                   </div>
-                  {val != null && (
+                  {val != null && !unreliable && (
                     <div style={{ fontSize:12, fontWeight:600, color:mc, minWidth:40, textAlign:"right" }}>
                       {typeof val==="number"?Math.round(val*10)/10:val}{unit}
                     </div>
                   )}
                   <div style={{ fontSize:11, color:mc, minWidth:64, textAlign:"right" }}>
-                    {scoreGrade(sc)}
+                    {unreliable ? (isAr ? "قراءة غير موثوقة" : "Not reliable") : scoreGrade(sc)}
                   </div>
                 </div>
               );

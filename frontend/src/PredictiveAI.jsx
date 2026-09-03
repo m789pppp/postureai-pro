@@ -3,6 +3,10 @@
  * Typography + layout overhaul: consistent font scale, spacing, hierarchy
  */
 import { useState, useEffect, useCallback } from "react";
+import {
+  cervicalLoadKg, neckFlexionDeg, sessionFatigue,
+  weekWindows, lifetimeSessions,
+} from "./lib/clinicalMetrics.js";
 import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache } from "./aiPreloader.js";
 import { SymptomAPI } from "./services/api.js";
@@ -71,12 +75,36 @@ function _dayPartOf(hour) {
   }
   return "night";
 }
+// Region names for the weekly forecast, keyed on metrics the engine emits.
+//
+// Three things were wrong here. `shoulder_level` said "right shoulder" — that
+// metric is an asymmetry MAGNITUDE and does not carry which shoulder is
+// dropped, so every user with it as their worst metric was told "right", a
+// coin flip presented as a localised finding, and it went out in the WhatsApp
+// reminder body verbatim. `screen_distance` said "eyes/neck" — a centimetre
+// distance predicting OCULAR discomfort this product cannot observe, the same
+// defect as the "Eyes" zone removed from the HR heatmap. And `spine_align`,
+// `trunk_lean` and `hip_angle` are not metric names the engine emits, while
+// `monitor_height`, `shoulder_elevation`, `head_tilt`, `torso_flexion`,
+// `trunk_rotation` and `elbow_angle` — all real — had no entry, so whenever one
+// of those won `worstMetric` the forecast fell back to a generic "posture"
+// while still quoting a precise percentage.
 const WF_REGION_LABEL = {
-  fhp_index: { en: "neck", ar: "رقبتك" }, neck_lean: { en: "neck", ar: "رقبتك" },
-  rounded_shoulders: { en: "shoulders", ar: "كتفك" }, shoulder_level: { en: "right shoulder", ar: "كتفك اليمين" },
-  spine_lean: { en: "lower back", ar: "أسفل ظهرك" }, spine_align: { en: "back", ar: "ظهرك" },
-  trunk_lean: { en: "back", ar: "ظهرك" }, hip_angle: { en: "hips", ar: "الحوض" },
-  screen_distance: { en: "eyes/neck", ar: "عينك ورقبتك" },
+  fhp_index:          { en: "neck",             ar: "رقبتك" },
+  neck_lean:          { en: "neck",             ar: "رقبتك" },
+  head_tilt:          { en: "neck",             ar: "رقبتك" },
+  head_yaw:           { en: "neck",             ar: "رقبتك" },
+  monitor_height:     { en: "neck",             ar: "رقبتك" },
+  rounded_shoulders:  { en: "shoulders",        ar: "كتفيك" },
+  shoulder_level:     { en: "shoulders",        ar: "كتفيك" },
+  shoulder_elevation: { en: "shoulders",        ar: "كتفيك" },
+  spine_lean:         { en: "lower back",       ar: "أسفل ظهرك" },
+  torso_flexion:      { en: "lower back",       ar: "أسفل ظهرك" },
+  trunk_rotation:     { en: "back",             ar: "ظهرك" },
+  elbow_angle:        { en: "forearms",         ar: "ساعديك" },
+  // Deliberately absent: screen_distance. Sitting too close is a real
+  // measurement, but eye strain is not something a posture camera observes,
+  // so it gets the generic fallback rather than a body region it cannot claim.
 };
 
 function computeWeeklyForecast(sessions) {
@@ -132,6 +160,17 @@ function computeWeeklyForecast(sessions) {
     .filter(b => b.scores.length >= 3)
     .map(b => {
       const avgScore = b.scores.reduce((a, c) => a + c, 0) / b.scores.length;
+      // This was rendered as "there's a {problemPct}% chance of {region}
+      // discomfort {day} {part}" — a forward-looking probability of PAIN. It is
+      // neither. It is the share of past sessions in this time bucket that
+      // scored under 65, and 65 is an invented cutoff silently redefined as
+      // "discomfort"; the product never observed discomfort on this path at
+      // all. The bucket minimum is 3, so the only values a minimal bucket can
+      // produce are 0/33/67/100 — "67% chance of shoulder discomfort" could
+      // mean two of three sessions scored below 65.
+      //
+      // Kept as what it is: how often posture was poor in this slot, phrased as
+      // an observation of the past rather than a prediction of pain.
       const badCount = b.scores.filter(s => s < 65).length;
       const problemPct = Math.round((badCount / b.scores.length) * 100);
       const worstMetric = Object.entries(b.metricSums)
@@ -257,15 +296,36 @@ function MdText({ text }) {
 
 function avg(arr) { return arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0; }
 
+// One threshold, used by both the badge and the prompt.
+//
+// The UI stamped a red "Anomaly" badge at |z| > 1.8 while the system prompt
+// told the model "z>2 = clinically significant deviation" — so the model was
+// handed a rule under which the very points the UI had flagged were not
+// significant.
+export const ANOMALY_Z = 2;
+
+// Minimum sample size. At n=5 with a POPULATION sigma the largest attainable
+// |z| is (n-1)/sqrt(n) = 1.79, so at the old n>=5 gate a threshold of 2 is
+// literally unreachable and even 1.8 is at the very ceiling — a z printed to
+// the user as "z-score 1.8" meant only "this is the most extreme of five
+// points", not that it was unusual. n>=8 puts the ceiling at 2.47 so the
+// threshold can actually discriminate.
+const ANOMALY_MIN_N = 8;
+
+// null (not []) when there were too few sessions to run the test at all, so
+// callers can distinguish "we looked and found none" from "we could not look".
 function detectAnomalies(scoredSessions) {
-  if (scoredSessions.length < 5) return [];
+  if (scoredSessions.length < ANOMALY_MIN_N) return null;
   const scores = scoredSessions.map(x => x.score);
   const m  = avg(scores);
-  const sd = Math.sqrt(scores.reduce((s, v) => s + Math.pow(v - m, 2), 0) / scores.length);
+  // Sample standard deviation (n-1). The population form understates spread on
+  // small samples, which inflates every z and makes anomalies look commoner
+  // than they are.
+  const sd = Math.sqrt(scores.reduce((s, v) => s + Math.pow(v - m, 2), 0) / (scores.length - 1));
   return scoredSessions.map((x, i) => ({
     index: i, value: x.score, session: x.session,
     z: sd > 0 ? Math.abs((x.score - m) / sd) : 0,
-    isAnomaly: sd > 0 && Math.abs((x.score - m) / sd) > 1.8,
+    isAnomaly: sd > 0 && Math.abs((x.score - m) / sd) > ANOMALY_Z,
     direction: x.score > m ? "high" : "low",
   })).filter(p => p.isAnomaly);
 }
@@ -304,9 +364,20 @@ function forecast(scores, days = 7) {
     lowerBound.push(Math.round(Math.max(0, Math.min(100, point - spread))));
   }
   const trend = slope > 0.3 ? "improving" : slope < -0.3 ? "declining" : "stable";
-  // Simple confidence label from how wide the 7-day band is relative to the scale
+  // The band is +/-1 sigma of the IN-SAMPLE residuals — no t-multiplier, no
+  // leverage term for extrapolating past the data, no small-n adjustment. So it
+  // is roughly a 68% fit band being read as a prediction interval, and it is
+  // NARROWEST exactly where the fit is most overfit (3-4 points). A green "High
+  // confidence" pill was the user-facing output of that, with 10/25 as invented
+  // cutoffs.
+  //
+  // Confidence is now driven by how much data the fit actually has, which is
+  // what a reader is really asking, and capped so a 3-point fit can never
+  // present as high confidence however tight its residuals happen to be.
   const bandWidth = (upperBound[days-1] || 0) - (lowerBound[days-1] || 0);
-  const confidence = bandWidth <= 10 ? "high" : bandWidth <= 25 ? "medium" : "low";
+  const confidence = n < 5 ? "low"
+                   : n < 10 ? (bandWidth <= 15 ? "medium" : "low")
+                   : bandWidth <= 10 ? "high" : bandWidth <= 25 ? "medium" : "low";
   return { slope: Math.round(slope * 100) / 100, predicted, upperBound, lowerBound, trend, confidence };
 }
 
@@ -330,8 +401,11 @@ function MetricChip({ label, value, color, raw }) {
 }
 
 // ── Risk card ────────────────────────────────────────────────────────
-function RiskCard({ title, score, icon, color, desc }) {
-  const pct = typeof score === "number" ? score : 0;
+function RiskCard({ title, score, icon, color, desc, unit = "/100", isAr = false }) {
+  // `typeof score === "number" ? score : 0` printed an unmeasured value as
+  // "0/100", which on a risk scale is the BEST possible reading.
+  const has = typeof score === "number" && Number.isFinite(score);
+  const pct = has ? score : null;
   return (
     <div style={{
       background: TOKENS.surface, border: `1px solid ${TOKENS.border}`,
@@ -344,15 +418,20 @@ function RiskCard({ title, score, icon, color, desc }) {
           {title}
         </span>
       </div>
-      <div style={{ fontSize: TOKENS.xl, fontWeight: TOKENS.black, color, lineHeight: 1 }}>
-        {pct}
-        <span style={{ fontSize: TOKENS.sm, fontWeight: TOKENS.medium, color: TOKENS.textMuted,
-          marginLeft: 3 }}>/100</span>
+      <div style={{ fontSize: TOKENS.xl, fontWeight: TOKENS.black, color: has ? color : TOKENS.textMuted, lineHeight: 1 }}>
+        {has ? pct : (isAr ? "مش متقاس" : "—")}
+        {has && <span style={{ fontSize: TOKENS.sm, fontWeight: TOKENS.medium, color: TOKENS.textMuted,
+          marginLeft: 3 }}>{unit}</span>}
       </div>
       {/* Progress bar */}
       <div style={{ height: 4, borderRadius: 99, background: "rgba(255,255,255,.07)", overflow: "hidden" }}>
         <div style={{
-          height: "100%", width: `${pct}%`, borderRadius: 99,
+          // `${pct}%` with pct null yields "null%" — an invalid CSS length, so
+          // the declaration is dropped and the bar falls back to width:auto, i.e.
+          // a FULL track. On a risk scale a full bar is the maximum reading, shown
+          // for a value that was never measured. A negative decline (posture
+          // improved within a session) gave "-3%" with the same result.
+          height: "100%", width: `${has ? Math.max(0, Math.min(100, pct)) : 0}%`, borderRadius: 99,
           background: color, transition: "width .6s cubic-bezier(.16,1,.3,1)",
         }} />
       </div>
@@ -550,12 +629,12 @@ function ForecastChart({ historical, predicted, upperBound, lowerBound, confiden
 
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: TOKENS.sp2 }}>
         <span style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>
-          {isAr ? "14 يوم مضت" : "14 days ago"}
+          {isAr ? "أقدم جلسة" : "Oldest session"}
         </span>
         <span style={{ fontSize: TOKENS.xs, color: "#0891b2", fontWeight: TOKENS.bold }}>
           {isAr
             ? `التوقع بعد 7 أيام: ${predicted[predicted.length - 1]}/100${upperBound ? ` (${lowerBound[lowerBound.length-1]}–${upperBound[upperBound.length-1]})` : ""}`
-            : `7-day forecast: ${predicted[predicted.length - 1]}/100${upperBound ? ` (${lowerBound[lowerBound.length-1]}–${upperBound[upperBound.length-1]})` : ""}`}
+            : `Next 7 sessions: ${predicted[predicted.length - 1]}/100${upperBound ? ` (${lowerBound[lowerBound.length-1]}–${upperBound[upperBound.length-1]})` : ""}`}
         </span>
         <span style={{ fontSize: TOKENS.xs, color: TOKENS.textMuted }}>+7d</span>
       </div>
@@ -653,19 +732,42 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   // instead and feed them in reverse-chronological order — inverting the trend.)
   const recent14  = allScores.slice(0, 14).slice().reverse();
 
-  const thisWeek = sessions.filter(s =>
-    (Date.now() - (s.created_at?.toDate?.() || new Date(s.created_at || 0))) < 7 * 86400000
-  );
-  const weekAvg = avg(thisWeek.map(s => s.avg_score || 0));
+  // avg([]) returned 0, and (100 - 0) * 0.5 gave every user who took a week
+  // off a burnout floor of 50 — "MODERATE, early intervention critical".
+  const _wk = weekWindows(sessions);
+  const weekAvg = _wk.thisWeek.avg;   // null when no sessions this week
+  // Same windows as the averages, so the count and the mean always agree about
+  // which sessions belong to a week.
+  const thisWeek = { length: _wk.thisWeek.n };
 
-  const burnoutScore = Math.min(100, Math.round(
-    (100 - weekAvg) * 0.5 +
-    (thisWeek.length > 6 ? 25 : 0) +
-    (avgScore < 50 ? 20 : 0) +
-    (allScores.length > 0 && allScores[0] < allScores[allScores.length - 1] * 0.8 ? 15 : 0)
-  ));
+  // burnoutScore is removed rather than repaired. It was:
+  //
+  //   (100 - weekAvg) * 0.5
+  //   + (thisWeek.length > 6 ? 25 : 0)
+  //   + (avgScore < 50 ? 20 : 0)
+  //   + (allScores[0] < allScores[allScores.length-1] * 0.8 ? 15 : 0)
+  //
+  // The dominant term is the inverted weekly posture average, so "Burnout Risk"
+  // was the posture score wearing another name and could never disagree with
+  // it. 0.5 / 25 / 20 / 15 / 0.8 / >6 are all invented. The second term
+  // PENALISED USING THE PRODUCT — daily sessions added 25 burnout points for
+  // compliance. The fourth compared the single newest session against the
+  // single oldest one in the window and called that a trend. And with no
+  // sessions this week the whole thing floored at 50%, so a week off read as
+  // moderate occupational burnout.
+  //
+  // Nothing in this product observes hours, workload, sleep or mood. The real
+  // signal that exists — posture degrading within a session — is measured from
+  // the stored score_history instead.
+  const _fatigue = sessionFatigue(sessions);
+  const fatigueDecline = _fatigue?.declinePoints ?? null;
+  const cervLoad  = cervicalLoadKg(sessions);
+  const cervAngle = neckFlexionDeg(sessions);
+  const lifetime  = lifetimeSessions(profile, sessions);
 
-  const anomalies    = detectAnomalies(scoredSessions);
+  const anomalyRes   = detectAnomalies(scoredSessions);
+  const anomalyReady = anomalyRes !== null;
+  const anomalies    = anomalyRes || [];
   const fore         = forecast(recent14.length >= 3 ? recent14 : allScores.slice().reverse());
   const forecastTrend = fore?.trend || "stable";
   const weeklyForecast = computeWeeklyForecast(sessions);
@@ -679,48 +781,70 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   const worstSymptomGap = symptomInsights?.length
     ? Math.max(0, ...symptomInsights.filter(i => i.direction === "worse").map(i => i.score_gap))
     : 0;
-  const riskFactors = [
-    { key: "avgScore",  label: isAr ? "متوسط السكور" : "Average score",       weight: 0.40, raw: Math.max(0, 100 - avgScore) },
-    { key: "burnout",   label: isAr ? "مؤشر الإرهاق" : "Burnout indicator",   weight: 0.25, raw: burnoutScore },
-    { key: "anomalies", label: isAr ? "شذوذ مكتشف" : "Detected anomalies",    weight: 0.15, raw: Math.min(100, anomalies.filter(a => a.direction === "low").length * 20) },
-    { key: "trend",     label: isAr ? "اتجاه التوقع" : "Forecast trend",      weight: 0.10, raw: forecastTrend === "declining" ? 100 : forecastTrend === "stable" ? 40 : 0 },
-    { key: "symptoms",  label: isAr ? "ربط الأعراض الحقيقي" : "Real symptom correlation", weight: 0.10, raw: Math.min(100, worstSymptomGap * 4) },
+  // The breakdown is presented to the user as independent, auditable factors
+  // with explicit weights. It was not: `burnout` was itself ~0.5 x (100 -
+  // weekAvg), so the posture score was counted twice under two names, at a
+  // combined effective weight of ~0.53 rather than the 0.40 shown. The burnout
+  // row is gone. The remaining rows are things that are actually measured, and
+  // a row with no data is dropped rather than contributing a zero that reads as
+  // "we checked and found nothing".
+  //
+  // `trend: stable -> 40` also meant a user with flawless, steady posture
+  // accrued risk for not improving; stable now contributes nothing.
+  const _rawFactors = [
+    { key: "avgScore",  label: isAr ? "متوسط السكور" : "Average score",       weight: 0.45, raw: avgScore == null ? null : Math.max(0, 100 - avgScore) },
+    { key: "fatigue",   label: isAr ? "التراجع داخل الجلسة" : "Within-session decline", weight: 0.20, raw: fatigueDecline == null ? null : Math.min(100, Math.max(0, fatigueDecline * 4)) },
+    { key: "anomalies", label: isAr ? "شذوذ مكتشف" : "Detected anomalies",    weight: 0.15, raw: anomalyReady ? Math.min(100, anomalies.filter(a => a.direction === "low").length * 20) : null },
+    { key: "trend",     label: isAr ? "اتجاه التوقع" : "Forecast trend",      weight: 0.10, raw: forecastTrend === "declining" ? 100 : 0 },
+    // score_gap is real measured data from the symptom check-ins, but an empty
+    // insights list (the default below the backend's MIN_DAYS gate, and also
+    // what a failed fetch produces) yielded 0 under a footnote reading "based
+    // on your actual check-ins" — "we checked your symptoms and found nothing"
+    // rather than "no symptom data exists". Dropped when there is none.
+    { key: "symptoms",  label: isAr ? "ربط الأعراض" : "Symptom correlation",  weight: 0.10, raw: symptomInsights?.length ? Math.min(100, worstSymptomGap * 4) : null },
   ];
-  const riskScore = Math.min(100, Math.round(riskFactors.reduce((s, f) => s + f.raw * f.weight, 0)));
+  const riskFactors = _rawFactors.filter(f => f.raw != null);
+  // Re-normalise over the factors that actually have data, so dropping one does
+  // not silently deflate the total toward "low risk".
+  const _wSum = riskFactors.reduce((a, f) => a + f.weight, 0);
+  const riskScore = riskFactors.length
+    ? Math.min(100, Math.round(riskFactors.reduce((s, f) => s + f.raw * f.weight, 0) / _wSum))
+    : null;
 
   const _scoreL = avgScore>=85?"Excellent":avgScore>=70?"Good":avgScore>=55?"Fair":"Needs Attention";
-  // These narrative thresholds used to be 40 while riskColor() — used for
-  // every risk-related color/badge in this file's UI, 10+ call sites —
-  // and _cervAngle/_cervLoad just above use 45. A score of 42 rendered
-  // green "safe zone" in the UI while the AI-generated clinical text
-  // narrated it as "MODERATE" / "1.4x elevated risk — early intervention
-  // critical", directly contradicting the color-coded UI next to it.
-  // Aligned to the same 45 cutoff the UI already uses everywhere.
-  const _cervAngle = riskScore>=70?"35-50":riskScore>=45?"20-35":"<20";
-  const _cervLoad  = riskScore>=70?"18-27 kg":riskScore>=45?"12-18 kg":"4-12 kg";
+  // _cervAngle and _cervLoad were three-way string buckets keyed on riskScore —
+  // a COMPOSITE that folds in burnout, anomaly count and forecast trend — and
+  // then rendered into the prompt as "Score ${avgScore}/100 → cervical angle
+  // ~35-50° → load ~18-27 kg (Hansraj 2014, neutral=4.5kg)". The sentence even
+  // attributed the figures to avgScore, which is not the variable that produced
+  // them. The engine measures the real thing (cervLoad / cervAngle above).
 
   const system = `You are Dr. Corvus — senior clinical physiotherapist and MSK specialist with 15 years experience.
 
 PATIENT PROFILE:
-- Posture: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg}/100 | Sessions: ${sessions.length}
-- Burnout: ${burnoutScore}% (${burnoutScore>=70?"HIGH":burnoutScore>=45?"MODERATE":"LOW"}) | Risk index: ${riskScore}/100 | Anomalies: ${anomalies.length}
+- Posture: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg==null?`no sessions (${thisWeek.length} recorded) — do NOT report this as 0/100`:`${weekAvg}/100`} | Sessions: ${lifetime.count}${lifetime.exact?"":"+ (query truncated)"}
+- Risk index: ${riskScore==null?"not computable — no factor has data":`${riskScore}/100`} | Anomalies: ${anomalyReady?anomalies.length:"not tested"}
 
 CLINICAL INTERPRETATION FOR THIS PATIENT:
-Score ${avgScore}/100 → cervical angle ~${_cervAngle}° → load ~${_cervLoad} (Hansraj 2014, neutral=4.5kg)
-${riskScore>=70?"C5-C7 facet joints under chronic overload — disc dehydration accelerated":riskScore>=45?"Approaching chronic cervicalgia threshold":"Within safe loading parameters"}
-Burnout ${burnoutScore}% → ${burnoutScore>=70?"2.3x elevated MSK injury risk (Holtermann 2018) — muscles in chronic guarding":burnoutScore>=45?"1.4x elevated risk — early intervention critical":"minimal elevated risk"}
-Anomalies: ${anomalies.length>=3?"Pattern = inconsistent postural control, likely fatigue spikes":anomalies.length>=1?"Isolated deviations — identify trigger events":"No significant anomalies"}
+${cervLoad==null
+  ? "Cervical load: NOT MEASURED. Do not estimate a flexion angle, quote a kilogram figure, cite Hansraj against this patient, or name a spinal level (no \"C5-C7\", no \"disc dehydration\") — say the measurement is unavailable and why (head or shoulders out of frame)."
+  : `Cervical load, MEASURED (Hansraj 2014 applied to measured forward-head displacement): ~${cervLoad} kg above the 4.5 kg neutral${cervAngle!=null?` at ~${cervAngle}° flexion`:""}. Use this figure; do not re-derive one from the posture score or the risk index.`}
+${fatigueDecline==null
+  ? "Within-session decline: NOT MEASURED — do not describe fatigue as measured."
+  : `Within-session posture decline: ${fatigueDecline} pts from the first third of a session to the last, across ${_fatigue.from} sessions.`}
+Occupational burnout is NOT measured by this product — it observes posture from a webcam, not hours, sleep, workload or mood. Do not report a burnout level, and do not quote a relative injury-risk multiplier for it.
+Anomalies: ${!anomalyReady?`NOT TESTED — only ${scoredSessions.length} scored sessions, and the test needs ${ANOMALY_MIN_N}. Do not describe their consistency as verified.`:anomalies.length>=3?"Pattern = inconsistent postural control across sessions":anomalies.length>=1?"Isolated deviations — identify trigger events":"No significant anomalies"}
 
 STANDARDS:
-- Interpret numbers as anatomical consequences — not just scores
-- Give week-by-week timelines based on data trajectory
-- Anomaly z-scores: z>2 = clinically significant deviation
+- Interpret only the figures given above. Never introduce a number that is not in this block.
+- Give week-by-week timelines based on the data trajectory
+- Anomalies above are flagged at |z| > ${ANOMALY_Z}; treat that as the significance threshold, not a different one
 - Recovery protocols: sets x reps, hold time, frequency, weeks to improvement
-- ${riskScore>=70||burnoutScore>=70?"⚕️ HIGH RISK — recommend professional evaluation":"⚕️ Flag any red flag symptoms"}
+- ${riskScore!=null&&riskScore>=70?"⚕️ HIGH RISK — recommend professional evaluation":"⚕️ Flag any red flag symptoms"}
 - No preamble, max 220 words, start immediately
 ${lang === "ar" ? "LANGUAGE: Egyptian Arabic (عامية مصرية) + medical terms with simple explanation." : "LANGUAGE: Clear professional English."}
 
-[CTXDATA:${JSON.stringify({avg:avgScore||0, sessions:sessions.length||0, weekAvg:weekAvg||0, weekSessions:thisWeek.length||0, burnout:burnoutScore||0, lang})}]`;
+[CTXDATA:${JSON.stringify({avg:avgScore??null, sessions:lifetime.count??null, sessionsExact:lifetime.exact, weekAvg:weekAvg??null, lastWeekAvg:_wk.lastWeek.avg??null, weekSessions:thisWeek.length??0, trendPct:_wk.trendPct??null, cervicalLoadKg:cervLoad??null, neckFlexionDeg:cervAngle??null, fatigueDecline:fatigueDecline??null, riskScore:riskScore??null, anomalyCount:anomalyReady?anomalies.length:null, forecast:fore?.predicted?.join(",")??null, lang})}]`;
   // ^ Without this marker, if the primary LLM path ever failed here, the
   // rule-based fallback in localAI.js (parseData()) would regex-match this
   // free-form prose and get every field wrong or default to 0 — same fix
@@ -728,13 +852,17 @@ ${lang === "ar" ? "LANGUAGE: Egyptian Arabic (عامية مصرية) + medical t
   // AIReports.jsx.
 
   const prompts = {
-    burnout: () => `Burnout & fatigue analysis for ${sessions.length} sessions.
-Data: burnout=${burnoutScore}%, posture avg=${avgScore}/100, this week=${weekAvg}/100, sessions this week=${thisWeek.length}
+    burnout: () => `Fatigue analysis over ${lifetime.count}${lifetime.exact?"":"+"} sessions.
+Data: ${fatigueDecline==null?"within-session decline NOT MEASURED":`within-session posture decline ${fatigueDecline} pts (first third vs last third of a session, across ${_fatigue.from} sessions)`}, posture avg=${avgScore}/100, this week=${weekAvg==null?"no sessions":`${weekAvg}/100`}, sessions this week=${thisWeek.length}
+
+IMPORTANT: this product measures posture from a webcam. It does not observe hours worked, sleep, workload or mood, so it CANNOT assess occupational burnout. Do not report a burnout percentage or level, and do not quote a relative injury-risk multiplier. If burnout is relevant, say plainly that it is not measured here.
 
 YOU MUST USE EXACTLY THIS STRUCTURE (use ## for section headers):
 
-## Burnout Assessment
-[2 sentences: interpret ${burnoutScore}% clinically. What does this mean for MSK health?]
+## Fatigue Assessment
+[2 sentences. ${fatigueDecline==null
+  ? "No within-session decline could be measured — explain what that means and what would produce the measurement (longer sessions), without describing a physiological state."
+  : `Interpret the ${fatigueDecline}-point decline across a session: which muscles stop holding position first, and what the pattern indicates.`}]
 
 ## Warning Signs
 1. [specific warning with clinical mechanism]
@@ -751,8 +879,11 @@ YOU MUST USE EXACTLY THIS STRUCTURE (use ## for section headers):
 
 Max 220 words. Start immediately — no preamble.`,
 
-    anomaly: () => `Analyze ${anomalies.length} posture anomalies detected in sessions.
-Data: ${anomalies.map(a => `Session ${a.index+1}: ${a.value}/100 (${a.direction==="high"?"HIGH":"LOW"}, z=${a.z.toFixed(1)})`).join(", ")}
+    anomaly: () => !anomalyReady
+      ? `The outlier test did NOT run for this user: it needs ${ANOMALY_MIN_N} scored sessions and they have ${scoredSessions.length}.
+Explain in 2-3 sentences what outlier detection would tell them and why it needs more sessions. Do NOT state an anomaly count, do NOT say their posture is consistent, and do NOT use the headings below — there is nothing to analyse yet.`
+      : `Analyze ${anomalies.length} posture anomalies detected in sessions.
+Data (newest first — index 1 is the MOST RECENT session): ${anomalies.map(a => `${a.index===0?"most recent":`${a.index+1} sessions ago`}: ${a.value}/100 (${a.direction==="high"?"ABOVE":"BELOW"} their mean, z=${a.z.toFixed(1)})`).join(", ")}
 Overall avg: ${avgScore}/100
 
 YOU MUST USE EXACTLY THIS STRUCTURE:
@@ -773,12 +904,13 @@ YOU MUST USE EXACTLY THIS STRUCTURE:
 Max 200 words. Start immediately.`,
 
     risk: () => `Posture risk analysis.
-Data: risk score=${riskScore}/100, burnout=${burnoutScore}%, anomalies=${anomalies.length}, trend=${forecastTrend}
+Data: risk index=${riskScore==null?"not computable":`${riskScore}/100`}, ${fatigueDecline==null?"within-session decline not measured":`within-session decline ${fatigueDecline} pts`}, anomalies=${anomalyReady?`${anomalies.length} (flagged at |z| > ${ANOMALY_Z})`:`not tested (needs ${ANOMALY_MIN_N} scored sessions, has ${scoredSessions.length})`}, trend=${forecastTrend}
+The risk index is a weighted blend of ${riskFactors.map(f=>f.label).join(", ")} — describe it as a composite of those inputs, not as a clinical risk score, and never quote a burnout figure (not measured).
 
 YOU MUST USE EXACTLY THIS STRUCTURE:
 
 ## Risk Profile
-[Overall risk interpretation — what ${riskScore}/100 means clinically]
+[${riskScore==null?"No factor has data yet — say so and explain what would produce a risk index":`What the composite ${riskScore}/100 reflects, in terms of the inputs above`}]
 
 ## Highest Risk Areas
 1. [specific risk + consequence]
@@ -792,7 +924,7 @@ YOU MUST USE EXACTLY THIS STRUCTURE:
 
 Max 200 words. Start immediately.`,
 
-    forecast: () => `7-day posture forecast.
+    forecast: () => `Posture projection over the user's NEXT 7 SESSIONS (not 7 days — the regression is fitted against session ordinal, with no time term, so do not describe it in days).
 Data: 14-day avg=${avg(recent14)||avgScore}/100, trend=${forecastTrend}, predicted=${fore?.predicted?.join(", ")||"insufficient data"}
 
 YOU MUST USE EXACTLY THIS STRUCTURE:
@@ -825,7 +957,7 @@ Max 180 words. Start immediately.`,
     }
     catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [sessions.length, avgScore, burnoutScore, riskScore, fore?.trend, lang, profile]);
+  }, [sessions.length, avgScore, fatigueDecline, riskScore, fore?.trend, lang, profile]);
 
   useEffect(() => { if (tab !== "weekplan") loadAI(tab); }, [tab]);
 
@@ -839,7 +971,7 @@ Max 180 words. Start immediately.`,
       <div style={{ background: "rgba(8,14,28,.98)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 18, padding: "36px 28px", maxWidth: 360, textAlign: "center" }}>
         <div style={{ fontSize: 42, marginBottom: 14 }}>🔒</div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "#f0f6ff", marginBottom: 8 }}>{isAr ? "AI تنبؤي — Elite" : "Predictive AI — Elite"}</div>
-        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "توقّع الإرهاق والألم قبل ما يحصل، بناءً على بيانات وضعيتك" : "Predict burnout and pain before it happens, based on your posture data"}</div>
+        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 22 }}>{isAr ? "شوف أنماط وضعيتك واتجاهها قبل ما تتحوّل لمشكلة" : "Spot patterns and trends in your posture before they become a problem"}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button onClick={onClose} style={{ padding: "10px 20px", background: "rgba(255,255,255,.06)", color: "#94a3b8", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{isAr ? "إغلاق" : "Close"}</button>
           <button onClick={()=>{ onClose?.(); onUpgrade?.(); }} style={{ padding: "10px 20px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{isAr ? "الترقية لـ Elite" : "Upgrade to Elite"}</button>
@@ -879,7 +1011,7 @@ Max 180 words. Start immediately.`,
   };
 
   const TABS = [
-    { id: "burnout",  icon: "🔥", en: "Burnout",   ar: "الإرهاق"  },
+    { id: "burnout",  icon: "📉", en: "Fatigue",   ar: "الإجهاد"  },
     { id: "anomaly",  icon: "🔍", en: "Anomalies", ar: "الشذوذات" },
     { id: "risk",     icon: "⚠️", en: "Risk",      ar: "الخطر"    },
     { id: "forecast", icon: "🔮", en: "Forecast",  ar: "التوقع"   },
@@ -940,15 +1072,17 @@ Max 180 words. Start immediately.`,
 
           {/* Metric chips */}
           <div style={{ display: "flex", gap: TOKENS.sp2, flexWrap: "wrap" }}>
-            <MetricChip label={isAr ? "خطر الإرهاق" : "Burnout Risk"}
-              value={burnoutScore} color={riskColor(burnoutScore)} />
-            <MetricChip label={isAr ? "الخطر العام" : "Overall Risk"}
-              value={riskScore}   color={riskColor(riskScore)} />
+            <MetricChip label={isAr ? "تراجع الجلسة" : "Session decline"}
+              value={fatigueDecline == null ? (isAr ? "مش متقاس" : "—") : `${fatigueDecline}${isAr ? " نقطة" : " pts"}`} raw
+              color={fatigueDecline == null ? TOKENS.textMuted : riskColor(Math.min(100, fatigueDecline * 4))} />
+            <MetricChip label={isAr ? "مؤشر الخطر" : "Risk index"}
+              value={riskScore == null ? (isAr ? "مش متاح" : "—") : `${riskScore}/100`} raw
+              color={riskScore == null ? TOKENS.textMuted : riskColor(riskScore)} />
             <MetricChip label={isAr ? "الاتجاه" : "Trend"}
               value={trendLabel}  color={trendColor} raw />
             <MetricChip label={isAr ? "الشذوذات" : "Anomalies"}
-              value={anomalies.length}
-              color={anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"}
+              value={anomalyReady ? `${anomalies.length}` : (isAr ? "مش متاح" : "—")}
+              color={!anomalyReady ? TOKENS.textMuted : anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"}
               raw />
           </div>
         </div>
@@ -992,24 +1126,30 @@ Max 180 words. Start immediately.`,
             </div>
           )}
 
-          {/* Burnout tab */}
+          {/* Fatigue tab (id stays "burnout" — it keys the prompt map and AI cache) */}
           {tab === "burnout" && sessions.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: TOKENS.sp4 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: TOKENS.sp3 }}>
                 <RiskCard
-                  title={isAr ? "خطر الإرهاق" : "Burnout Risk"}
-                  score={burnoutScore} icon="🔥"
-                  color={riskColor(burnoutScore)}
-                  desc={burnoutScore >= 70
-                    ? (isAr ? "مستوى مرتفع — يُنصح بالراحة" : "High — rest recommended")
-                    : burnoutScore >= 45
-                    ? (isAr ? "مستوى متوسط — راقب نفسك" : "Moderate — monitor closely")
-                    : (isAr ? "مستوى آمن — استمر" : "Safe zone — keep it up")} />
+                  title={isAr ? "التراجع داخل الجلسة" : "Within-session decline"}
+                  score={fatigueDecline} unit={isAr ? " نقطة" : " pts"} icon="📉" isAr={isAr}
+                  color={fatigueDecline == null ? TOKENS.textMuted : riskColor(Math.min(100, fatigueDecline * 4))}
+                  desc={fatigueDecline == null
+                    ? (isAr ? "محتاج جلسات أطول عشان نقيسه" : "Needs longer sessions to measure")
+                    : fatigueDecline >= 15
+                    ? (isAr ? "وضعيتك بتتراجع بوضوح خلال الجلسة" : "Posture degrades markedly over a session")
+                    : fatigueDecline >= 5
+                    ? (isAr ? "تراجع بسيط خلال الجلسة" : "Mild drift within sessions")
+                    : (isAr ? "بتحافظ على وضعيتك للآخر" : "You hold position throughout")} />
+                {/* Was score={thisWeek.length * 14} rendered as "/100" in the
+                    same card component used for risk indices — a session COUNT
+                    displayed as a risk score, with 14 invented so 7 sessions
+                    pinned the bar at 100. It is a count, so it shows a count. */}
                 <RiskCard
                   title={isAr ? "جلسات الأسبوع" : "Weekly Sessions"}
-                  score={Math.min(100, thisWeek.length * 14)} icon="📅"
+                  score={thisWeek.length} unit="" icon="📅" isAr={isAr}
                   color="#60a5fa"
-                  desc={`${thisWeek.length} ${isAr ? "جلسة هذا الأسبوع" : "sessions this week"}`} />
+                  desc={isAr ? "جلسة هذا الأسبوع" : "sessions this week"} />
               </div>
               <RiskBreakdown factors={riskFactors} total={riskScore} isAr={isAr} />
               <AIBlock loading={loading} data={aiText} error={error}
@@ -1027,22 +1167,29 @@ Max 180 words. Start immediately.`,
                 <div style={{ display: "flex", justifyContent: "space-between",
                   alignItems: "center", marginBottom: TOKENS.sp3 }}>
                   <div style={{ fontSize: TOKENS.base, fontWeight: TOKENS.bold, color: TOKENS.text }}>
-                    {isAr ? `${anomalies.length} شذوذ مكتشف` : `${anomalies.length} anomalies detected`}
+                    {!anomalyReady
+                      ? (isAr ? "اكتشاف الشواذ مش شغّال لسه" : "Outlier detection hasn't run yet")
+                      : (isAr ? `${anomalies.length} شذوذ مكتشف` : `${anomalies.length} anomalies detected`)}
                   </div>
                   <div style={{
-                    background: anomalies.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
-                    border: `1px solid ${anomalies.length > 0 ? "rgba(245,158,11,.3)" : "rgba(16,185,129,.3)"}`,
+                    background: !anomalyReady ? "rgba(148,163,184,.10)" : anomalies.length > 0 ? "rgba(245,158,11,.12)" : "rgba(16,185,129,.12)",
+                    border: `1px solid ${!anomalyReady ? "rgba(148,163,184,.25)" : anomalies.length > 0 ? "rgba(245,158,11,.3)" : "rgba(16,185,129,.3)"}`,
                     borderRadius: 99, padding: "3px 10px",
                     fontSize: TOKENS.xs, fontWeight: TOKENS.bold,
-                    color: anomalies.length > 0 ? "#fbbf24" : "#34d399",
+                    color: !anomalyReady ? TOKENS.textMuted : anomalies.length > 0 ? "#fbbf24" : "#34d399",
                     textTransform: "uppercase", letterSpacing: ".05em",
                   }}>
-                    {anomalies.length > 0 ? (isAr ? "يستحق الانتباه" : "Needs attention") : (isAr ? "طبيعي" : "Normal")}
+                    {!anomalyReady ? (isAr ? "مش متاح" : "Not enough data") : anomalies.length > 0 ? (isAr ? "يستحق الانتباه" : "Needs attention") : (isAr ? "طبيعي" : "Normal")}
                   </div>
                 </div>
                 {anomalies.length === 0
                   ? <div style={{ fontSize: TOKENS.base, color: TOKENS.textSub, textAlign: "center", padding: "20px 0" }}>
-                      {isAr ? "✅ لا توجد شذوذات في بياناتك" : "✅ No anomalies detected in your data"}
+                      {/* A green "no anomalies detected" for a user with too few
+                          sessions is a positive finding from a test that never
+                          ran — the outlier test needs ANOMALY_MIN_N sessions. */}
+                      {!anomalyReady
+                        ? (isAr ? `محتاجين ${ANOMALY_MIN_N} جلسات على الأقل عشان نقدر نكتشف الشواذ — عندك ${scoredSessions.length}` : `Outlier detection needs at least ${ANOMALY_MIN_N} scored sessions — you have ${scoredSessions.length}`)
+                        : (isAr ? "✅ لا توجد شذوذات في بياناتك" : "✅ No anomalies detected in your data")}
                     </div>
                   : anomalies.slice(0, 5).map((a, i) =>
                       <AnomalyRow key={i} anomaly={a} isAr={isAr} />)
@@ -1059,14 +1206,18 @@ Max 180 words. Start immediately.`,
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: TOKENS.sp3 }}>
                 <RiskCard
                   title={isAr ? "الخطر الكلي" : "Overall Risk"}
-                  score={riskScore} icon="⚠️"
-                  color={riskColor(riskScore)}
-                  desc={isAr ? "مؤشر مركّب من وضعيتك وأنماط بياناتك" : "Composite: posture + burnout + anomalies"} />
+                  score={riskScore} icon="⚠️" isAr={isAr}
+                  color={riskScore == null ? TOKENS.textMuted : riskColor(riskScore)}
+                  desc={riskScore == null
+                    ? (isAr ? "مفيش بيانات كافية لحسابه" : "Not enough data to compute")
+                    : (isAr ? `مؤشر مركّب من: ${riskFactors.map(f=>f.label).join("، ")}` : `Composite of: ${riskFactors.map(f=>f.label).join(", ")}`)} />
                 <RiskCard
-                  title={isAr ? "الشذوذات" : "Anomaly Weight"}
-                  score={Math.min(100, anomalies.length * 20)} icon="🔍"
-                  color={anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"}
-                  desc={`${anomalies.length} ${isAr ? "نقطة شاذة مكتشفة" : "anomalous sessions detected"}`} />
+                  title={isAr ? "الشذوذات" : "Anomalies"}
+                  score={anomalyReady ? anomalies.length : null} unit="" icon="🔍" isAr={isAr}
+                  color={!anomalyReady ? TOKENS.textMuted : anomalies.length > 3 ? "#ef4444" : anomalies.length > 0 ? "#f59e0b" : "#10b981"}
+                  desc={anomalyReady
+                    ? `${anomalies.length} ${isAr ? "نقطة شاذة مكتشفة" : "anomalous sessions detected"}`
+                    : (isAr ? `محتاج ${ANOMALY_MIN_N} جلسات` : `Needs ${ANOMALY_MIN_N} scored sessions`)} />
               </div>
               <AIBlock loading={loading} data={aiText} error={error}
                 onRetry={() => loadAI(tab)} isAr={isAr} />
@@ -1090,14 +1241,17 @@ Max 180 words. Start immediately.`,
                       v: trendLabel, c: trendColor,
                     },
                     {
-                      l: isAr ? "توقع 7 أيام" : "7-Day Est.",
+                      l: isAr ? "توقع 7 جلسات" : "Next 7 sessions",
                       v: fore.predicted?.[6] ? `${fore.predicted[6]}/100` : "—",
                       c: fore.predicted?.[6]
                         ? riskColor(100 - fore.predicted[6])
                         : TOKENS.textMuted,
                     },
                     {
-                      l: isAr ? "الميل اليومي" : "Daily Slope",
+                      // The regression has no time term — it fits score against
+                      // array index, i.e. session ordinal. Labelling that "per
+                      // day" was wrong by whatever the user's session rate is.
+                      l: isAr ? "الميل لكل جلسة" : "Slope / session",
                       v: fore.slope >= 0 ? `+${fore.slope.toFixed(1)}` : fore.slope.toFixed(1),
                       c: fore.slope >= 0 ? "#10b981" : "#ef4444",
                     },
@@ -1158,9 +1312,14 @@ Max 180 words. Start immediately.`,
                         {isAr ? "الأسبوع الجاي" : "Next Week"}
                       </div>
                       <div style={{ fontSize: TOKENS.md, color: TOKENS.text, lineHeight: 1.6, marginBottom: TOKENS.sp3 }}>
+                        {/* Was "there's a {problemPct}% chance of {region}
+                            discomfort" — a pain probability. The number is the
+                            share of PAST sessions in this slot that scored under
+                            65; nothing here observes discomfort. Same number,
+                            described as the observation it is. */}
                         {isAr
-                          ? <>لو اشتغلت بنفس النمط، احتمال <strong style={{color:riskColor(weeklyForecast.problemPct)}}>{weeklyForecast.problemPct}%</strong> تحس بألم في {region.ar} يوم {dayName} {partName}.</>
-                          : <>If you keep the same pattern, there's a <strong style={{color:riskColor(weeklyForecast.problemPct)}}>{weeklyForecast.problemPct}%</strong> chance of {region.en} discomfort {dayName} {partName}.</>}
+                          ? <><strong style={{color:riskColor(weeklyForecast.problemPct)}}>{weeklyForecast.problemPct}%</strong> من جلساتك يوم {dayName} {partName} كانت وضعيتك فيها ضعيفة ({weeklyForecast.n} جلسة)، وأكتر حاجة اتأثرت هي {region.ar}.</>
+                          : <>In <strong style={{color:riskColor(weeklyForecast.problemPct)}}>{weeklyForecast.problemPct}%</strong> of your {dayName} {partName} sessions ({weeklyForecast.n} recorded) your posture scored poorly, most often affecting your {region.en}.</>}
                       </div>
                       <div style={{ fontSize: TOKENS.sm, color: TOKENS.textSub, lineHeight: 1.6,
                         borderTop: `1px solid ${TOKENS.border}`, paddingTop: TOKENS.sp3 }}>

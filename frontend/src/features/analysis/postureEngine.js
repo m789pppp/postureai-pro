@@ -2847,7 +2847,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       spine_lean:        { value: spine.angle,      score: spine.score,    unit: "°",  label: "Spine lean",          reliable: spine.reliable, signed: spine.signedAngle },
       head_yaw:          { value: yaw.angle,        score: yaw.score,      unit: "°",  label: "Head turn",           reliable: yaw.reliable },
       screen_distance:   { value: distCm,           score: distSc,         unit: "cm", label: "Screen distance",     calibrated: !!(distCalibFactor && distCalibFactor > 0) },
-      fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, reliable: fhp.reliable },
+      fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, neck_angle_deg: fhp.neckAngleDeg, reliable: fhp.reliable },
       rounded_shoulders: { value: rounded.depth,    score: rounded.score,  unit: "depth", label: "Rounded shoulders",asymmetry: rounded.asymmetry, reliable: rounded.reliable },
       torso_flexion:     { value: torsoFlex.shrinkPct, score: torsoFlex.score, unit: "%",  label: "Forward slouch",   reliable: torsoFlex.reliable },
       trunk_rotation:    { value: trunkRot.angle,      score: trunkRot.score,  unit: "°",  label: "Trunk rotation",   reliable: trunkRot.reliable },
