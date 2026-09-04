@@ -100,11 +100,15 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
   } catch {}
 }
 
-export function speakCoach(text, lang = "en", { force = false } = {}) {
-  if (!force && !_enabled) return false;
+export function speakCoach(text, lang = "en", { force = false, preview = false } = {}) {
+  // `preview` is the only thing that may speak while the coach is off, and it
+  // is used exclusively by the toggle confirmation and the settings preview —
+  // both already behind the Elite gate at their call sites.
+  if (!preview && !_enabled) return false;
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
   const now = Date.now();
-  if (!force && now - _lastSpeakMs < SPEAK_COOLDOWN_MS) return false;
+  // `force` skips the rate limit only. It used to skip the entitlement too.
+  if (!force && !preview && now - _lastSpeakMs < SPEAK_COOLDOWN_MS) return false;
   _lastSpeakMs = now;
   try {
     const synth = window.speechSynthesis;

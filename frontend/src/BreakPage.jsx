@@ -1,35 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { playSuccessChime, playPostureAlert } from "./PostureUtils.jsx";
+import { routineFor, POSTURE_REFERENCE, postureChecklist, CREDIT } from "./lib/exerciseMedia.js";
 
 // ── Desk-friendly guided break routine ──────────────────────────────
-// Each entry: icon, name/desc (EN+AR), and a duration in seconds.
-const EXERCISES = [
-  { icon:"🔄", en:"Neck Rolls",          ar:"تدوير الرقبة",
-    dens:"Slowly roll your head in a full circle — 5 times each direction.",
-    dar:"دوّر رأسك ببطء في دائرة كاملة — 5 مرات في كل اتجاه.", dur:30 },
-  { icon:"💪", en:"Shoulder Shrugs",     ar:"رفع الكتفين",
-    dens:"Lift both shoulders up to your ears, hold 3s, then release. Repeat 10×.",
-    dar:"ارفع كتفيك ناحية أذنيك، اثبت 3 ثوانٍ ثم أرخِ. كرّر 10 مرات.", dur:20 },
-  { icon:"🙆", en:"Chest Opener",        ar:"فتح الصدر",
-    dens:"Clasp your hands behind your back and gently lift — open the chest.",
-    dar:"شبّك يديك خلف ظهرك وارفعهما بلطف — افتح صدرك للأمام.", dur:30 },
-  { icon:"🌀", en:"Seated Spinal Twist", ar:"لَف العمود الفقري",
-    dens:"Sit tall, twist gently to one side, hold, then the other. 15s each.",
-    dar:"اجلس مستقيماً، لُف جذعك بلطف لجهة ثم الأخرى. 15 ثانية لكل جهة.", dur:30 },
-  { icon:"✋", en:"Wrist & Finger Stretch", ar:"إطالة الرسغ والأصابع",
-    dens:"Extend each arm, gently pull the fingers back, then flex. Ease typing strain.",
-    dar:"مُدّ ذراعك واسحب أصابعك للخلف بلطف ثم اثنِها. يخفّف إجهاد الكتابة.", dur:20 },
-  { icon:"👁️", en:"Eyes: 20-20-20",     ar:"العينان: 20-20-20",
-    dens:"Look at something ~6 metres away for 20 seconds to rest your eyes.",
-    dar:"انظر إلى شيء يبعد ~6 أمتار لمدة 20 ثانية لإراحة عينيك.", dur:20 },
-  { icon:"🧍", en:"Stand & Reach",       ar:"قِف وامتدّ",
-    dens:"Stand up, reach both arms overhead and stretch tall. Take a deep breath.",
-    dar:"قِف، ارفع ذراعيك لأعلى وامتدّ لأقصى ارتفاع. خذ نفساً عميقاً.", dur:20 },
-];
+// The routine itself lives in lib/exerciseMedia.js alongside its illustrations
+// and their licence obligations, so a picture can never drift away from the
+// credit the licence requires it to carry.
 
-export default function BreakPage({ cs, lang="en", onExit, muted=false }) {
+export default function BreakPage({ cs, lang="en", onExit, muted=false, alertCauses=[] }) {
   const isAr = lang === "ar";
   const dir  = isAr ? "rtl" : "ltr";
+  // Ordered by what the session that just ended actually flagged. It was a
+  // fixed array in a fixed order, so a user whose whole session was rounded
+  // shoulders opened on the same exercise as everyone else.
+  const [EXERCISES] = useState(() => routineFor(alertCauses));
   const [idx, setIdx]         = useState(0);
   const [secs, setSecs]       = useState(EXERCISES[0].dur);
   const [running, setRunning] = useState(false);
@@ -108,8 +92,43 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false }) {
           <div style={{ ...box, padding:"40px 24px", textAlign:"center" }}>
             <div style={{ fontSize:52, marginBottom:12 }}>🎉</div>
             <div style={{ fontSize:19, fontWeight:800, marginBottom:6 }}>{isAr?"انتهت الاستراحة!":"Break complete!"}</div>
-            <div style={{ fontSize:13, color:muted2, marginBottom:24, lineHeight:1.6 }}>
+            <div style={{ fontSize:13, color:muted2, marginBottom:20, lineHeight:1.6 }}>
               {isAr?"عمل رائع — جسمك شاكرك. ارجع لجلستك بوضعية أفضل.":"Great job — your body thanks you. Head back with a fresher posture."}
+            </div>
+
+            {/* The reference goes HERE, at the one moment it is actionable: the
+                user is standing up from a break and about to sit back down. A
+                posture diagram on a settings page is a picture; the same diagram
+                three seconds before someone sits is an instruction. */}
+            <div style={{ borderTop:`1px solid ${border}`, paddingTop:18, marginBottom:22 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:muted2, marginBottom:12,
+                letterSpacing:".04em", textTransform:"uppercase" }}>
+                {isAr?"ارجع تقعد كده":"Sit back down like this"}
+              </div>
+              <div style={{ background:"#fff", borderRadius:14, padding:"12px 10px 6px",
+                display:"inline-block", maxWidth:"100%" }}>
+                <img src={POSTURE_REFERENCE.src} alt={isAr?POSTURE_REFERENCE.alt.ar:POSTURE_REFERENCE.alt.en}
+                  width={POSTURE_REFERENCE.width} height={POSTURE_REFERENCE.height} loading="lazy" decoding="async"
+                  style={{ display:"block", height:300, width:"auto", maxWidth:"100%", objectFit:"contain", margin:"0 auto 6px" }}/>
+                <div style={{ fontSize:8.5, color:"#64748b", marginTop:4 }}>
+                  {POSTURE_REFERENCE.credit.author} ·{" "}
+                  <a href={POSTURE_REFERENCE.credit.licenceUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ color:"#64748b" }}>{POSTURE_REFERENCE.credit.licence}</a>
+                </div>
+              </div>
+              {/* The diagram's labels are baked into the image in English. This
+                  list is the same information in the user's own language — and
+                  it is also the only version a screen reader can reach, since
+                  text inside an image reaches neither. */}
+              <ul style={{ listStyle:"none", padding:0, margin:"14px 0 0", textAlign:isAr?"right":"left",
+                maxWidth:340, marginInline:"auto" }}>
+                {postureChecklist(isAr).map(line=>(
+                  <li key={line} style={{ fontSize:12, color:muted2, lineHeight:1.9,
+                    display:"flex", gap:8, flexDirection:isAr?"row-reverse":"row" }}>
+                    <span style={{ color:"#10b981", flexShrink:0 }}>✓</span><span>{line}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
             <button onClick={onExit} style={btn(`linear-gradient(135deg,${ACCENT},#2563eb)`,"#fff",{ padding:"14px 40px", width:"auto" })}>
               {isAr?"العودة للجلسة":"Back to session"}
@@ -132,10 +151,38 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false }) {
 
             {/* Current exercise */}
             <div style={{ ...box, padding:"26px 22px", textAlign:"center", marginBottom:16 }}>
-              <div style={{ fontSize:52, marginBottom:12 }}>{ex.icon}</div>
-              <div style={{ fontSize:19, fontWeight:800, marginBottom:8 }}>{isAr?ex.ar:ex.en}</div>
-              <div style={{ fontSize:13, color:muted2, lineHeight:1.7, maxWidth:380, margin:"0 auto 20px" }}>
+              {/* The illustration. These are medical line illustrations drawn on
+                  white, so they sit on a white plate rather than being dropped
+                  onto the dark card, where they would read as a broken cut-out.
+                  `loading="eager"` because the very next thing that happens is a
+                  countdown — an image that fades in three seconds late is an
+                  image the user has already stopped looking for. */}
+              {ex.img && (
+                <div style={{ background:"#fff", borderRadius:14, padding:"10px 8px 6px",
+                  marginBottom:12, display:"inline-block", maxWidth:"100%" }}>
+                  <img src={ex.img} alt={isAr?ex.ar:ex.en} loading="eager" decoding="async"
+                    style={{ display:"block", height:176, maxWidth:"100%", objectFit:"contain", margin:"0 auto" }}/>
+                  {/* Licence term, not decoration — see lib/exerciseMedia.js. */}
+                  <div style={{ fontSize:8.5, color:"#64748b", marginTop:4, lineHeight:1.4 }}>
+                    <a href={CREDIT.authorUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ color:"#64748b" }}>{CREDIT.author}</a>
+                    {" · "}
+                    <a href={CREDIT.licenceUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ color:"#64748b" }}>{CREDIT.licence}</a>
+                    {CREDIT.changed && (isAr ? " · معدّلة الحجم" : " · resized")}
+                  </div>
+                </div>
+              )}
+              <div style={{ fontSize:19, fontWeight:800, margin:"4px 0 8px" }}>{ex.icon} {isAr?ex.ar:ex.en}</div>
+              <div style={{ fontSize:13, color:muted2, lineHeight:1.7, maxWidth:380, margin:"0 auto 10px" }}>
                 {isAr?ex.dar:ex.dens}
+              </div>
+              {/* The count on its own line — it used to be the tail of a sentence
+                  someone was trying to read while already moving. */}
+              <div style={{ display:"inline-block", fontSize:12, fontWeight:700, color:ACCENT,
+                background:`${ACCENT}14`, border:`1px solid ${ACCENT}30`, borderRadius:99,
+                padding:"4px 12px", marginBottom:18 }}>
+                {isAr?ex.repsAr:ex.reps}
               </div>
 
               {/* Countdown ring */}
