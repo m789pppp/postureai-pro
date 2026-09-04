@@ -200,7 +200,11 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
   }, [intervalMin, enabled]);
 
   useEffect(() => {
-    if (enabled) scheduleNext();
+    // Turning reminders off (or ending the session) must also take down a card
+    // that is already on screen — otherwise the prompt outlives the setting
+    // that produced it, and the user's "off" appears not to have worked.
+    if (!enabled) { setShowBreak(false); return; }
+    scheduleNext();
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [enabled, scheduleNext]);
 

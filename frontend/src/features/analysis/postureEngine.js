@@ -2229,26 +2229,25 @@ function buildAlerts(modules, distCm, lo, hi) {
     // Now uses spine.signedAngle to name the actual side and give the
     // matching correction.
     add("spine_sev", spine.reliable && Math.abs(spine.signedAngle ?? spine.angle) > 18,
-        `⚠️ Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — sit centered, weight even on both hips`),
+        `⚠️ Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — sit centered, weight even on both hips`, imp("spine", spine)),
     add("spine_mid", spine.reliable && Math.abs(spine.signedAngle ?? spine.angle) > 10 && Math.abs(spine.signedAngle ?? spine.angle) <= 18,
-        `Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — engage core, sit centered`),
+        `Leaning ${(spine.signedAngle ?? spine.angle) > 0 ? "right" : "left"} ${spine.angle}° — engage core, sit centered`, imp("spine", spine)),
     add("yaw",       yaw.reliable && yaw.absAngle > 18,           `Head turned ${yaw.absAngle}° ${yaw.angle > 0 ? "right" : "left"} — face monitor`, imp("yaw", yaw)),
     add("dist_cl",   distCm < lo - 10,                            `⚠️ Very close (${distCm}cm) — move back to ${lo}–${hi}cm`, imp("distance", distance)),
     add("dist_c",    distCm < lo && distCm >= lo - 10,            `Too close (${distCm}cm) — ideal ${lo}–${hi}cm`, imp("distance", distance)),
     add("dist_f",    distCm > hi + 15,                            `Too far (${distCm}cm) — ideal ${lo}–${hi}cm`, imp("distance", distance)),
     add("round_sev", rounded.reliable && rounded.depth > 15,      `⚠️ Rounded shoulders — pull shoulder blades together`, imp("rounded", rounded)),
     add("round_mid", rounded.reliable && rounded.depth > 8 && rounded.depth <= 15, `Shoulders slightly forward — open chest`, imp("rounded", rounded)),
-    add("round_calib_tip", rounded.calibrationRecommended,        `Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading`, imp("rounded", rounded)),
     add("shrug_sev", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.bad,
       shoulderElev.asymmetric
         ? `⚠️ ${shoulderElev.asymmetric === "left" ? "Left" : "Right"} shoulder raised — drop that shoulder, relax your neck`
         : `⚠️ Both shoulders raised (${shoulderElev.elevPct}%) — let them drop down and back`,
-      imp("shoulder", shoulder)),
+      imp("shoulderElev", shoulderElev)),
     add("shrug_mid", shoulderElev.reliable && shoulderElev.elevPct > THR.SHOULDER_ELEV.ok && shoulderElev.elevPct <= THR.SHOULDER_ELEV.bad,
       shoulderElev.asymmetric
         ? `${shoulderElev.asymmetric === "left" ? "Left" : "Right"} shoulder slightly raised — relax that side`
         : `Shoulders slightly raised — relax your trap muscles`,
-      imp("shoulder", shoulder)),
+      imp("shoulderElev", shoulderElev)),
     add("elbow_hi",  elbow.reliable && elbow.angle != null && elbow.angle < 70, `⚠️ Elbows too high (${elbow.angle}°) — lower keyboard`, imp("elbow", elbow)),
     add("elbow_lo",  elbow.reliable && elbow.angle != null && elbow.angle > 125, `Elbows too low (${elbow.angle}°) — raise keyboard`, imp("elbow", elbow)),
     // "below" (looking down) used to always be worded as "Monitor too low —
@@ -2272,16 +2271,19 @@ function buildAlerts(modules, distCm, lo, hi) {
     // Forward slouch — the posture behind most lower-back complaints, and one
     // this engine used to be completely blind to.
     add("slouch_sev", torsoFlex?.reliable && torsoFlex.severity === "severe",
-        `⚠️ Slouching forward — stack your ribs over your hips and let the chair back support you`),
+        `⚠️ Slouching forward — stack your ribs over your hips and let the chair back support you`, imp("torsoFlex", torsoFlex)),
     add("slouch_mid", torsoFlex?.reliable && (torsoFlex.severity === "moderate" || torsoFlex.severity === "mild"),
         `You're starting to slump — sit tall, hips back in the seat`, imp("torsoFlex", torsoFlex)),
     // Trunk twist — usually an off-centre monitor rather than a habit, so the
     // advice names the fix rather than telling the user to "sit better".
     add("twist_sev", trunkRot?.reliable && trunkRot.severity === "severe",
-        `⚠️ Torso twisted ${trunkRot.angle}° — square your chair to the screen instead of turning your body`),
+        `⚠️ Torso twisted ${trunkRot.angle}° — square your chair to the screen instead of turning your body`, imp("trunkRot", trunkRot)),
     add("twist_mid", trunkRot?.reliable && trunkRot.severity === "moderate",
-        `Sitting turned ${trunkRot.angle}° — centre your monitor so you don't have to twist`),
-    add("hand_prop", handProp?.detected, `Hand/object covering one ear — resting your chin on your hand hides real neck strain from being measured`),
+        `Sitting turned ${trunkRot.angle}° — centre your monitor so you don't have to twist`, imp("trunkRot", trunkRot)),
+    // Ranked high on purpose rather than left at the default 0: when a hand is
+    // covering an ear, roughly half the score's weight is unreliable, so this
+    // has to outrank the readings it invalidates instead of sorting below them.
+    add("hand_prop", handProp?.detected, `Hand/object covering one ear — resting your chin on your hand hides real neck strain from being measured`, 999),
   ];
   void _built;   // the add() calls above populate `items`; this array is unused
 
@@ -2785,7 +2787,11 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   }
 
   // Alerts
-  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev, handProp, torsoFlex, trunkRot }, distCm, lo, hi);
+  // `distance` was in buildAlerts' destructuring list but was never passed,
+  // so all three distance alerts scored imp("distance", undefined) = 0 and
+  // sank to the bottom of the "most costly first" sort. "Very close (28cm)"
+  // could never be the headline.
+  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance: { score: distSc }, shoulderElev, handProp, torsoFlex, trunkRot }, distCm, lo, hi);
 
   return {
     score:       overall,

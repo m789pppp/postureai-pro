@@ -3093,7 +3093,7 @@ function VoiceCoachSettings({ cs, isAr, lang, addToast }) {
 
   const preview = () => {
     const text = isAr ? "كده صوتي هيبقى وأنت بتستخدم المدرب الصوتي." : "This is how I'll sound during your voice coaching sessions.";
-    const ok = speakCoach(text, langKey, { force: true });
+    const ok = speakCoach(text, langKey, { preview: true });
     if (!ok) addToast?.(isAr ? "المتصفح ده مش بيدعم الأصوات" : "This browser doesn't support speech voices", "error");
   };
 

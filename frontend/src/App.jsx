@@ -49,7 +49,7 @@ import {
   Switch, SettingsRow, SettingsDivider,
 } from "./LiveUI.jsx";
 import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
-import { speakCoach, setVoiceCoachEnabled, stopSpeaking } from "./lib/voiceCoach.js";
+import { speakCoach, setVoiceCoachEnabled, stopSpeaking, isVoiceCoachEnabled } from "./lib/voiceCoach.js";
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
@@ -2766,7 +2766,14 @@ export default function App(){
   const[upgradeReason,setUpgradeReason]=useState("");
   const[showAcctSelect,setShowAcctSelect]=useState(false);
   const[showDeviceSelect,setShowDeviceSelect]=useState(false);
-  const[breakReminder,setBreakReminder]=useState(true);
+  // Persisted. It was `useState(true)` with no setter call anywhere in the
+  // codebase, so "remind me to take breaks" was a permanent, unreachable yes.
+  const[breakReminder,setBreakReminder]=useState(()=>{
+    try { return localStorage.getItem("corvus_break_reminder") !== "0"; } catch { return true; }
+  });
+  useEffect(()=>{
+    try { localStorage.setItem("corvus_break_reminder", breakReminder ? "1" : "0"); } catch {}
+  },[breakReminder]);
   const[breakReturnPage,setBreakReturnPage]=useState("live"); // where the break page returns to
   // Leaving Live for the break page unmounts the <video>, but nothing here used
   // to stop or pause anything: the camera tracks kept running (OS indicator
@@ -2782,7 +2789,16 @@ export default function App(){
     setBreakReturnPage(page==="break"?"live":page);
     setPage("break");
   },[page]);
-  const[breakIntervalMin,setBreakIntervalMin]=useState(25);
+  // Also persisted — it reset to 25 on every reload, so a user who chose 60
+  // was back to being interrupted every 25 minutes the next time they opened
+  // the app, with no indication their setting had been discarded.
+  const[breakIntervalMin,setBreakIntervalMin]=useState(()=>{
+    try { const v = parseInt(localStorage.getItem("corvus_break_interval")||"25",10);
+          return [15,25,45,60,90].includes(v) ? v : 25; } catch { return 25; }
+  });
+  useEffect(()=>{
+    try { localStorage.setItem("corvus_break_interval", String(breakIntervalMin)); } catch {}
+  },[breakIntervalMin]);
   const[showDashboard,setShowDashboard]=useState(false);
 
   // Calibration (personal baseline)
@@ -2846,7 +2862,8 @@ export default function App(){
   const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 6000);
 
   // Break timer
-  const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } = useBreakTimer(breakIntervalMin, breakReminder);
+  const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } =
+    useBreakTimer(breakIntervalMin, breakReminder && camActive && !isPaused);
 
   // Sound feedback
   const[muted,setMuted]=useState(false);
@@ -2862,7 +2879,9 @@ export default function App(){
   // way to silence it at all once break reminders were disabled. `muted`
   // itself is left as-is: it still correctly gates BreakPage's own sounds
   // and the break-reminder chime (see the showBreak effect above).
-  const { alertIfNeeded } = useSoundFeedback(!sound);
+  // `alertIfNeeded` was the score<60 beep removed from the frame loop
+  // below; the hook is still used for playSuccessChime elsewhere.
+  useSoundFeedback(!sound);
   const { update: updatePainPrediction, reset: resetPainPrediction } = usePainPrediction();
 
   // Pro-tier Custom Alert Rules — sync local copy once profile loads/changes
@@ -2875,6 +2894,10 @@ export default function App(){
         ? `⚠️ ${label} تعدّى ${rule.thresholdDeg}° لأكتر من ${Math.round(rule.durationSec/60)} دقيقة`
         : `⚠️ ${label} exceeded ${rule.thresholdDeg}° for over ${Math.round(rule.durationSec/60)} min`;
       addToast(msg,"warn");
+      // Was {force:true}, which bypassed the Elite entitlement as well as the
+      // cooldown — a Pro user with a voice rule got spoken alerts they had not
+      // paid for. A custom rule is a legitimate reason to skip the 25s rate
+      // limit (the user asked for this specific alert), not to skip the gate.
       if(rule.voice) speakCoach(msg, isAr?"ar":"en", {force:true});
     },
   });
@@ -3952,7 +3975,18 @@ export default function App(){
             // Score pipeline: buffer(60frames) → calibration → EMA smoother → UI
             const smoothed1=pushScore(finalResult.overall);
             const displayScore = smoothed1 ?? finalResult.overall;
-            alertIfNeeded(displayScore);
+            // A SECOND beep system used to fire here: useSoundFeedback calls
+            // playPostureAlert() on every frame where the score is under 60, on
+            // its own 45s cooldown, with no idea which fault is responsible and
+            // no per-cause backoff. It ran in parallel with the cause-based
+            // alert path below, so a user sitting below 60 got that beep every
+            // 45 seconds PLUS whatever the cause path did — two independent
+            // sounds for one posture, which is the noise complaint in
+            // miniature and defeats the channel arbitration below.
+            //
+            // Removed rather than gated: a raw score threshold has nothing to
+            // add over a path that knows the cause, escalates per cause, and
+            // now picks exactly one channel per event.
             checkCustomAlertRules(finalResult.metrics);
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
@@ -4096,7 +4130,7 @@ export default function App(){
                   // Cause key drives the per-cause cooldown below; collapse the
                   // engine's severity suffixes so "fhp_sev" and "fhp_mid" are
                   // one cause and cannot alternate past the cooldown.
-                  causeKey = String(_top.key||"posture").replace(/_(sev|mid|cl|c|f|hi|lo|calib_tip)$/,"");
+                  causeKey = String(_top.key||"posture").replace(/_(sev|mid|cl|c|f|hi|lo|low|prop|calib_tip)$/,"");
                   msg = _top.text;
                   // The engine emits one language; the Arabic UI keeps the
                   // localised fallback rather than showing English mid-session.
@@ -4126,13 +4160,35 @@ export default function App(){
                     setStreakAlert(true);
                   }
                   setAlerts([...alRef.current]);setAlertMsg({text:displayMsg,type:"warn"});
-                  if(sound)playBeep(sev);
-                  speakCoach(displayMsg, isAr?"ar":"en"); // no-op unless Elite + toggle on
+
+                  // Channel arbitration. Exactly one thing speaks per event.
+                  //
+                  //   tab hidden        -> OS notification (nothing on screen
+                  //                        is being looked at)
+                  //   voice available   -> speak it; the banner already carries
+                  //                        the text, so a beep on top is a
+                  //                        third copy of one message
+                  //   otherwise         -> a beep, and only for severe/moderate
+                  //
+                  // The banner and the alert log are not channels in this sense
+                  // — they are silent, on-screen, and dismissible by looking
+                  // away. The noisy ones are the three below.
+                  const tabHidden = typeof document !== "undefined" && document.hidden;
+                  const voiceOn   = isVoiceCoachEnabled();
+                  if(tabHidden){
+                    sendDesktopNotif(msg,finalResult.overall);
+                  } else if(voiceOn){
+                    speakCoach(displayMsg, isAr?"ar":"en");
+                  } else if(sound && sev !== "mild"){
+                    // Mild faults get the banner only. A beep for every small
+                    // drift is what trains people to ignore the beep.
+                    playBeep(sev);
+                  }
+
                   // Smart permission: show in-app card after first real alert
                   if("Notification" in window && Notification.permission==="default"){
                     setShowNotifCard(true);
                   }
-                  sendDesktopNotif(msg,finalResult.overall);
                 }
                 } // close if(_cool)
               } // close else if(badRef>15000)
@@ -4271,7 +4327,10 @@ export default function App(){
                 if(now-lastAlRef.current>_cool){
                 lastAlRef.current=now;acRef.current.total++;
                 // Per-cause exponential backoff (same as local MP loop)
-                const causeKeyBE = result.alerts?.[0]?.slice(0,30) || "posture";
+                // Strip the digits so one fault is one cause however its
+                // numbers drift; then collapse to a short stable key.
+                const causeKeyBE = (result.alerts?.[0] || "posture")
+                  .toLowerCase().replace(/[\d.]+\s*(cm|°|deg|%)?/g, "").replace(/\s+/g, " ").trim().slice(0, 24) || "posture";
                 const causeEntryBE = alertCauseRef.current[causeKeyBE] || { last: 0, count: 0 };
                 const causeCoolBE = causeEntryBE.count === 0 ? 5*60*1000 : causeEntryBE.count === 1 ? 10*60*1000 : 20*60*1000;
                 if(now - causeEntryBE.last > causeCoolBE){
@@ -4282,9 +4341,16 @@ export default function App(){
                 setAlertCounts({...acRef.current});
                 alRef.current=[{time:new Date().toLocaleTimeString(),msg:msgFb,score:smoothed},...alRef.current].slice(0,20);
                 setAlerts([...alRef.current]);setAlertMsg({text:msgFb,type:"warn"});
-                if(sound)playBeep();
-                speakCoach(msgFb, isAr?"ar":"en"); // no-op unless Elite + toggle on
-                sendDesktopNotif(msgFb,smoothed);
+                // One channel per event — see the arbitration note in the local
+                // MediaPipe loop above. This path had the same banner + beep +
+                // speech + OS-notification pile-up.
+                {
+                  const _sevFb = smoothed<40?"severe":smoothed<55?"moderate":"mild";
+                  const _hidden = typeof document !== "undefined" && document.hidden;
+                  if(_hidden) sendDesktopNotif(msgFb,smoothed);
+                  else if(isVoiceCoachEnabled()) speakCoach(msgFb, isAr?"ar":"en");
+                  else if(sound && _sevFb !== "mild") playBeep(_sevFb);
+                }
                 } // close per-cause backoff
                 } // close if(_cool)
               } // close else if(badRef>15000)
@@ -4318,7 +4384,7 @@ export default function App(){
         });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,alertIfNeeded,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles]);
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles]);
 
   // Keep the analysis loop bound to the latest state. runLoop is a useCallback
   // whose identity changes when mode / sound / faceBlur / calib change; without
@@ -5579,7 +5645,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
   if(page==="embed")return <EmbedWidget/>;
   if(page==="break")return(
     <ErrorBoundary>
-      <BreakPage cs={cs} lang={lang} muted={muted} onExit={()=>setPage(breakReturnPage||"live")}/>
+      <BreakPage cs={cs} lang={lang} muted={muted}
+        alertCauses={(alRef.current||[]).map(a=>a?.cause).filter(Boolean)}
+        onExit={()=>setPage(breakReturnPage||"live")}/>
     </ErrorBoundary>
   );
 
@@ -6076,6 +6144,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
               stepsAr:["ابعد عن الشاشة بطول ذراعك (50–70 سم)","كبّر حجم الخط عشان متحتاجش تقرب","استخدم اختصار التكبير: Ctrl/⌘ + عشان تقلل رغبتك في الميل للأمام"], img:"📏"},
     posture: {icon:"🪑", steps:["Sit back fully — use lumbar support or rolled towel","Feet flat on floor, knees at 90°","Relax shoulders down and back"],
               stepsAr:["اتكي على الكرسي بالكامل — استخدم مسند لأسفل الظهر أو فوطة ملفوفة","رجليك تلامسوا الأرض بالكامل، والركب بزاوية 90°","ارخي كتفيك لأسفل وللخلف"], img:"🪑"},
+    fhp:     {icon:"⬅️", steps:["Tuck your chin straight back — make a double chin, don't tip your head down","Raise the monitor so its top edge is at eye level","Sit back so the chair supports you instead of hovering forward"],
+              stepsAr:["ارجع بذقنك لورا في خط مستقيم — اعمل دقن مزدوجة، متنزلش راسك","ارفع الشاشة لحد ما حرفها العلوي يبقى في مستوى عينك","ارجع لورا وخلي الكرسي يشيلك بدل ما تكون مايل لقدام"], img:"⬅️"},
+    round:   {icon:"🤸", steps:["Draw your shoulder blades together and down, as if holding a pencil between them","Open the chest: clasp your hands low behind your back and lift","Move the keyboard closer so you stop reaching for it"],
+              stepsAr:["قرّب لوحي كتفيك من بعض ولتحت، كأنك ماسك قلم بينهم","افتح صدرك: شبّك إيديك ورا ظهرك من تحت وارفع","قرّب الكيبورد ناحيتك عشان تبطل تمدّ دراعك"], img:"🤸"},
+    shrug:   {icon:"⬇️", steps:["Let both shoulders drop — exhale and feel them settle","Lower the armrests, or move them in so your elbows rest without lifting","Check the desk height: a high desk keeps the traps switched on all day"],
+              stepsAr:["سيب كتفيك ينزلوا — ازفر وحسّ بيهم بيرتاحوا","نزّل مساند الدراع، أو قرّبهم عشان كوعك يرتاح من غير رفع","بُص لارتفاع المكتب: المكتب العالي بيخلّي عضلات الكتف شغالة طول اليوم"], img:"⬇️"},
+    spine:   {icon:"⚖️", steps:["Sit centred — weight even on both sit bones","Move whatever you're reaching for (mouse, phone, notes) closer","If you rest on one armrest, level both or use neither"],
+              stepsAr:["اقعد في النص — وزنك متوزّع على الجنبين بالتساوي","قرّب الحاجة اللي بتمدّ ناحيتها (الماوس، الموبايل، الورق)","لو بتتكي على مسند واحد، ظبّط الاتنين أو سيبهم"], img:"⚖️"},
+    slouch:  {icon:"🪑", steps:["Stack your ribs over your hips — think 'grow taller', not 'pull shoulders back'","Slide your hips all the way into the seat back","Raise the screen: slouching is often the body following a low monitor"],
+              stepsAr:["حط قفصك الصدري فوق حوضك — فكّر إنك بتطوّل، مش بتشد كتفك لورا","زقّ حوضك لآخر الكرسي من ورا","ارفع الشاشة: الترهّل غالباً الجسم بيتبع شاشة واطية"], img:"🪑"},
+    twist:   {icon:"🔄", steps:["Square your chair to the screen instead of turning your body","Centre the monitor you look at most — a side monitor twists you all day","Move the phone or documents you keep turning to"],
+              stepsAr:["ظبّط كرسيك في مواجهة الشاشة بدل ما تلف جسمك","حط الشاشة اللي بتبص عليها أكتر في النص — الشاشة الجانبية بتلفّك طول اليوم","حرّك الموبايل أو الورق اللي بتلف ناحيته"], img:"🔄"},
+    mon:     {icon:"🔼", steps:["Raise the monitor until its top edge is level with your eyes","A stack of books works; a stand works better","If you're looking down at a phone or notes rather than the screen, keep it short"],
+              stepsAr:["ارفع الشاشة لحد ما حرفها العلوي يبقى في مستوى عينك","كذا كتاب فوق بعض بيعملها؛ الاستاند أحسن","لو بتبص لموبايل أو ورق مش للشاشة، خليها فترة قصيرة"], img:"🔼"},
+    elbow:   {icon:"⌨️", steps:["Set the keyboard so your elbows sit at 90-100° with forearms level","Lower the desk or raise the chair — whichever you can actually adjust","If the chair goes up, add a footrest so your feet stay flat"],
+              stepsAr:["ظبّط الكيبورد بحيث كوعك يبقى ٩٠°-١٠٠° والساعد أفقي","نزّل المكتب أو ارفع الكرسي — أي واحد فيهم تقدر تظبطه","لو رفعت الكرسي، حط مسند رجل عشان رجليك تفضل على الأرض"], img:"⌨️"},
+    tilt:    {icon:"↕️", steps:["Level your head — both ears the same height","Check chair and armrest height: an uneven rest tips the head","If you cradle a phone against your shoulder, use a headset"],
+              stepsAr:["ظبّط راسك — الودنين في نفس المستوى","بُص لارتفاع الكرسي والمساند: المسند غير المستوي بيميّل الراس","لو بتحط الموبايل بين كتفك وودنك، استخدم سماعة"], img:"↕️"},
+    sh:      {icon:"⚖️", steps:["Level both shoulders — check whether one armrest sits higher","Move anything you reach for repeatedly to the centre","A bag or wallet in one back pocket tilts the whole chain — take it out"],
+              stepsAr:["ظبّط الكتفين في نفس المستوى — شوف لو مسند دراع أعلى من التاني","حط أي حاجة بتمدّ ناحيتها كتير في النص","محفظة أو حاجة في جيب واحد بتميّل الجسم كله — طلّعها"], img:"⚖️"},
+    hand:    {icon:"🤚", steps:["Take your hand off your face — propping your chin hides real neck strain from the camera","If you're leaning into your hand because you're tired, that's the signal to take the break","Rest both forearms on the desk instead"],
+              stepsAr:["شيل إيدك من على وشك — سند الدقن بيخفي إجهاد الرقبة الحقيقي عن الكاميرا","لو بتتكي على إيدك عشان تعبان، دي إشارة إنك محتاج استراحة","سيب ساعديك الاتنين على المكتب بدلها"], img:"🤚"},
     default: {icon:"✅", steps:["Take a 2-minute stretch break","Roll shoulders backward 5 times","Stand up and walk for 60 seconds"],
               stepsAr:["خذ استراحة تمدد لمدة دقيقتين","لف كتفيك للخلف 5 مرات","قوم امشي لمدة 60 ثانية"], img:"🚶"},
   };
@@ -8310,7 +8400,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   setVoiceCoach(v=>{
                     const nv=!v;
                     try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
-                    if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{force:true});
+                    if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{preview:true});
                     else stopSpeaking();
                     return nv;
                   });
@@ -8410,12 +8500,25 @@ async function downloadPDF(sessionOverride, isClinical=false){
               padding:"0 6px 0 12px",height:36,
             }}>
               <span style={{fontSize:11,color:cs.muted,whiteSpace:"nowrap"}}>{isAr?"استراحة كل":"Break every"}</span>
-              <select value={breakIntervalMin} onChange={e=>setBreakIntervalMin(Number(e.target.value))}
+              {/* The interval picker was the only break control and it had no
+                  "off". The reminder itself was hardcoded on with no setter
+                  anywhere in the codebase, so a user who did not want it had
+                  nowhere to go. "Off" is now a value of the same control, which
+                  is where someone would look for it. */}
+              <select value={breakReminder?breakIntervalMin:0}
+                onChange={e=>{
+                  const v=Number(e.target.value);
+                  if(v===0){ setBreakReminder(false); }
+                  else { setBreakReminder(true); setBreakIntervalMin(v); }
+                }}
                 className="liveui-focusable"
                 style={{
                   background:"transparent",border:"none",color:cs.text,fontSize:12,fontWeight:700,
                   cursor:"pointer",outline:"none",textAlign:isAr?"left":"right",
                 }}>
+                <option value={0} style={{background:cs.bg,color:cs.text}}>
+                  {isAr?"مقفول":"Off"}
+                </option>
                 {[15,25,45,60,90].map(m=>(
                   <option key={m} value={m} style={{background:cs.bg,color:cs.text}}>
                     {isAr?`${m} دقيقة`:`${m} min`}
