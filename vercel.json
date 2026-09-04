@@ -139,10 +139,6 @@
       "dest": "/api/misc.js"
     },
     {
-      "src": "/api/gamification/compute",
-      "dest": "/api/misc.js"
-    },
-    {
       "src": "/api/announcements",
       "dest": "/api/misc.js"
     },

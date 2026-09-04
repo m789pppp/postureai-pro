@@ -18,7 +18,11 @@ export function getCurrentSeason(now = new Date()) {
   const qStartMonth = qIndex * 3;
   const start = new Date(y, qStartMonth, 1, 0, 0, 0, 0);
   const end = new Date(y, qStartMonth + 3, 0, 23, 59, 59, 999);
-  const totalDays = Math.round((end - start) / 86400000) + 1;
+  // NOT `+ 1`: `end - start` is already (days-1) + 23:59:59.999, which rounds
+  // to the true day count. The extra day made every quarter one longer than it
+  // is, so `daysElapsed` capped at totalDays-1 and the season bar read 99% on
+  // the last day of every quarter instead of completing.
+  const totalDays = Math.round((end - start) / 86400000);
   const daysElapsed = Math.min(totalDays, Math.floor((now - start) / 86400000) + 1);
   const daysRemaining = Math.max(0, Math.round((end - now) / 86400000));
   const quarterLabel = ["Q1","Q2","Q3","Q4"][qIndex];
@@ -37,7 +41,7 @@ const SEASON_TIERS = [
   { id:"gold",   icon:"🥇", minSessions:30, minAvg:75, label:{en:"Gold",ar:"ذهبي"} },
 ];
 
-export function SeasonProgress({ sessions, cs, lang = "en" }) {
+export function SeasonProgress({ sessions, cs, lang = "en", sessionsCapped = false }) {
   const DARK = cs || { border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", card: "#05101f" };
   const isAr = lang === "ar";
   const season = getCurrentSeason();
@@ -50,6 +54,13 @@ export function SeasonProgress({ sessions, cs, lang = "en" }) {
   const seasonAvg = seasonCount
     ? Math.round(seasonSessions.reduce((a, s) => a + (s.avg_score || 0), 0) / seasonCount)
     : 0;
+
+  // `sessions` is the limit(50) query, not the user's history. Someone with 80
+  // sessions this quarter is told they have 50, and the Gold tier ("30+
+  // sessions") looks unreachable to exactly the heavy users who have already
+  // cleared it. The count is a floor, not a total, and the panel says so
+  // instead of quietly presenting a truncated number as complete.
+  const countIsFloor = sessionsCapped && seasonCount >= (sessions?.length || 0);
 
   const currentTierIdx = SEASON_TIERS.reduce((acc, tier, i) =>
     (seasonCount >= tier.minSessions && seasonAvg >= tier.minAvg) ? i : acc, -1);
@@ -80,8 +91,13 @@ export function SeasonProgress({ sessions, cs, lang = "en" }) {
       {/* Season stats */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
         <div style={{ background:"rgba(148,163,184,.04)", border:`0.5px solid ${DARK.border}`, borderRadius:10, padding:"12px 14px" }}>
-          <div style={{ fontSize:20, fontWeight:800, color:DARK.text }}>{seasonCount}</div>
+          <div style={{ fontSize:20, fontWeight:800, color:DARK.text }}>{countIsFloor ? `${seasonCount}+` : seasonCount}</div>
           <div style={{ fontSize:10, color:DARK.muted, marginTop:2 }}>{t.sessionsThisSeason}</div>
+          {countIsFloor && (
+            <div style={{ fontSize:8.5, color:DARK.muted, marginTop:3, lineHeight:1.4 }}>
+              {isAr ? "آخر ٥٠ جلسة بس محمّلة" : "only the last 50 loaded"}
+            </div>
+          )}
         </div>
         <div style={{ background:"rgba(148,163,184,.04)", border:`0.5px solid ${DARK.border}`, borderRadius:10, padding:"12px 14px" }}>
           <div style={{ fontSize:20, fontWeight:800, color: seasonAvg>=75?"#10b981":seasonAvg>=50?"#f59e0b":DARK.text }}>{seasonCount ? seasonAvg : "—"}</div>
@@ -127,9 +143,16 @@ const LEVEL_COLORS = [
 ];
 
 // ── XP Progress Bar ───────────────────────────────────────────────
-export function XPBar({ xp, level, xpCurrent, xpNext, levelLabel, cs }) {
-  const pct = xpNext ? Math.round((xpCurrent / xpNext) * 100) : 0;
-  const col  = LEVEL_COLORS[Math.min(level - 1, 9)];
+export function XPBar({ xp, level, xpCurrent, xpNext, levelLabel, cs, lang = "en" }) {
+  const isAr = lang === "ar";
+  // Guarded so a missing field can never render a FULL bar. `width: "NaN%"` is
+  // an invalid CSS length: the browser drops the declaration and the inner
+  // block element expands to fill its track, so an undefined xpCurrent showed
+  // every user a completed level, forever.
+  const _cur  = Number.isFinite(xpCurrent) ? xpCurrent : null;
+  const _next = Number.isFinite(xpNext) && xpNext > 0 ? xpNext : null;
+  const pct = (_cur != null && _next != null) ? Math.max(0, Math.min(100, Math.round((_cur / _next) * 100))) : 0;
+  const col  = LEVEL_COLORS[Math.min(Math.max((level || 1) - 1, 0), 9)];
   return (
     <div style={{ padding: "12px 14px", background: "rgba(148,163,184,.05)", border: `0.5px solid ${cs?.border || "rgba(148,163,184,.1)"}`, borderRadius: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -137,7 +160,7 @@ export function XPBar({ xp, level, xpCurrent, xpNext, levelLabel, cs }) {
           <div style={{ width: 28, height: 28, borderRadius: "50%", background: col, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "white" }}>{level}</div>
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: cs?.text || "#f0f4f8" }}>{levelLabel}</div>
-            <div style={{ fontSize: 9, color: cs?.muted || "#64748b" }}>Level {level}</div>
+            <div style={{ fontSize: 9, color: cs?.muted || "#64748b" }}>{isAr ? `المستوى ${level}` : `Level ${level}`}</div>
           </div>
         </div>
         <div style={{ fontSize: 11, color: cs?.muted || "#64748b" }}>{(xp||0).toLocaleString()} XP</div>
@@ -145,20 +168,24 @@ export function XPBar({ xp, level, xpCurrent, xpNext, levelLabel, cs }) {
       <div style={{ background: "rgba(148,163,184,.1)", borderRadius: 99, height: 5, overflow: "hidden" }}>
         <div style={{ height: "100%", borderRadius: 99, width: `${pct}%`, background: col, transition: "width .8s ease" }} />
       </div>
-      <div style={{ fontSize: 9, color: cs?.muted || "#64748b", marginTop: 4, textAlign: "right" }}>{xpCurrent}/{xpNext} XP to next level</div>
+      <div style={{ fontSize: 9, color: cs?.muted || "#64748b", marginTop: 4, textAlign: "right" }}>
+        {(_cur != null && _next != null)
+          ? (isAr ? `${_cur}/${_next} نقطة للمستوى التالي` : `${_cur}/${_next} XP to next level`)
+          : "—"}
+      </div>
     </div>
   );
 }
 
 // ── Streak Display ────────────────────────────────────────────────
-export function StreakDisplay({ streak, cs }) {
+export function StreakDisplay({ streak, cs, lang = "en" }) {
   const fire = streak >= 7 ? "🔥" : streak >= 3 ? "✨" : "⚡";
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", padding: "8px 12px", background: "rgba(245,158,11,.08)", border: "0.5px solid rgba(245,158,11,.2)", borderRadius: 10 }}>
       <span style={{ fontSize: 20 }}>{fire}</span>
       <div>
         <div style={{ fontSize: 16, fontWeight: 800, color: "#f59e0b" }}>{streak}</div>
-        <div style={{ fontSize: 9, color: cs?.muted || "#64748b" }}>day streak</div>
+        <div style={{ fontSize: 9, color: cs?.muted || "#64748b" }}>{lang === "ar" ? "يوم متتالي" : "day streak"}</div>
       </div>
     </div>
   );
@@ -215,7 +242,9 @@ export function WeeklyChallengeCard({ wc, cs, lang = "en" }) {
 }
 
 // ── Achievement Badge ─────────────────────────────────────────────
-function AchievementBadge({ ach, earned, isNew, cs }) {
+// The backend ships `name_ar` for every achievement and this rendered
+// `name` regardless — a fully bilingual payload discarded at the last step.
+function AchievementBadge({ ach, earned, isNew, cs, lang = "en" }) {
   return (
     <div style={{
       background: earned ? "rgba(99,102,241,.08)" : "rgba(148,163,184,.04)",
@@ -228,7 +257,7 @@ function AchievementBadge({ ach, earned, isNew, cs }) {
         <div style={{ position: "absolute", top: -6, right: -6, background: "#ef4444", color: "white", fontSize: 8, fontWeight: 700, padding: "2px 6px", borderRadius: 99 }}>NEW</div>
       )}
       <div style={{ fontSize: 24, marginBottom: 4, filter: earned ? "none" : "grayscale(1)" }}>{ach.icon}</div>
-      <div style={{ fontSize: 10, fontWeight: 600, color: earned ? (cs?.text || "#f0f4f8") : (cs?.muted || "#64748b"), lineHeight: 1.3 }}>{ach.name}</div>
+      <div style={{ fontSize: 10, fontWeight: 600, color: earned ? (cs?.text || "#f0f4f8") : (cs?.muted || "#64748b"), lineHeight: 1.3 }}>{(lang === "ar" && ach.name_ar) || ach.name}</div>
       <div style={{ fontSize: 9, color: "#6366f1", marginTop: 3 }}>+{ach.xp} XP</div>
     </div>
   );
@@ -239,6 +268,7 @@ export function PostureHeatmap({ sessions, cs, lang = "en" }) {
   const [data, setData]         = useState(null);
   const [loading, setLoading]   = useState(false);
   const [activeHour, setHour]   = useState(null);
+  const [err, setErr]           = useState("");
 
   const load = useCallback(async () => {
     if (!sessions?.length) return;
@@ -247,16 +277,29 @@ export function PostureHeatmap({ sessions, cs, lang = "en" }) {
       const d = await apiFetch("/analytics/heatmap", {
         method: "POST",
         body: {
+          // Negated: getTimezoneOffset() returns minutes to ADD to local to get
+          // UTC, so Cairo (UTC+2) reports -120. The server wants the other sign.
+          tz_offset_min: -new Date().getTimezoneOffset(),
           sessions: sessions.map(s => ({
-            avg_score:      s.avg_score || 0,
+            avg_score:      s.avg_score ?? null,
             created_at_iso: s.created_at?.toDate?.()?.toISOString() || s.created_at_iso || null,
           })),
         },
       });
       setData(d);
-    } catch {}
+      setErr("");
+    } catch (e) {
+      // A 403 (wrong tier), a 500 or a timeout used to be swallowed and render
+      // as "Complete more sessions to see your heatmap" — telling the user the
+      // problem is their behaviour when the problem is ours.
+      setErr(e?.message || "load_failed");
+    }
     finally { setLoading(false); }
-  }, [sessions]);
+    // Keyed on the COUNT, not the array: `sessions` gets a new identity on every
+    // Firestore snapshot, and this re-ran the POST each time for a chart whose
+    // only input is that same set of sessions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions?.length]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -267,7 +310,15 @@ export function PostureHeatmap({ sessions, cs, lang = "en" }) {
 
   if (loading) return (
     <div style={{ padding: 20, textAlign: "center" }}>
-      <div style={{ fontSize: 11, color: DARK.muted }}>Loading heatmap…</div>
+      <div style={{ fontSize: 11, color: DARK.muted }}>{lang === "ar" ? "جاري تحميل الخريطة…" : "Loading heatmap…"}</div>
+    </div>
+  );
+
+  if (err) return (
+    <div style={{ padding: 20, textAlign: "center" }}>
+      <div style={{ fontSize: 11, color: "#f87171", lineHeight: 1.7 }}>
+        {lang === "ar" ? "تعذر تحميل الخريطة — جرّب تاني" : "Couldn't load the heatmap — try again"}
+      </div>
     </div>
   );
 
@@ -348,8 +399,10 @@ export function PostureHeatmap({ sessions, cs, lang = "en" }) {
 
       {/* Legend */}
       <div style={{ display: "flex", gap: 10, marginTop: 12, alignItems: "center" }}>
-        <span style={{ fontSize: 9, color: DARK.muted }}>Score:</span>
-        {[["Poor <50", "#ef4444"], ["Fair 50-75", "#f59e0b"], ["Good 75+", "#10b981"]].map(([l, c]) => (
+        <span style={{ fontSize: 9, color: DARK.muted }}>{lang==="ar"?"الدرجة:":"Score:"}</span>
+        {(lang==="ar"
+          ? [["ضعيف <50", "#ef4444"], ["مقبول 50-75", "#f59e0b"], ["جيد 75+", "#10b981"]]
+          : [["Poor <50", "#ef4444"], ["Fair 50-75", "#f59e0b"], ["Good 75+", "#10b981"]]).map(([l, c]) => (
           <div key={l} style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
             <span style={{ fontSize: 9, color: DARK.muted }}>{l}</span>
@@ -361,28 +414,63 @@ export function PostureHeatmap({ sessions, cs, lang = "en" }) {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────
-export function Leaderboard({ employees, companyName, cs, lang = "en" }) {
+// `employees` is deliberately NOT a prop any more: passing the client's copy of
+// the roster in is what let the raw user documents reach the wire in the first
+// place.
+export function Leaderboard({ companyName, cs, lang = "en" }) {
   const [data, setData]   = useState(null);
   const [loading, setLoading] = useState(false);
   const [view, setView]   = useState("individual"); // individual | department
 
   const DARK = cs || { border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b", card: "#05101f" };
-  const T = { en: { title: "Company Leaderboard", dep: "Departments", ind: "Individuals", week: "This week", champion: "Posture Champion" }, ar: { title: "لوحة الشرف", dep: "الأقسام", ind: "الأفراد", week: "هذا الأسبوع", champion: "بطل الوضعية" } };
+  // "This week" was a lie: the ranking is each user's lifetime avg_score from
+  // their profile, and the `period: "week"` the client sent was echoed back
+  // unused by the server. The label now says what the numbers are.
+  const T = { en: { title: "Company Leaderboard", dep: "Departments", ind: "Individuals", week: "All time", champion: "Posture Champion" }, ar: { title: "لوحة الشرف", dep: "الأقسام", ind: "الأفراد", week: "كل الوقت", champion: "بطل الوضعية" } };
   const t = T[lang] || T.en;
 
+  const [err, setErr] = useState("");
   useEffect(() => {
-    if (!employees?.length) return;
     setLoading(true);
-    apiFetch("/gamification/leaderboard", {
-      method: "POST",
-      body:   { employees, period: "week" },
-    }).then(d => setData(d)).catch(() => {}).finally(() => setLoading(false));
-  }, [employees]);
+    // The roster is NOT sent any more. This used to POST the raw Firestore user
+    // documents the client had already fetched — names, emails, tiers, up to
+    // 500 of them — and the server ranked whatever it was given. The server now
+    // reads its own roster from the caller's company and applies the same
+    // aggregate_only default and k-anonymity floor as /api/company/dashboard.
+    apiFetch("/gamification/leaderboard", { method: "POST", body: { period: "all" } })
+      .then(d => { setData(d); setErr(""); })
+      // A failed request used to leave `data` null, which renders as "No
+      // employee data available" — a 403, a 500 and an empty company were
+      // indistinguishable.
+      .catch(e => setErr(e?.message || "load_failed"))
+      .finally(() => setLoading(false));
+  }, []);
 
   const sc = v => v >= 75 ? "#10b981" : v >= 50 ? "#f59e0b" : "#ef4444";
 
-  if (loading) return <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: DARK.muted }}>Computing rankings…</div>;
-  if (!data)   return <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: DARK.muted }}>No employee data available</div>;
+  if (loading) return <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: DARK.muted }}>{lang==="ar"?"جاري الحساب…":"Computing rankings…"}</div>;
+  if (err)     return <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: "#f87171" }}>
+    {lang==="ar"?"تعذر تحميل لوحة الشرف — جرّب تاني":"Couldn't load the leaderboard — try again"}
+  </div>;
+  if (!data)   return <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: DARK.muted }}>{lang==="ar"?"مفيش بيانات":"No employee data available"}</div>;
+
+  // A personal account has no colleagues to be compared with — that is a
+  // different thing from "your group is too small to show safely", and saying
+  // the second to someone who means the first is just confusing. (This branch
+  // also used to interpolate an absent min_group_size and render the literal
+  // word "undefined" into the sentence.)
+  if (data.reason === "no_company" || data.reason === "empty_roster") return (
+    <div style={{ padding: 24, textAlign: "center", fontSize: 11, color: DARK.muted, lineHeight: 1.8 }}>
+      {lang==="ar"
+        ? "لوحة الشرف بتقارن بينك وبين زمايلك في نفس الشركة — حسابك دلوقتي شخصي، فمفيش مقارنة."
+        : "The leaderboard compares you with colleagues in the same company — this is a personal account, so there is nothing to compare against."}
+    </div>
+  );
+  if (data.reason === "backend_unavailable") return (
+    <div style={{ padding: 24, textAlign: "center", fontSize: 11, color: "#f87171", lineHeight: 1.8 }}>
+      {lang==="ar" ? "تعذر تحميل لوحة الشرف — جرّب تاني" : "Couldn't load the leaderboard — try again"}
+    </div>
+  );
 
   return (
     <div>
@@ -400,38 +488,90 @@ export function Leaderboard({ employees, companyName, cs, lang = "en" }) {
         </div>
       </div>
 
-      {view === "individual" ? (
+      {/* Aggregate mode: no names, no per-person rows, and nothing at all below
+          the k-anonymity floor — "3rd of 4" plus a company average lets you
+          reconstruct individuals by subtraction. The server decides; this just
+          renders what it is allowed to show. */}
+      {data.aggregate_only && view === "individual" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {data.leaderboard?.[0]?.aggregate ? (
+            <div style={{ padding: "14px 16px", background: "rgba(148,163,184,.05)", border: `0.5px solid ${DARK.border}`, borderRadius: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, color: DARK.muted }}>{lang==="ar"?"متوسط الشركة":"Company average"}</span>
+                <span style={{ fontSize: 15, fontWeight: 700, color: sc(data.leaderboard[0].company_avg) }}>{data.leaderboard[0].company_avg}</span>
+              </div>
+              {/* Absent below 20 participants: with fewer, the "decile" index
+                  lands on the single highest individual's average, which is
+                  one named person's score published by the mode that promises
+                  not to show individual scores. */}
+              {data.leaderboard[0].top_decile != null && (
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: DARK.muted }}>{lang==="ar"?"أعلى 10%":"Top 10%"}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: DARK.text }}>{data.leaderboard[0].top_decile}</span>
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: DARK.muted }}>
+                {lang==="ar"?`${data.leaderboard[0].participants} زميل سجّلوا جلسات`:`${data.leaderboard[0].participants} colleagues with recorded sessions`}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: 20, textAlign: "center", fontSize: 11, color: DARK.muted, lineHeight: 1.7 }}>
+              {lang==="ar"
+                ? `المجموعة أصغر من ${data.min_group_size} أشخاص، فمش هنعرض مقارنة — الأرقام كانت هتدل على أفراد بعينهم.`
+                : `Fewer than ${data.min_group_size} colleagues have recorded sessions, so no comparison is shown — the numbers would identify individuals.`}
+            </div>
+          )}
+          {data.my_avg_score != null && (
+            <div style={{ padding: "12px 16px", background: "rgba(26,86,219,.06)", border: "0.5px solid rgba(26,86,219,.25)", borderRadius: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: DARK.muted }}>{lang==="ar"?"درجتك":"Your score"}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: sc(data.my_avg_score) }}>{data.my_avg_score}</span>
+            </div>
+          )}
+          <div style={{ fontSize: 9.5, color: DARK.muted, textAlign: "center", lineHeight: 1.6 }}>
+            {lang==="ar"
+              ? "شركتك مضبوطة على وضع الأرقام المجمّعة — مفيش أسماء ولا درجات أفراد."
+              : "Your company is set to aggregate reporting — no names, no individual scores."}
+          </div>
+        </div>
+      ) : view === "individual" ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {data.leaderboard.slice(0, 10).map((emp, i) => (
+          {(data.leaderboard || []).slice(0, 10).map((emp, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: i === 0 ? "rgba(251,191,36,.06)" : "rgba(148,163,184,.04)", border: `0.5px solid ${i === 0 ? "rgba(251,191,36,.2)" : DARK.border}`, borderRadius: 10 }}>
               <div style={{ width: 28, textAlign: "center", fontSize: i < 3 ? 18 : 12, fontWeight: 700, color: i === 0 ? "#fbbf24" : i === 1 ? "#94a3b8" : i === 2 ? "#cd7c2f" : DARK.muted }}>
                 {emp.medal || emp.rank}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: DARK.text }}>{emp.name}</div>
-                <div style={{ fontSize: 10, color: DARK.muted }}>{emp.department} · {emp.sessions_count} sessions</div>
+                <div style={{ fontSize: 10, color: DARK.muted }}>{emp.department} · {emp.sessions_count} {lang==="ar"?"جلسة":"sessions"}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: sc(emp.avg_score) }}>{emp.avg_score}</div>
-                <div style={{ fontSize: 9, color: DARK.muted }}>{emp.grade}</div>
+                <div style={{ fontSize: 9, color: DARK.muted }}>{lang==="ar" ? ({Excellent:"ممتاز",Good:"جيد",Fair:"مقبول",Poor:"ضعيف"}[emp.grade] || emp.grade) : emp.grade}</div>
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {data.department_ranking.map((dept, i) => (
+          {(data.department_ranking || []).map((dept, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "rgba(148,163,184,.04)", border: `0.5px solid ${DARK.border}`, borderRadius: 10 }}>
               <div style={{ width: 24, textAlign: "center", fontSize: 13, fontWeight: 700, color: DARK.muted }}>{i + 1}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: DARK.text }}>{dept.department}</div>
-                <div style={{ fontSize: 10, color: DARK.muted }}>{dept.employees} employees</div>
+                <div style={{ fontSize: 10, color: DARK.muted }}>{dept.employees} {lang==="ar"?"موظف":"employees"}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: sc(dept.avg_score) }}>{dept.avg_score}</div>
               </div>
             </div>
           ))}
+          {data.departments_suppressed > 0 && (
+            <div style={{ fontSize: 9.5, color: DARK.muted, textAlign: "center", marginTop: 4, lineHeight: 1.6 }}>
+              {lang==="ar"
+                ? `${data.departments_suppressed} قسم مش ظاهر — أقل من ${data.min_group_size} أفراد فيه جلسات مسجّلة.`
+                : `${data.departments_suppressed} department${data.departments_suppressed===1?"":"s"} hidden — fewer than ${data.min_group_size} members with recorded sessions.`}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -443,19 +583,29 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
   useBodyScrollLock();
   const [gamData, setGamData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState("");
   const [tab, setTab]         = useState("progress");
 
   const DARK = cs || { bg: "#030b14", card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
   const T = { en: { progress: "My Progress", achievements: "Achievements", heatmap: "Heatmap", leaderboard: "Leaderboard", season: "Season" }, ar: { progress: "تقدمي", achievements: "الإنجازات", heatmap: "الخريطة الحرارية", leaderboard: "لوحة الشرف", season: "الموسم" } };
   const t = T[lang] || T.en;
 
+  // profile.avg_score is the true lifetime running average (see saveSession()
+  // in firebase.js); recomputing from `sessions` alone undercounts it for
+  // anyone past the 50-session fetch cap. Hoisted out of the effect so it can
+  // be a dependency — the effect used to depend on the whole `profile` object,
+  // which gets a new identity on every Firestore snapshot.
+  const avg = profile?.avg_score
+    || (sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : 0);
+
+  // `profile.achievements` is an ARRAY, so it gets a fresh identity on every
+  // Firestore snapshot even when its contents are identical — and this panel's
+  // own onAchievementsUpdate writes the profile. Depending on the array itself
+  // is the loop it was supposed to break: POST → persist → snapshot → POST.
+  // Depend on its contents instead.
+  const achKey = (profile?.achievements || []).join(",");
+
   useEffect(() => {
-    // profile.avg_score is the true lifetime running average (see
-    // saveSession() in firebase.js); recomputing from `sessions` alone
-    // undercounts it for anyone with more than the 50-session fetch cap.
-    // Only fall back to the local recompute if the profile hasn't loaded
-    // an avg_score yet at all.
-    const avg = profile?.avg_score || (sessions?.length ? Math.round(sessions.reduce((a,s) => a+(s.avg_score||0),0)/sessions.length) : 0);
     apiFetch("/gamification/compute", {
       method: "POST",
       body: {
@@ -465,17 +615,51 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
         referral_count:      profile?.referral_count || 0,
         has_calibration:     !!calibration,
         earned_achievements: profile?.achievements || [],
+        // High-water marks, so XP cannot fall. Without these the server has
+        // only today's numbers to work from, and a broken streak or a slipping
+        // average takes XP away — a level the user can lose for missing a day.
+        best_avg_score:      profile?.best_avg_score || 0,
+        best_streak:         profile?.best_streak || 0,
+        // Same reason: calibration XP is gated on "has ever calibrated", not on
+        // whether calibData happens to have hydrated yet, and the weekly
+        // challenge pays for every week completed rather than only the one
+        // being claimed. Both are floors — the server takes the higher of this
+        // and what it reads back from Firestore.
+        ever_calibrated:     !!(profile?.ever_calibrated || calibration),
+        weekly_challenges_completed: profile?.weekly_challenges_completed || 0,
+        // The user's clock: the weekly challenge buckets days with it, and the
+        // "Night Owl"/"Early Bird" achievements are decided by the hours their
+        // sessions were actually recorded at rather than by the server's clock
+        // at the moment the panel happened to be opened.
+        tz_offset_min:       -new Date().getTimezoneOffset(),
+        session_hours: (sessions || []).slice(0, 60)
+          .map(x => { const d = x.created_at?.toDate?.() || (x.created_at ? new Date(x.created_at) : null);
+                      return d && !isNaN(d) ? d.getHours() : null; })
+          .filter(h => h != null),
       },
     }).then(d => {
       setGamData(d);
+      setErr("");
       // Backend now persists all_achievements to Firestore once something
       // new is earned — mirror that into the in-memory profile too, so
       // reopening this panel later in the *same* session (profile isn't
       // live-subscribed, just fetched once at sign-in) doesn't keep
       // re-showing the same achievements as newly unlocked.
       if (d?.new_achievements?.length) onAchievementsUpdate?.(d.all_achievements);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, [profile, sessions, calibration]);
+    })
+    // A failure used to leave gamData null, which renders the Progress tab as
+    // an empty fragment with just a streak chip — indistinguishable from a new
+    // account. Say what happened.
+    .catch(e => setErr(e?.message || "load_failed"))
+    .finally(() => setLoading(false));
+    // `profile` gets a new object identity on every Firestore snapshot, and
+    // this panel's own onAchievementsUpdate writes the profile — so depending
+    // on the object re-fired the POST in a loop. Depend on the values used.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.sessions_count, profile?.streak_days, profile?.referral_count,
+      achKey, profile?.best_avg_score, profile?.best_streak,
+      profile?.ever_calibrated, profile?.weekly_challenges_completed,
+      avg, calibration, sessions?.length]);
 
   const TABS = [t.progress, t.achievements, t.season, t.heatmap, t.leaderboard];
   const KEYS = ["progress", "achievements", "season", "heatmap", "leaderboard"];
@@ -496,40 +680,55 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
           {TABS.map((label, i) => {
             const locked = KEYS[i] === "heatmap" && !isPro;
             return (
-              <button key={KEYS[i]} onClick={() => setTab(locked ? "heatmap-locked" : KEYS[i])} style={{ background: "none", border: "none", borderBottom: tab === KEYS[i] ? "2px solid #1a56db" : "2px solid transparent", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: tab === KEYS[i] ? "#1a56db" : DARK.muted, cursor: "pointer" }}>{locked ? "🔒 " : ""}{label}</button>
+              // `heatmap-locked` never equalled KEYS[i], so clicking the locked
+              // tab showed its upsell panel with no tab highlighted at all.
+              (() => { const active = tab === KEYS[i] || (locked && tab === "heatmap-locked" && KEYS[i] === "heatmap");
+                return (
+              <button key={KEYS[i]} onClick={() => setTab(locked ? "heatmap-locked" : KEYS[i])} style={{ background: "none", border: "none", borderBottom: active ? "2px solid #1a56db" : "2px solid transparent", padding: "10px 14px", fontSize: 11, fontWeight: 600, color: active ? "#1a56db" : DARK.muted, cursor: "pointer" }}>{locked ? "🔒 " : ""}{label}</button>
+                ); })()
             );
           })}
         </div>
 
         <div style={{ overflowY: "auto", padding: 20, flex: 1 }}>
           {loading ? (
-            <div style={{ textAlign: "center", padding: 40, color: DARK.muted, fontSize: 12 }}>Loading your progress…</div>
+            <div style={{ textAlign: "center", padding: 40, color: DARK.muted, fontSize: 12 }}>
+              {lang === "ar" ? "جاري تحميل تقدمك…" : "Loading your progress…"}
+            </div>
+          // Scoped to the two tabs that actually read gamData. Season is
+          // computed client-side and Heatmap/Leaderboard call their own
+          // endpoints with their own error states — one 500 here used to make
+          // all four unreachable behind a tab bar that still looked clickable.
+          ) : err && (tab === "progress" || tab === "achievements") ? (
+            <div style={{ textAlign: "center", padding: 40, color: "#f87171", fontSize: 12, lineHeight: 1.8 }}>
+              {lang === "ar" ? "تعذر تحميل التقدم — جرّب تاني بعد شوية" : "Couldn't load your progress — try again shortly"}
+            </div>
           ) : tab === "progress" ? (
             <>
               <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-                {gamData && <XPBar xp={gamData.xp} level={gamData.level} xpCurrent={gamData.xp_current} xpNext={gamData.xp_to_next} levelLabel={gamData.level_label} cs={DARK} />}
-                <StreakDisplay streak={profile?.streak_days || 0} cs={DARK} />
+                {gamData && <XPBar xp={gamData.xp} level={gamData.level} xpCurrent={gamData.xp_current} xpNext={gamData.xp_to_next} levelLabel={gamData.level_label} cs={DARK} lang={lang} />}
+                <StreakDisplay streak={profile?.streak_days || 0} cs={DARK} lang={lang} />
               </div>
               <WeeklyChallengeCard wc={gamData?.weekly_challenge} cs={DARK} lang={lang} />
               {/* Daily Goal */}
               {gamData?.daily_goal && (
                 <div style={{ background: "rgba(26,86,219,.06)", border: "0.5px solid rgba(26,86,219,.15)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: DARK.text }}>🎯 Daily Goal</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: DARK.text }}>{lang === "ar" ? "🎯 هدف اليوم" : "🎯 Daily Goal"}</div>
                     <div style={{ fontSize: 10, color: "#6366f1" }}>+{gamData.daily_goal.xp_reward} XP</div>
                   </div>
-                  <div style={{ fontSize: 12, color: DARK.muted }}>{gamData.daily_goal.label}</div>
+                  <div style={{ fontSize: 12, color: DARK.muted }}>{(lang === "ar" && gamData.daily_goal.label_ar) || gamData.daily_goal.label}</div>
                 </div>
               )}
               {/* New achievements toast */}
               {gamData?.new_achievements?.length > 0 && (
                 <div style={{ background: "rgba(99,102,241,.08)", border: "0.5px solid rgba(99,102,241,.2)", borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#a5b4fc", marginBottom: 8 }}>🎉 New achievements unlocked!</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#a5b4fc", marginBottom: 8 }}>{lang === "ar" ? "🎉 إنجازات جديدة!" : "🎉 New achievements unlocked!"}</div>
                   {gamData.new_achievements.map(a => (
                     <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 4 }}>
                       <span style={{ fontSize: 18 }}>{a.icon}</span>
                       <div>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: DARK.text }}>{a.name}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: DARK.text }}>{(lang === "ar" && a.name_ar) || a.name}</div>
                         <div style={{ fontSize: 10, color: "#6366f1" }}>+{a.xp} XP</div>
                       </div>
                     </div>
@@ -540,7 +739,7 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
           ) : tab === "achievements" ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 10 }}>
               {gamData?.achievements_list?.map(ach => (
-                <AchievementBadge key={ach.id} ach={ach} earned={gamData.all_achievements?.includes(ach.id)} isNew={gamData.new_achievements?.some(n => n.id === ach.id)} cs={DARK} />
+                <AchievementBadge key={ach.id} ach={ach} earned={gamData.all_achievements?.includes(ach.id)} isNew={gamData.new_achievements?.some(n => n.id === ach.id)} cs={DARK} lang={lang} />
               ))}
             </div>
           ) : tab === "heatmap" && isPro ? (
@@ -556,9 +755,10 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
               </div>
             </div>
           ) : tab === "season" ? (
-            <SeasonProgress sessions={sessions} cs={DARK} lang={lang} />
+            <SeasonProgress sessions={sessions} cs={DARK} lang={lang}
+              sessionsCapped={(sessions?.length || 0) >= 50 && (profile?.sessions_count || 0) > (sessions?.length || 0)} />
           ) : tab === "leaderboard" ? (
-            <Leaderboard employees={employees || []} companyName={profile?.company || "Your Company"} cs={DARK} lang={lang} />
+            <Leaderboard companyName={profile?.company || "Your Company"} cs={DARK} lang={lang} />
           ) : null}
         </div>
       </div>
