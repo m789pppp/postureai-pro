@@ -13903,17 +13903,53 @@ def compute_gamification():
         streak        = int(data.get("streak", 0))
         referrals_n   = int(data.get("referral_count", 0))
         calibrated    = bool(data.get("has_calibration", False))
-        existing_ach  = data.get("earned_achievements", [])
-        hour_of_day   = datetime.now().hour
+        # De-duplicated: the XP loop below pays each earned achievement once,
+        # and a list that arrived with repeats (a double-write to the profile,
+        # a client re-send) would otherwise pay some of them twice and inflate
+        # the level. dict.fromkeys keeps first-seen order.
+        _raw_ach      = data.get("earned_achievements", [])
+        existing_ach  = list(dict.fromkeys(
+            a for a in (_raw_ach if isinstance(_raw_ach, list) else []) if isinstance(a, str)))
+        # The client's own clock offset, so time-of-day achievements and the
+        # weekly buckets below mean the user's day rather than the server's.
+        # This host runs UTC; the user base is UTC+2/+3.
+        try:
+            tz_off = max(-840, min(840, int(data.get("tz_offset_min", 0))))
+        except (TypeError, ValueError):
+            tz_off = 0
+        _local_now = datetime.utcnow() + timedelta(minutes=tz_off)
 
-        # Compute XP
+        # ── XP ────────────────────────────────────────────────────────
+        #
+        # Every term here must be MONOTONIC — XP is shown as a level the user
+        # has reached, and a level that can be taken away for missing a day is
+        # a punishment disguised as a game mechanic.
+        #
+        # What this replaces: `avg_score * 2`-style terms and live streak
+        # bonuses, both of which fall. A rolling average slipping from 82 to 70
+        # removed XP; breaking a 20-day streak removed 300 at once. A user could
+        # open the panel and be a level lower than yesterday having done nothing
+        # except take a day off.
+        #
+        # Sessions only ever increase. The score bonuses are gated on
+        # `best_avg_score` — the high-water mark, persisted below — so reaching
+        # 80 once keeps its bonus. Streak bonuses are gated on `best_streak` for
+        # the same reason: you earned the seven days, you keep the badge.
+        best_avg    = max(int(data.get("best_avg_score", 0) or 0), avg_score)
+        best_streak = max(int(data.get("best_streak", 0) or 0), streak)
+        # Calibration was the one term still gated on the LIVE flag while every
+        # other one moved to a high-water mark. `calibData` hydrates
+        # asynchronously on the client, so opening Progress early — or clearing
+        # a calibration to redo it — took 100 XP away.
+        ever_cal    = bool(data.get("ever_calibrated")) or calibrated
+
         xp = 0
         xp += sessions_n * _xp_events["session_complete"]
-        if avg_score >= 80: xp += _xp_events["score_80_plus"] * max(0, sessions_n - 5)
-        if avg_score >= 90: xp += _xp_events["score_90_plus"] * max(0, sessions_n - 20)
-        if calibrated: xp += _xp_events["calibration_done"]
-        if streak >= 7:  xp += _xp_events["7_day_streak"]
-        if streak >= 30: xp += _xp_events["30_day_streak"]
+        if best_avg >= 80: xp += _xp_events["score_80_plus"] * max(0, sessions_n - 5)
+        if best_avg >= 90: xp += _xp_events["score_90_plus"] * max(0, sessions_n - 20)
+        if ever_cal: xp += _xp_events["calibration_done"]
+        if best_streak >= 7:  xp += _xp_events["7_day_streak"]
+        if best_streak >= 30: xp += _xp_events["30_day_streak"]
 
         # XP level system
         def xp_to_level(x):
@@ -13926,17 +13962,45 @@ def compute_gamification():
         # Check achievements
         new_achievements = []
         all_earned       = list(existing_ach)
+        _ach_by_id       = {a["id"]: a for a in ACHIEVEMENTS}
+        # Already-earned achievements keep paying. This loop used to `continue`
+        # past them AND only add xp for newly-earned ones, so the very next call
+        # after an achievement persisted returned less XP than the call before —
+        # the bar dropped as a reward for earning something.
+        for _id in all_earned:
+            _a = _ach_by_id.get(_id)
+            if _a: xp += _a["xp"]
+
+        # `late_session` / `early_session` were keyed off the SERVER clock at the
+        # moment the panel was opened, with no reference to any session at all —
+        # open Progress at 23:00 UTC with zero sessions recorded and you
+        # permanently earned "Night Owl — you did a late session". They are now
+        # decided by the hours the user's sessions were actually recorded at,
+        # sent by the client alongside its timezone.
+        _session_hours = data.get("session_hours") or []
+        try:
+            _session_hours = [int(h) for h in _session_hours if 0 <= int(h) <= 23]
+        except (TypeError, ValueError):
+            _session_hours = []
+        _did_late  = any(h >= 22 or h <= 1 for h in _session_hours)
+        _did_early = any(2 <= h <= 7 for h in _session_hours)
+        # `perfect_week` is NOT decided here: it needs the seven per-day
+        # totals, which only exist once the weekly challenge below has been
+        # computed, so it is awarded there. It had no evaluation branch
+        # anywhere before, which made it unreachable for every user since it
+        # shipped.
+
         for ach in ACHIEVEMENTS:
             if ach["id"] in all_earned: continue
             req = ach["req"]
             earned = False
             if "sessions"      in req and sessions_n >= req["sessions"]: earned = True
-            if "avg_score"     in req and avg_score  >= req["avg_score"]: earned = True
-            if "streak"        in req and streak      >= req["streak"]:   earned = True
-            if "calibrated"    in req and calibrated  == req["calibrated"]: earned = True
+            if "avg_score"     in req and best_avg   >= req["avg_score"]: earned = True
+            if "streak"        in req and best_streak >= req["streak"]:  earned = True
+            if "calibrated"    in req and ever_cal    == req["calibrated"]: earned = True
             if "referrals"     in req and referrals_n >= req["referrals"]: earned = True
-            if "late_session"  in req and hour_of_day >= 22:              earned = True
-            if "early_session" in req and hour_of_day <= 7:               earned = True
+            if "late_session"  in req and _did_late:                      earned = True
+            if "early_session" in req and _did_early:                     earned = True
             if earned:
                 new_achievements.append(ach)
                 all_earned.append(ach["id"])
@@ -13963,11 +14027,35 @@ def compute_gamification():
         WC_TARGET_SCORE  = 70
         WC_XP_REWARD     = 150
         weekly_challenge = None
+        # Weeks ever completed, NOT "did they complete one just now". The reward
+        # used to be added only inside the branch that wrote the claim flag, so
+        # the call that completed the challenge returned 150 more XP than every
+        # call after it — enough to drop a user a whole level for reopening the
+        # panel. It is now `150 x weeks completed`, counted in Firestore, which
+        # only ever goes up. Seeded from the client's copy so a transient read
+        # failure cannot make it fall either.
+        wc_completed = max(0, int(data.get("weekly_challenges_completed", 0) or 0))
         try:
-            today = datetime.utcnow()
-            week_start = (today - timedelta(days=today.isoweekday() - 1)).replace(
+            # The user's local week, not the server's. The claim key is also
+            # moved from `%Y-W%W` to ISO `%G-W%V`, which is the correct
+            # week-numbering for a Monday-anchored week across a year boundary
+            # (%W's week 00 belongs to no ISO week at all). Old keys are still
+            # recognised — see week_key_legacy below.
+            today      = _local_now
+            week_start_local = (today - timedelta(days=today.isoweekday() - 1)).replace(
                 hour=0, minute=0, second=0, microsecond=0)
-            week_key = week_start.strftime("%Y-W%W")
+            week_key   = week_start_local.strftime("%G-W%V")
+            # The key this week WOULD have had under the old format. Claims
+            # written before this change are stored that way, and comparing
+            # only against the new key would re-claim (and re-pay) every
+            # already-completed week exactly once on deploy.
+            week_key_legacy = week_start_local.strftime("%Y-W%W")
+            # Query in UTC, bucket in local. Two weeks back, not one: a
+            # "perfect week" can only be judged once the week is over, and a
+            # user who never opened the panel between Sunday night and Monday
+            # midnight would otherwise lose a completed perfect week forever.
+            prev_week_start_local = week_start_local - timedelta(days=7)
+            week_start = prev_week_start_local - timedelta(minutes=tz_off)
 
             wk_docs = (db.collection("sessions")
                          .where("uid", "==", g.uid)
@@ -13983,14 +14071,19 @@ def compute_gamification():
                 if sc is None or not ts or sc < WC_TARGET_SCORE:
                     continue
                 try:
-                    day = ts.strftime("%Y-%m-%d") if hasattr(ts, "strftime") else str(ts)[:10]
+                    # Shift into the user's day before taking the date part.
+                    if hasattr(ts, "strftime"):
+                        _ts = ts.replace(tzinfo=None) if getattr(ts, "tzinfo", None) else ts
+                        day = (_ts + timedelta(minutes=tz_off)).strftime("%Y-%m-%d")
+                    else:
+                        day = str(ts)[:10]
                 except Exception:
                     continue
                 good_min_by_day[day] = good_min_by_day.get(day, 0) + (mins or 0)
 
             days_detail = []
             for i in range(7):
-                day_dt = week_start + timedelta(days=i)
+                day_dt = week_start_local + timedelta(days=i)
                 day_key = day_dt.strftime("%Y-%m-%d")
                 mins = round(good_min_by_day.get(day_key, 0), 1)
                 days_detail.append({
@@ -14003,21 +14096,51 @@ def compute_gamification():
             days_qualified = sum(1 for d in days_detail if d["qualified"])
             complete = days_qualified >= WC_TARGET_DAYS
 
+            # "Perfect Week" = all seven days qualified, in EITHER the current
+            # week or the one before it. The achievement existed in the list
+            # with req {"perfect_week": True} and the evaluation loop had no
+            # branch for it at all, so it was unreachable for every user since
+            # it shipped; judging only the current week would have left it
+            # reachable solely by a user who happened to open the panel on
+            # Sunday night after a flawless seven days.
+            _prev_qualified = sum(
+                1 for i in range(7)
+                if round(good_min_by_day.get(
+                    (prev_week_start_local + timedelta(days=i)).strftime("%Y-%m-%d"), 0), 1) >= WC_TARGET_MIN)
+            if (days_qualified >= 7 or _prev_qualified >= 7) and "perfect_week" not in all_earned:
+                _pw = _ach_by_id.get("perfect_week")
+                if _pw:
+                    new_achievements.append(_pw)
+                    all_earned.append("perfect_week")
+                    xp += _pw["xp"]
+
             # Persist the claim once per week so the XP/badge isn't
             # re-awarded (or re-shown as "newly completed") on every call —
             # same pattern as the achievements persistence right above.
             newly_completed = False
-            if complete:
-                try:
-                    user_ref = db.collection("users").document(g.uid)
-                    user_doc = user_ref.get()
-                    claimed_week = (user_doc.to_dict() or {}).get("weekly_challenge_claimed_week") if user_doc.exists else None
-                    if claimed_week != week_key:
-                        user_ref.set({"weekly_challenge_claimed_week": week_key}, merge=True)
+            try:
+                user_ref = db.collection("users").document(g.uid)
+                user_doc = user_ref.get()
+                _u = (user_doc.to_dict() or {}) if user_doc.exists else {}
+                claimed_week = _u.get("weekly_challenge_claimed_week")
+                wc_completed = max(wc_completed, int(_u.get("weekly_challenges_completed") or 0))
+                if complete:
+                    # A claim under either key format counts as this week's.
+                    already = claimed_week in (week_key, week_key_legacy)
+                    _wc_write = {}
+                    if not already:
+                        wc_completed += 1
                         newly_completed = True
-                        xp += WC_XP_REWARD
-                except Exception as e:
-                    print(f"[weekly_challenge] failed to persist claim uid={g.uid}: {e}", file=sys.stderr)
+                        _wc_write = {"weekly_challenge_claimed_week": week_key,
+                                     "weekly_challenges_completed":  wc_completed}
+                    elif wc_completed < 1:
+                        # Claimed before the counter existed; without this the
+                        # reward would silently disappear for those users.
+                        wc_completed = 1
+                        _wc_write = {"weekly_challenges_completed": 1}
+                    if _wc_write: user_ref.set(_wc_write, merge=True)
+            except Exception as e:
+                print(f"[weekly_challenge] failed to persist claim uid={g.uid}: {e}", file=sys.stderr)
 
             weekly_challenge = {
                 "target_days":     WC_TARGET_DAYS,
@@ -14028,12 +14151,16 @@ def compute_gamification():
                 "complete":        complete,
                 "newly_completed": newly_completed,
                 "xp_reward":       WC_XP_REWARD,
+                "weeks_completed": wc_completed,
                 "label":           f"Sit correctly ({WC_TARGET_SCORE}+) for {WC_TARGET_MIN} min/day, {WC_TARGET_DAYS} days this week",
                 "label_ar":        f"اجلس صح ({WC_TARGET_SCORE}+) لمدة {WC_TARGET_MIN} دقيقة يوميًا، {WC_TARGET_DAYS} أيام هذا الأسبوع",
                 "badge":           "🏅",
             }
         except Exception as e:
             print(f"[weekly_challenge] compute failed uid={g.uid}: {e}", file=sys.stderr)
+
+        # Paid for EVERY week ever completed, not just the one being claimed.
+        xp += WC_XP_REWARD * wc_completed
 
         # Level computed here — after xp has received achievement AND
         # weekly-challenge rewards, not before (see fix note above).
@@ -14044,13 +14171,25 @@ def compute_gamification():
         # stateless — existing_ach came from profile.achievements, which no
         # frontend code ever wrote — so every qualifying achievement was
         # returned as new_achievements on literally every call.
+        _persist = {}
         if new_achievements:
+            # ArrayUnion, not a whole-array overwrite. This endpoint never reads
+            # the stored achievements — it trusts the list the client sent — so
+            # writing `all_earned` wholesale would permanently delete badges any
+            # time the client's copy was stale (the profile listener not having
+            # fired yet) or the evidence had aged out of the 50-session window
+            # that "Night Owl" is now judged from.
+            _persist["achievements"] = firestore.ArrayUnion([a["id"] for a in new_achievements])
+        # High-water marks. XP is gated on these rather than on the live values
+        # so it cannot fall; they have to survive between calls for that to hold.
+        if best_avg    > int(data.get("best_avg_score", 0) or 0): _persist["best_avg_score"] = best_avg
+        if best_streak > int(data.get("best_streak", 0) or 0):    _persist["best_streak"]    = best_streak
+        if ever_cal and not data.get("ever_calibrated"):          _persist["ever_calibrated"] = True
+        if _persist:
             try:
-                db.collection("users").document(g.uid).set(
-                    {"achievements": all_earned}, merge=True
-                )
+                db.collection("users").document(g.uid).set(_persist, merge=True)
             except Exception as e:
-                print(f"[gamification] failed to persist achievements uid={g.uid}: {e}", file=sys.stderr)
+                print(f"[gamification] failed to persist uid={g.uid}: {e}", file=sys.stderr)
 
         return jsonify({
             "xp":                xp,
@@ -14059,6 +14198,9 @@ def compute_gamification():
             "xp_to_next":        xp_next,
             "level_label":       ["Beginner","Aware","Developing","Consistent","Advanced","Pro","Elite","Master","Grandmaster","Legend"][min(level-1, 9)],
             "streak":            streak,
+            "best_streak":       best_streak,
+            "best_avg_score":    best_avg,
+            "ever_calibrated":   ever_cal,
             "new_achievements":  new_achievements,
             "all_achievements":  all_earned,
             "daily_goal":        daily_goal,
@@ -14072,53 +14214,165 @@ def compute_gamification():
 @require_auth
 @limiter.limit("30 per minute")
 def compute_leaderboard():
-    """Compute leaderboard from submitted employee data."""
+    """
+    Company leaderboard, under the same privacy control as /api/company/dashboard.
+
+    WHAT THIS USED TO DO. The client POSTed the raw Firestore user documents it
+    had already fetched — names, emails, tiers, scores, up to 500 of them — and
+    this handler re-ranked that payload and echoed back name + department +
+    avg_score + an A-D grade, with no company lookup, no `aggregate_only` check,
+    no k-anonymity floor and no role check.
+
+    That is precisely the "named posture leaderboard of every employee" that
+    /api/company/dashboard was rewritten to stop shipping by default, reachable
+    from a 🏆 Progress button. A suppression the server does not enforce is not a
+    suppression, and one enforced on one endpoint while a second endpoint serves
+    the same data unguarded is not one either.
+
+    It now reads the roster itself from the caller's own company, applies the
+    same aggregate_only default and min_group_size floor, and ignores whatever
+    the client sent.
+    """
     try:
         data      = request.get_json(force=True) or {}
-        employees = data.get("employees", [])
         period    = data.get("period", "week")   # week | month | all
 
-        if not employees:
-            return jsonify({"leaderboard": [], "total": 0})
+        # The caller's company, from their own token — never from the request
+        # body, which the client controls.
+        uid = getattr(g, "uid", "")
+        # Every early return below carries the SAME field set as the success
+        # path. The client interpolates min_group_size into its suppression
+        # copy, and a response that omitted it rendered the literal word
+        # "undefined" to the user.
+        def _empty(reason, mgs=5, agg=True):
+            return jsonify({"leaderboard": [], "department_ranking": [], "total": 0,
+                            "departments_suppressed": 0, "min_group_size": mgs,
+                            "aggregate_only": agg, "my_rank": None, "my_avg_score": None,
+                            "period": "all_time", "reason": reason})
 
+        # An unavailable Firestore client must not read as "you have no
+        # company" — that is our outage described to the user as their setup.
+        if db is None:
+            return _empty("backend_unavailable"), 503
+        try:
+            _me = (db.collection("users").document(uid).get().to_dict() or {})
+        except Exception:
+            return _empty("backend_unavailable"), 503
+        company_id = _me.get("company_id")
+        if not company_id:
+            return _empty("no_company")
+
+        _org = {}
+        try:
+            _snap = db.collection("companies").document(company_id).get()
+            if _snap.exists: _org = _snap.to_dict() or {}
+        except Exception:
+            _org = {}
+        # Default ON, exactly as /api/company/dashboard. The safe state is what
+        # you get for doing nothing.
+        aggregate_only = bool(_org.get("aggregate_only", True))
+        min_group_size = int(_org.get("min_group_size", 5) or 5)
+
+        try:
+            emp_docs = (db.collection("users")
+                          .where("company_id", "==", company_id)
+                          .limit(500).stream())
+            employees = [d.to_dict() or {} for d in emp_docs]
+        except Exception:
+            employees = []
+
+        if not employees:
+            return _empty("empty_roster", min_group_size, aggregate_only)
+
+        # Someone who signed up and never opened the camera is not a competitor.
+        # createUserProfile seeds sessions_count: 0 / avg_score: 0, and the old
+        # filter accepted any numeric avg_score — so those accounts appeared by
+        # name, "0 sessions", graded "Poor", and dragged the department averages
+        # down with a zero they never earned.
         ranked = sorted(
-            [e for e in employees if isinstance(e.get("avg_score"), (int, float))],
+            [e for e in employees
+             if isinstance(e.get("avg_score"), (int, float))
+             and int(e.get("sessions_count") or 0) > 0],
             key=lambda e: (e.get("avg_score", 0), e.get("sessions_count", 0)),
             reverse=True
         )
-        leaderboard = []
-        for i, emp in enumerate(ranked[:20]):
-            score  = emp.get("avg_score", 0)
-            medals = {0: "🥇", 1: "🥈", 2: "🥉"}
-            leaderboard.append({
-                "rank":           i + 1,
-                "medal":          medals.get(i, ""),
-                "name":           emp.get("name", "Anonymous"),
-                "department":     emp.get("department", ""),
-                "avg_score":      round(score, 1),
-                "sessions_count": emp.get("sessions_count", 0),
-                "streak":         emp.get("streak", 0),
-                "grade":          "Excellent" if score >= 85 else "Good" if score >= 70 else "Fair" if score >= 50 else "Poor",
-            })
+        # Where the caller sits, so the panel can show them their own standing
+        # without naming anybody else.
+        my_rank = next((i + 1 for i, e in enumerate(ranked) if e.get("uid") == uid), None)
+        my_score = _me.get("avg_score") if isinstance(_me.get("avg_score"), (int, float)) else None
 
-        # Department rankings
+        leaderboard = []
+        if aggregate_only:
+            # No names, no per-person rows. A group below the floor gets nothing
+            # at all — with four colleagues, "3rd of 4" plus the company average
+            # is enough to reconstruct individuals by subtraction.
+            if len(ranked) >= min_group_size:
+                _scores = [e.get("avg_score", 0) for e in ranked]
+                # A decile needs at least ten people to be a decile. Below 20
+                # participants `len//10 - 1` lands on index 0, so the field
+                # labelled "Top 10%" was the single highest individual's
+                # average — one named person's score, published by the mode
+                # whose whole promise is that individual scores are not shown.
+                # Omitted rather than approximated.
+                _top_decile = (round(sorted(_scores, reverse=True)[len(_scores)//10 - 1], 1)
+                               if len(_scores) >= 20 else None)
+                leaderboard = [{
+                    "aggregate":    True,
+                    "participants": len(ranked),
+                    "company_avg":  round(sum(_scores) / len(_scores), 1),
+                    "top_decile":   _top_decile,
+                }]
+        else:
+            for i, emp in enumerate(ranked[:20]):
+                score  = emp.get("avg_score", 0)
+                medals = {0: "🥇", 1: "🥈", 2: "🥉"}
+                leaderboard.append({
+                    "rank":           i + 1,
+                    "medal":          medals.get(i, ""),
+                    "name":           emp.get("name", "Anonymous"),
+                    "department":     emp.get("department", ""),
+                    "avg_score":      round(score, 1),
+                    "sessions_count": emp.get("sessions_count", 0),
+                    "streak":         emp.get("streak", 0),
+                    "is_me":          emp.get("uid") == uid,
+                    "grade":          "Excellent" if score >= 85 else "Good" if score >= 70 else "Fair" if score >= 50 else "Poor",
+                })
+
+        # Department rankings, from the ACTIVE roster only (see the filter
+        # above) and suppressed below the k-anonymity floor — a department of
+        # two is two named people wearing a department label.
         depts: dict = {}
-        for emp in employees:
-            dept = emp.get("department", "General")
-            if dept not in depts: depts[dept] = []
-            if isinstance(emp.get("avg_score"), (int, float)):
-                depts[dept].append(emp["avg_score"])
+        for emp in ranked:
+            depts.setdefault(emp.get("department") or "General", []).append(emp["avg_score"])
         dept_rankings = sorted(
-            [{"department": k, "avg_score": round(sum(v)/len(v), 1), "employees": len(v)} for k, v in depts.items() if v],
+            [{"department": k, "avg_score": round(sum(v)/len(v), 1), "employees": len(v)}
+             for k, v in depts.items() if len(v) >= min_group_size],
             key=lambda d: d["avg_score"], reverse=True
         )
+        _suppressed = sum(1 for v in depts.values() if 0 < len(v) < min_group_size)
 
+        # Below the floor NOTHING comparative leaves the server — not the
+        # ranking, not the participant count, not the caller's own position.
+        # "3rd of 4" plus a company average reconstructs the other three by
+        # subtraction, and a suppression that ships the numbers anyway and
+        # trusts the client not to render them is not a suppression.
+        _suppressed_all = aggregate_only and not leaderboard
         return jsonify({
-            "leaderboard":       leaderboard,
-            "department_ranking": dept_rankings,
-            "total":             len(ranked),
-            "period":            period,
-            "generated_at":      datetime.now().isoformat(),
+            "leaderboard":        leaderboard,
+            "department_ranking": [] if _suppressed_all else dept_rankings,
+            "departments_suppressed": 0 if _suppressed_all else _suppressed,
+            "min_group_size":     min_group_size,
+            "aggregate_only":     aggregate_only,
+            "total":              0 if _suppressed_all else len(ranked),
+            "my_rank":            None if _suppressed_all else my_rank,
+            # The caller's own score is their own data, never a disclosure
+            # about anybody else — it stays.
+            "my_avg_score":       my_score,
+            # The client labels this card "This week"; it is lifetime data from
+            # each user's profile, so say so rather than letting the label lie.
+            "period":             "all_time",
+            "period_requested":   period,
+            "generated_at":       datetime.now().isoformat(),
         })
     except Exception as e:
         return safe_error(e)
@@ -14613,6 +14867,16 @@ def compute_heatmap():
     try:
         data     = request.get_json(force=True) or {}
         sessions = data.get("sessions", [])
+        # The chart is labelled "Hour of day — 12am · 6am · 12pm · 6pm" and the
+        # insight says "your posture is weakest around 14:00-15:00". Both were
+        # bucketed on the UTC hour of the timestamp, so for this product's
+        # UTC+2/+3 user base every hour sat 2-3 slots off and any session after
+        # ~21:00 local was filed under the previous weekday, corrupting the
+        # day-of-week chart as well. Bucket in the user's own clock.
+        try:
+            tz_off = max(-840, min(840, int(data.get("tz_offset_min", 0))))
+        except (TypeError, ValueError):
+            tz_off = 0
         if not sessions:
             return jsonify({"heatmap": [], "insights": []})
 
@@ -14621,10 +14885,14 @@ def compute_heatmap():
         daily:  dict = {d: [] for d in range(7)}
         for s in sessions:
             ts = s.get("created_at_iso")
-            sc = s.get("avg_score", 0)
-            if not ts or not sc: continue
+            sc = s.get("avg_score")
+            # `not sc` dropped a genuinely terrible session that scored 0 as
+            # though it were missing data — the worst hour of someone's day
+            # excluded from the chart of their worst hours.
+            if not ts or not isinstance(sc, (int, float)): continue
             try:
                 dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                dt = dt.replace(tzinfo=None) + timedelta(minutes=tz_off)
                 hourly[dt.hour].append(sc)
                 daily[dt.weekday()].append(sc)
             except Exception:

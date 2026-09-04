@@ -1,3 +1,16 @@
+// UNROUTED. Kept only so api/misc.js's import does not break.
+//
+// This shipped as /api/gamification/compute but returns a different shape from
+// the one the Progress panel reads: {xp, level, xp_to_next, achievements} vs
+// the {xp_current, level_label, achievements_list, weekly_challenge,
+// daily_goal} the UI is written against. Every mismatched read was undefined,
+// so the XP bar rendered width:"NaN%" and sat permanently full, the
+// achievements grid was blank, and the weekly challenge never appeared. It also
+// has no auth check, and its XP formula disagrees with the Python one on both
+// the terms and the level curve.
+//
+// The route was removed; /api/gamification/compute now falls through to
+// api/main.py. Do not re-route to this file.
 /**
  * POST /api/gamification/compute
  * Computes achievements + XP from session stats.
