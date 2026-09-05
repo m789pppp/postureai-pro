@@ -420,11 +420,11 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
                   {["Score", "Sessions", "Streak", "Rank"].map((m, i) => (
                     <div key={m} style={{ background: "rgba(255,255,255,0.05)", borderRadius: parseInt(config.borderRadius) * 0.6, padding: 8 }}>
                       <div style={{ fontSize: 14, fontWeight: 800, color: i === 0 ? config.primaryColor : i === 1 ? config.accentColor : "#fff", fontFamily: config.fontFamily }}>{["84", "12", "7d", "#3"][i]}</div>
-                      <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", fontFamily: config.fontFamily }}>{m}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", fontFamily: config.fontFamily }}>{m}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop: 8, fontSize: 9, color: "rgba(255,255,255,0.25)", fontFamily: config.fontFamily, textAlign: "center" }}>
+                <div style={{ marginTop: 8, fontSize: 11, color: "rgba(255,255,255,0.25)", fontFamily: config.fontFamily, textAlign: "center" }}>
                   {!config.hideCorvusBranding && config.showPoweredBy ? "Powered by Corvus" : config.footerText}
                 </div>
               </div>
@@ -434,7 +434,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
             <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
               {[config.primaryColor, config.accentColor, config.bgColor].map((c, i) => (
                 <div key={i} style={{ flex: 1, height: 32, borderRadius: 8, background: c, border: `1px solid ${cs.border}`, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 4 }}>
-                  <span style={{ fontSize: 8, color: "rgba(255,255,255,0.7)", fontFamily: "monospace" }}>{c}</span>
+                  <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.7)", fontFamily: "monospace" }}>{c}</span>
                 </div>
               ))}
             </div>

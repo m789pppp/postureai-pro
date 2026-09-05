@@ -1845,6 +1845,9 @@ function analyzeFHP(lms, W, H, prop) {
   const rEar  = g(PL.R_EAR);
   const midEarX = ((lEar.x + rEar.x) / 2) * W;
   const midEarZ = (lEar.z + rEar.z) / 2;           // depth — normalised to same scale as X
+  // The nose is anterior to the ear plane on every human: it is the in-frame
+  // reference that tells us which Z direction is "forward" (see below).
+  const noseZ   = g(PL.NOSE)?.z ?? null;
 
   // Z-asymmetry guard: if the two ears have very different Z values the head
   // is significantly rotated (yaw). In that state the ear midpoint is no longer
@@ -1853,15 +1856,48 @@ function analyzeFHP(lms, W, H, prop) {
   const zSpread = Math.abs(lEar.z - rEar.z);
   if (zSpread > 0.06) return { distCm: 0, extraLoadKg: 0, neckAngleDeg: 0, score: 90, severity: "normal", confidence: 0, reliable: false, reason: "head_rotated" };
 
-  // Bug #7 fix: true 3D distance combining horizontal (X) and depth (Z) offsets.
-  // Pure 2D (X only) was corrupted by yaw — a rotated-but-straight neck produced
-  // apparent FHP. Z-component corrects for depth, giving true sagittal displacement.
-  const deltaX  = midEarX - prop.midSh.x;           // pixels
-  const deltaZ  = midEarZ - prop.midShZ;             // normalised units (same scale as Z from MediaPipe)
-  // Convert Z to pixels using shoulder width as reference
-  const deltaZpx = deltaZ * W;
-  const dist2D  = Math.sqrt(deltaX * deltaX + deltaZpx * deltaZpx);
-  const distCm  = Math.round(dist2D * prop.cmPerPx * 10) / 10;
+  // ── Sagittal displacement only ──────────────────────────────────────
+  //
+  // Forward head posture is a SAGITTAL finding: how far the ear sits in FRONT
+  // of the shoulder line. It was being computed as
+  // `sqrt(deltaX² + deltaZ²)` — the magnitude of the ear-to-shoulder offset
+  // combining the frontal (X) and sagittal (Z) axes. Two things follow, and
+  // both were measurable on synthetic subjects with known ground-truth poses:
+  //
+  //  1. A PURE SIDEWAYS LEAN was reported as forward head posture. 30° of
+  //     lateral lean with the head exactly zero centimetres forward produced
+  //     5.8cm of "FHP", a score of 43, a 21° "neck angle" and 0.3kg of "extra
+  //     neck load" — a Hansraj sagittal-flexion figure computed from a
+  //     frontal-plane displacement. The user was told to tuck their chin when
+  //     the actual finding was a lateral lean, which `neck_lean` already
+  //     measures from the same two points. One displacement, counted twice,
+  //     with the wrong correction attached to the second copy.
+  //
+  //  2. Taking the MAGNITUDE made the metric non-monotonic in the thing it
+  //     measures. A neutral head sits roughly 2cm BEHIND the shoulder line, so
+  //     |offset| bottomed out at +2cm of real forward translation: the engine
+  //     awarded its best possible score (100) to a head already 2cm forward,
+  //     and gave 0cm and 4cm of forward head the identical score of 85.
+  //
+  // The sign is derived in-frame rather than assumed. The nose is
+  // unambiguously anterior to the ear plane on every human, so
+  // `noseZ - midEarZ` gives the direction of "toward the front" in whatever
+  // sign convention this frame happens to use — the same in-frame-reference
+  // approach the spine-lean sign fix uses, so it cannot silently invert if a
+  // caller feeds a pre-mirrored frame or a future MediaPipe flips its Z.
+  //
+  // Posterior head position clamps to zero: it is not forward head posture,
+  // and folding it in is exactly what produced the V-shaped curve above.
+  // If the nose is not visible, fall back to MediaPipe's documented convention
+  // (-Z toward the camera) rather than guessing a sign from noisy data.
+  const anteriorSign = noseZ != null ? (Math.sign(noseZ - midEarZ) || -1) : -1;
+  const forwardNorm  = (midEarZ - prop.midShZ) * anteriorSign;  // >0 = ear in FRONT of shoulders
+  const forwardPx    = Math.max(0, forwardNorm) * W;
+  const distCm       = Math.round(forwardPx * prop.cmPerPx * 10) / 10;
+  // Kept for the reliability/diagnostics path below — the lateral component is
+  // no longer part of the FHP figure, but knowing it was large is useful when
+  // deciding whether this reading is trustworthy.
+  const lateralPx    = Math.abs(midEarX - prop.midSh.x);
 
   // Clinically correct extra neck load — Hansraj (2014) Surgical Technology International
   const HEAD_WEIGHT_KG   = 4.5;

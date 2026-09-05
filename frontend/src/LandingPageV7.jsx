@@ -858,8 +858,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 // the page a university pilot is about to be judged on is
                 // the worst possible place for one. Replaced with a fact
                 // about the engine that is true and checkable in the code.
-                ? [["478","نقطة تتبّع","🎯"],["عربي/EN","ثنائي اللغة","🌐"],["0","فيديو محفوظ","🛡"]]
-                : [["478","tracked landmarks","🎯"],["AR/EN","fully bilingual","🌐"],["0","video stored","🛡"]]
+                ? [["13","مقياس وضعية","🎯"],["عربي/EN","ثنائي اللغة","🌐"],["0","فيديو محفوظ","🛡"]]
+                : [["13","posture metrics","🎯"],["AR/EN","fully bilingual","🌐"],["0","video stored","🛡"]]
               ).map(([val,label,icon],i)=>(
                 <div key={label} style={{
                   flex:1, textAlign:"center", padding:"14px 8px",
@@ -1103,10 +1103,10 @@ function SocialProof({ lang }) {
             {/* Same removal as the stat strip above: "50+ active beta users"
                 was not measured and is not true. */}
             {(ar ? [
-              ["478","نقطة تتبّع للوضعية","🎯"],["عربي/EN","واجهة ثنائية اللغة","🌐"],
+              ["13","مقياس وضعية","🎯"],["عربي/EN","واجهة ثنائية اللغة","🌐"],
               ["على جهازك","تتم المعالجة","⚙"],["0","لا نحفظ فيديو","🛡"],
             ] : [
-              ["478","posture landmarks","🎯"],["AR/EN","fully bilingual","🌐"],
+              ["13","posture metrics","🎯"],["AR/EN","fully bilingual","🌐"],
               ["On-device","processing","⚙"],["0","video data stored","🛡"],
             ]).map(([num, label, icon]) => (
               <div key={label} style={{
@@ -1241,21 +1241,29 @@ function Features({ lang }) {
       icon:"🎯", accentColor:"#4f7cf9",
       badge:{ en:"All Plans", ar:"كل الخطط" }, badgeC:"#10b981",
       title:{ en:"Posture Score Engine", ar:"محرك درجة الوضعية" },
-      sub:{ en:"478 landmarks · 3D head pose · 30 fps live", ar:"478 نقطة · وضع رأس ثلاثي الأبعاد · 30 إطار/ثانية" },
+      sub:{ en:"33 body landmarks · 13 posture metrics · ~20 fps on-device", ar:"33 نقطة جسم · 13 مقياس وضعية · ~20 إطار/ثانية على الجهاز" },
       bullets:{
-        en:["MediaPipe FaceMesh tracks 478 facial & body landmarks in real time",
-            "3D head pose via solvePnP — detects forward head, tilt & rotation",
-            "Shoulder symmetry + neck angle measured every frame",
-            "Live 0–100 score with green/amber/red alerts every 15 seconds"],
-        ar:["MediaPipe FaceMesh تتتبع 478 نقطة على الوجه والجسم فورياً",
-            "وضع رأس ثلاثي الأبعاد عبر solvePnP — يكتشف الرأس الأمامي والميلان والدوران",
-            "تقييم تماثل الكتفين وزاوية العنق في كل إطار",
-            "درجة حية 0-100 مع تنبيهات ملونة كل 15 ثانية"],
+        en:["MediaPipe Pose tracks 33 body landmarks in the browser, every frame",
+            "13 measured metrics: forward head, neck and trunk lean, shoulder symmetry, screen distance and more",
+            "Each reading carries its own reliability flag — an unmeasurable metric is reported as unmeasured, never guessed",
+            "Live 0–100 score with green/amber/red alerts once a fault persists"],
+        ar:["MediaPipe Pose بتتبع 33 نقطة في الجسم داخل المتصفح، كل إطار",
+            "13 مقياس فعلي: الرأس الأمامي، ميل الرقبة والجذع، تماثل الكتفين، مسافة الشاشة وغيرها",
+            "كل قراءة معاها مؤشر موثوقية — والمقياس اللي مينفعش يتقاس بيتقال إنه مش متاح، مش بيتخمّن",
+            "درجة حية 0-100 مع تنبيهات ملونة لما الخطأ يستمر"],
       },
-      // Was "96% tracking accuracy" — a number never measured against
-      // anything. Replaced with a fact about the method that is verifiable by
-      // looking at the product: the pose model does track 478 landmarks.
-      stat:{ v:"478",  l:{ en:"landmarks tracked", ar:"نقطة يتم تتبعها" } },
+      // NOT a landmark count, and NOT an accuracy percentage.
+      //
+      // This said "478 landmarks tracked", with a comment asserting the pose
+      // model tracks 478. It does not: the product loads MediaPipe's
+      // `pose_landmarker_full`, which returns 33 body landmarks. 478 is the
+      // FaceMesh count, and postureEngine.js's own header states the engine
+      // "has no FaceMesh/solvePnP access". An engineer in a pitch audience
+      // recognises 478 on sight and asks the one question the product cannot
+      // answer. The honest figure is the more meaningful one anyway — a user
+      // does not care how many dots there are, they care how many things are
+      // being measured about them.
+      stat:{ v:"13",  l:{ en:"posture metrics measured", ar:"مقياس وضعية" } },
       mock:"score",
     },
     {
@@ -1857,8 +1865,8 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       priceUSD:{ monthly:199, yearly:1910 }, priceEGP:{ monthly:6999, yearly:67190 },
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["حتى 100 موظف","كل مزايا ستارتر","كشف 478 نقطة FaceMesh","وضع رأس 3D solvePnP","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"]
-        : ["Up to 100 employees","Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
+        ? ["حتى 100 موظف","كل مزايا ستارتر","قواعد تنبيه مخصّصة","تقارير PDF إكلينيكية","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"]
+        : ["Up to 100 employees","Everything in Starter","Custom alert rules","Clinical PDF reports","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
     },
     {
       id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",

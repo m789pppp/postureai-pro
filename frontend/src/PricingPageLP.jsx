@@ -140,8 +140,8 @@ const CO_PLANS = [
     features:[
       { t:"Employees", v:"Up to 100" },
       { t:"Everything in Starter", v:true },
-      { t:"FaceMesh 478-landmark detection", v:true },
-      { t:"3D solvePnP head pose", v:true },
+      { t:"Custom alert rules", v:true },
+      { t:"Clinical PDF reports", v:true },
       { t:"Advanced HR analytics", v:true },
       { t:"Slack / Teams alerts", v:true },
       { t:"Executive HR reports", v:true },

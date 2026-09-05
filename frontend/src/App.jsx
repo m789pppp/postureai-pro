@@ -217,8 +217,8 @@ const B2B_TIERS = {
     price_egp_monthly:6999, price_egp_yearly:67190,   // 6,999 EGP/mo flat | 67,190/yr
     price_usd_monthly:199,  price_usd_yearly:1910,    // $199/mo flat | $1,910/yr
     seats:100,
-    features:["Up to 100 employees","Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
-    featuresAr:["حتى 100 موظف","كل مزايا ستارتر","كشف 478 نقطة FaceMesh","وضع رأس 3D solvePnP","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"],
+    features:["Up to 100 employees","Everything in Starter","Custom alert rules","Clinical PDF reports","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
+    featuresAr:["حتى 100 موظف","كل مزايا ستارتر","قواعد تنبيه مخصّصة","تقارير PDF إكلينيكية","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"],
     badge:"Most Popular",
   },
   b2b_enterprise: {
@@ -1831,7 +1831,7 @@ function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,add
               <button key={b} onClick={()=>setBilling(b)} style={{padding:"8px 17px",fontSize:12,fontWeight:600,
                 color:billing===b?cs.text:cs.muted,background:billing===b?cs.blue:"transparent",
                 border:"none",borderRadius:7,cursor:"pointer",position:"relative"}}>
-                {l}{b==="yearly"&&<span style={{position:"absolute",top:-8,right:-4,background:"#4FAE8E",color:"white",fontSize:7,fontWeight:700,padding:"1px 5px",borderRadius:99}}>-17%</span>}
+                {l}{b==="yearly"&&<span style={{position:"absolute",top:-8,right:-4,background:"#4FAE8E",color:"white",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99}}>-17%</span>}
               </button>
             ))}
           </div>
@@ -2752,6 +2752,17 @@ export default function App(){
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[user?.uid, profile?.onboarding_done?.length, profile?.acct_type, profile?.user_type, profile?.company_id, page]);
   const[userSessions,setUserSessions]=useState([]);
+  // "We have not fetched yet" is a different fact from "there is nothing".
+  //
+  // `userSessions` starts as [] and every empty state in the product keys off
+  // `userSessions.length === 0`, so for the whole first round-trip to Firestore
+  // a returning user with fifty sessions is shown "No sessions yet — start
+  // your first session". On a fast connection that is a flicker; on a slow one,
+  // or on a demo laptop on conference wifi, it is the first thing anyone sees.
+  // Set false by every path that resolves the query, including the failure
+  // paths — an error is also "no longer loading", and leaving it true forever
+  // would trade a wrong empty state for an infinite spinner.
+  const[sessionsLoading,setSessionsLoading]=useState(true);
   const[allUsers,setAllUsers]=useState([]);
   const[deepPlan,setDeepPlan]=useState(null);
   const[showQuarterlyReport,setShowQuarterlyReport]=useState(false);
@@ -3507,7 +3518,9 @@ export default function App(){
           if(p.tier) setTier(normalizeTier(p.tier));
           if(p.company_id) setCompanyId(p.company_id);
         }
-        getUserSessions(u.uid).then(setUserSessions).catch(e=>console.warn("[Sessions]",e.message));
+        getUserSessions(u.uid).then(setUserSessions)
+          .catch(e=>console.warn("[Sessions]",e.message))
+          .finally(()=>setSessionsLoading(false));
         // Pending-session retry used to live here too — moved to the main
         // onAuthStateChanged success path below, which fires for every
         // login method (this redirect flow included, once Firebase's own
@@ -3627,6 +3640,7 @@ export default function App(){
             if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; }
             const unsubSessions = onUserSessions(u.uid, sessions=>{
               setUserSessions(sessions);
+              setSessionsLoading(false);
               // Re-trigger preloader when sessions arrive (has real data now)
               if (sessions?.length > 0) {
                 setTimeout(() => {
@@ -3634,6 +3648,9 @@ export default function App(){
                 }, 1500);
               }
             }, err => {
+              // An error resolves the question too: stop claiming to be loading,
+              // or the UI spins forever behind a failure it already knows about.
+              setSessionsLoading(false);
               console.error("[Auth] sessions listener failed:", err.code, err.message);
               addToast?.(isAr
                 ? "تعذر تحميل جلساتك — حاول تحديث الصفحة"
@@ -3750,6 +3767,8 @@ export default function App(){
           setUser(null);
           setProfile(null);
           setUserSessions([]);
+          // Signed out: there is genuinely nothing, and that is now known.
+          setSessionsLoading(false);
           setMfaChallengePending(false);
           goLandingUnlessDeepLinked(setPage);
         }
@@ -6035,6 +6054,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; }
             window.__unsubSessions = onUserSessions(user.uid, sessions=>{
               setUserSessions(sessions);
+              setSessionsLoading(false);
               if (sessions?.length > 0) {
                 setTimeout(() => {
                   preloadAIInsights(user.uid, profile, sessions, null, profile?.is_trial ? profile?.trial_tier : profile?.tier, lang);
@@ -6467,7 +6487,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           and being willing to run for them. */}
       <HomePage
         user={user} profile={profile} cs={cs} lang={lang} isAr={isAr} dir={dir}
-        userSessions={userSessions} setUserSessions={setUserSessions}
+        userSessions={userSessions} setUserSessions={setUserSessions} sessionsLoading={sessionsLoading}
         allUsers={allUsers} setAllUsers={setAllUsers}
         tier={effectiveTier} setTier={setTier} mode={mode} setMode={setMode}
         setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}

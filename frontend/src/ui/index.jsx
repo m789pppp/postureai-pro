@@ -214,7 +214,7 @@ export function Badge({ label, color, bg, border, dot }) {
   return (
     <span style={{
       display:"inline-flex", alignItems:"center", gap:4,
-      fontSize:9.5, fontWeight:700, letterSpacing:".05em",
+      fontSize:11, fontWeight:700, letterSpacing:".05em",
       padding:"2px 8px", borderRadius:99,
       color:color||UI_TOKENS.muted, background:bg||"rgba(100,116,139,.1)",
       border:`1px solid ${border||"transparent"}`,
@@ -679,7 +679,7 @@ export function AchievementToast({ title, desc, icon = "🏆", onClose, isAr }) 
     <>
       {confetti && <Confetti count={24} onDone={() => setConf(false)}/>}
       <div style={{
-        position:"fixed", bottom:88, [isAr?"left":"right"]:16, zIndex:9998,
+        position:"fixed", bottom:88, [isAr?"left":"right"]:16, zIndex:100000,
         background:"linear-gradient(135deg,rgba(167,139,250,.15),rgba(99,102,241,.1))",
         border:"1px solid rgba(167,139,250,.35)",
         borderRadius:18, padding:"14px 16px", maxWidth:280,
@@ -854,7 +854,11 @@ export function Toasts({ toasts = [], dismiss, isAr = false, edgeOffset = 16 }) 
   injectCSS();
   return (
     <div style={{
-      position:"fixed", bottom:88, [isAr?"left":"right"]:edgeOffset, zIndex:9999,
+      // 100000: above every dialog in the app (which cluster at 9999-10001).
+      // A toast reports the outcome of an action usually taken INSIDE a modal —
+      // at the same z-index it was ordered by DOM position, so "Session saved"
+      // and "Save failed" could both land behind the dialog that produced them.
+      position:"fixed", bottom:88, [isAr?"left":"right"]:edgeOffset, zIndex:100000,
       display:"flex", flexDirection:"column-reverse", gap:8,
       maxWidth:320, pointerEvents:"none",
     }}>
@@ -1037,7 +1041,7 @@ export function BarChart({ data, color = "#6366f1", cs, height = 44 }) {
             height:Math.max(2, Math.round(((d.v||0)/max)*height)),
             transition:"height .5s ease", opacity:.85,
           }} title={`${d.l}: ${d.v||0}`}/>
-          {d.l&&<div style={{ fontSize:7, color:cs?.muted||UI_TOKENS.muted,
+          {d.l&&<div style={{ fontSize:10, color:cs?.muted||UI_TOKENS.muted,
             overflow:"hidden", whiteSpace:"nowrap" }}>{d.l}</div>}
         </div>
       ))}
@@ -1056,7 +1060,7 @@ export function TierBadge({ tier, isTrial }) {
   }[tier] || {bg:"rgba(99,102,241,.1)",text:"#a5b4fc",border:"rgba(99,102,241,.2)"};
   return (
     <div style={{ background:m.bg, color:m.text, border:`1px solid ${m.border}`,
-      borderRadius:99, padding:"2px 9px", fontSize:9.5, fontWeight:700,
+      borderRadius:99, padding:"2px 9px", fontSize:11, fontWeight:700,
       display:"inline-flex", alignItems:"center", gap:4 }}>
       {tier?.toUpperCase()}
       {isTrial && <span style={{ opacity:.7, fontSize:9 }}>⏱</span>}
@@ -1296,7 +1300,7 @@ export function SessionDetailModal({ session, allSessions = [], profile, cs, isA
               <div key={i} style={{ flexShrink: 0 }}>
                 <img src={snap.img} alt={isAr ? `لقطة ${i + 1} — نتيجة ${snap.score}` : `Snapshot ${i + 1} — score ${snap.score}`}
                   style={{ width: 110, height: 82, objectFit: "cover", borderRadius: 8, display: "block" }} />
-                <div style={{ fontSize: 9, color: UI_TOKENS.muted, textAlign: "center", marginTop: 3 }}>{snap.score}/100 · {snap.time}</div>
+                <div style={{ fontSize: 11, color: UI_TOKENS.muted, textAlign: "center", marginTop: 3 }}>{snap.score}/100 · {snap.time}</div>
               </div>
             ))}
           </div>

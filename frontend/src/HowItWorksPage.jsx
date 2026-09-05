@@ -46,7 +46,7 @@ POST /api/v1/employees/bulk
   },
   { n:"03", icon:"📷", color:"#10d9a0", time:"2 min/day", title:"Employees run daily check-ins",
     desc:"Each employee opens Corvus in their browser, enables their webcam for 60 seconds, and gets an instant posture score. No app install. No hardware.",
-    details:["Browser-based — no install","60-second daily session","478-landmark AI analysis","Instant score + coaching tips"],
+    details:["Browser-based — no install","60-second daily session","33-landmark pose analysis","Instant score + coaching tips"],
     code:`// On-device analysis (no upload)
 mediapipe.analyze(webcamFrame)
 → { score: 82, risks: ["FHP"],
@@ -221,7 +221,7 @@ export default function HowItWorksPage() {
           </Reveal>
           <div className="hiw-stack-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
             {[
-              { icon:"📡", color:"#4f7cf9", title:"On-device AI", desc:"MediaPipe runs entirely in the browser. 478 landmarks, zero video upload, < 40ms latency." },
+              { icon:"📡", color:"#4f7cf9", title:"On-device AI", desc:"MediaPipe Pose runs entirely in the browser. 33 body landmarks, 13 posture metrics, zero video upload." },
               { icon:"🧠", color:"#22d3ee", title:"Groq LLM", desc:"llama-3.1-8b-instant powers the AI coach. Responses in < 2 seconds with scientific citation support." },
               { icon:"🔥", color:"#10d9a0", title:"Firebase + Flask", desc:"Auth, Firestore, and a Python backend for score storage, HR reports, and webhook delivery." },
             ].map((item,i) => (

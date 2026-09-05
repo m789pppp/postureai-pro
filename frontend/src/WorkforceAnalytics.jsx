@@ -90,7 +90,7 @@ function Bars({data=[],h=60,color}) {
             <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
               <div style={{width:"100%",height:`${pct}%`,background:c,borderRadius:"3px 3px 0 0",opacity:.85,transition:`height 600ms ${i*40}ms ${SPRING}`}}/>
             </div>
-            {d.l && <div style={{fontSize:8,color:"var(--wa-muted)",fontWeight:600,letterSpacing:".02em"}}>{d.l}</div>}
+            {d.l && <div style={{fontSize:10.5,color:"var(--wa-muted)",fontWeight:600,letterSpacing:".02em"}}>{d.l}</div>}
           </div>
         );
       })}
@@ -107,8 +107,8 @@ function HeatCell({v,label,sub}) {
       onMouseEnter={e=>e.currentTarget.style.transform="scale(1.04)"}
       onMouseLeave={e=>e.currentTarget.style.transform="none"}>
       <div style={{fontFamily:SYNE,fontSize:v!=null?20:12,fontWeight:800,color:tc,lineHeight:1}}>{v!=null?v:"—"}</div>
-      <div style={{fontSize:9,fontWeight:700,color:"var(--wa-muted)",textTransform:"uppercase",letterSpacing:".06em"}}>{label}</div>
-      {sub && <div style={{fontSize:9,color:tc,fontWeight:600}}>{sub}</div>}
+      <div style={{fontSize:11,fontWeight:700,color:"var(--wa-muted)",textTransform:"uppercase",letterSpacing:".06em"}}>{label}</div>
+      {sub && <div style={{fontSize:11,color:tc,fontWeight:600}}>{sub}</div>}
     </div>
   );
 }
@@ -126,7 +126,7 @@ function Gauge({value,size=90,sw=8,label,sublabel}) {
       </svg>
       <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
         <div style={{fontFamily:SYNE,fontSize:size>70?20:15,fontWeight:800,color:c,lineHeight:1}}>{value}</div>
-        {label && <div style={{fontSize:8,color:"var(--wa-muted)",marginTop:2,fontWeight:600}}>{label}</div>}
+        {label && <div style={{fontSize:10.5,color:"var(--wa-muted)",marginTop:2,fontWeight:600}}>{label}</div>}
       </div>
       {sublabel && <div style={{textAlign:"center",fontSize:10,color:"var(--wa-muted)",marginTop:4,fontWeight:500}}>{sublabel}</div>}
     </div>
@@ -395,7 +395,7 @@ function CompanyScore({data,isAr,loading}) {
         {loading ? [1,2,3,4].map(i=><CardSkeleton key={i} h={52}/>) : kpis.map((k,i)=>(
           <div key={i} style={{background:grad(k.accent,.08),border:`1px solid ${grad(k.accent,.25).replace("rgba","rgba").replace(",0.08",",.22")}`,borderRadius:12,padding:"12px 14px",animation:`wa-fadeIn 400ms ${k.delay}ms both`}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
-              <span style={{fontSize:9,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:"var(--wa-muted)"}}>{k.label}</span>
+              <span style={{fontSize:11,fontWeight:700,letterSpacing:".07em",textTransform:"uppercase",color:"var(--wa-muted)"}}>{k.label}</span>
               <span style={{fontSize:14}}>{k.icon}</span>
             </div>
             <div style={{fontFamily:SYNE,fontSize:22,fontWeight:800,color:k.color,lineHeight:1,letterSpacing:"-.03em"}}>{k.value}</div>
@@ -405,7 +405,7 @@ function CompanyScore({data,isAr,loading}) {
       {/* Monthly 6-month bar */}
       {!loading && data.monthly6?.some(m=>m.score>0) && (
         <div>
-          <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"var(--wa-muted)",marginBottom:8}}>
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"var(--wa-muted)",marginBottom:8}}>
             {isAr?"آخر 6 أشهر":"6-Month Trend"}
           </div>
           <Bars data={(data.monthly6||[]).map(m=>({v:m.score,l:m.label}))} h={48}/>
@@ -444,7 +444,7 @@ function ProductivityTrends({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
               {l:isAr?"التغيير":"Change",          v:`${pct(data.weekAvg,data.prevAvg)>0?"+":""}${pct(data.weekAvg,data.prevAvg)}%`, c:pct(data.weekAvg,data.prevAvg)>=0?"#10b981":"#ef4444"},
             ].map((m,i)=>(
               <div key={i} style={{background:"var(--wa-surf)",border:"1px solid var(--wa-border)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{fontSize:9,color:"var(--wa-muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>{m.l}</div>
+                <div style={{fontSize:11,color:"var(--wa-muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>{m.l}</div>
                 <div style={{fontFamily:SYNE,fontSize:20,fontWeight:800,color:m.c}}>{m.v||"—"}</div>
               </div>
             ))}
@@ -523,11 +523,11 @@ function FatiguePatterns({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
           </div>
           {/* Weekly fatigue heatmap */}
           <div style={{marginBottom:10}}>
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"var(--wa-muted)",marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",color:"var(--wa-muted)",marginBottom:8}}>
               {isAr?"خريطة حرارة الإرهاق الأسبوعية":"Weekly Fatigue Heatmap"}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-              {weekDays.map(d=><div key={d} style={{textAlign:"center",fontSize:8,color:"var(--wa-muted)",paddingBottom:3,fontWeight:600}}>{d}</div>)}
+              {weekDays.map(d=><div key={d} style={{textAlign:"center",fontSize:10.5,color:"var(--wa-muted)",paddingBottom:3,fontWeight:600}}>{d}</div>)}
               {data.heatmap.flat().map((cell,i)=>(
                 <div key={i} style={{
                   height:18,borderRadius:4,
@@ -543,7 +543,7 @@ function FatiguePatterns({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
               {[["#10b981","≥80"],["#f59e0b","60-79"],["#ef4444","<60"],["rgba(148,163,184,.1)",isAr?"لا بيانات":"No data"]].map(([c,l])=>(
                 <div key={l} style={{display:"flex",alignItems:"center",gap:4}}>
                   <div style={{width:10,height:10,borderRadius:2,background:c}}/>
-                  <span style={{fontSize:9,color:"var(--wa-muted)"}}>{l}</span>
+                  <span style={{fontSize:11,color:"var(--wa-muted)"}}>{l}</span>
                 </div>
               ))}
             </div>
@@ -583,7 +583,7 @@ function EngagementAnalytics({data,profile,isAr,loading}) {
         <>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
             <div style={{background:"rgba(245,158,11,.08)",border:"1px solid rgba(245,158,11,.2)",borderRadius:12,padding:"14px",textAlign:"center"}}>
-              <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:6}}>{isAr?"السلسلة الحالية":"Current Streak"}</div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:6}}>{isAr?"السلسلة الحالية":"Current Streak"}</div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
                 <span style={{fontSize:22}}>🔥</span>
                 <div style={{fontFamily:SYNE,fontSize:28,fontWeight:800,color:"#f59e0b",lineHeight:1}}>{currentStreak}</div>
@@ -591,7 +591,7 @@ function EngagementAnalytics({data,profile,isAr,loading}) {
               <div style={{fontSize:10,color:"#f59e0b",marginTop:4,fontWeight:600}}>{isAr?"أيام":"days"}</div>
             </div>
             <div style={{background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.2)",borderRadius:12,padding:"14px",textAlign:"center"}}>
-              <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:6}}>{isAr?"التفاعل الإجمالي":"Overall Engagement"}</div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:6}}>{isAr?"التفاعل الإجمالي":"Overall Engagement"}</div>
               <div style={{fontFamily:SYNE,fontSize:28,fontWeight:800,color:sc(data.engagementScore),lineHeight:1}}>{data.engagementScore}%</div>
               <div style={{fontSize:10,color:sc(data.engagementScore),marginTop:4,fontWeight:600}}>
                 {data.engagementScore>=80?(isAr?"ممتاز":"Excellent"):data.engagementScore>=60?(isAr?"جيد":"Good"):(isAr?"يحتاج تحسين":"Needs improvement")}
@@ -600,7 +600,7 @@ function EngagementAnalytics({data,profile,isAr,loading}) {
           </div>
           {/* Streak dots */}
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>{isAr?"خريطة الأسبوع":"This week"}</div>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>{isAr?"خريطة الأسبوع":"This week"}</div>
             <div style={{display:"flex",gap:6}}>
               {Array.from({length:7},(_,i)=>{
                 const active=i<(data.week.length||0);
@@ -615,14 +615,14 @@ function EngagementAnalytics({data,profile,isAr,loading}) {
           {/* Sessions by time of day — computed from real sessions (was a
               hardcoded array presented as measured data). */}
           <div>
-            <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>{isAr?"أفضل أوقاتك":"Your best times"}</div>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>{isAr?"أفضل أوقاتك":"Your best times"}</div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
               {(isAr?["صباح","ظهر","بعد الظهر","مساء"]:["Morning","Noon","Afternoon","Evening"]).map((t,i)=>{
                 const v = data?.timeOfDay?.[i] ?? null;
                 const col = v === null ? "var(--wa-muted)" : sc(v);
                 return (
                   <div key={i} style={{background:v===null?"transparent":`${col}10`,border:`1px solid ${v===null?"rgba(148,163,184,.18)":col+"22"}`,borderRadius:9,padding:"9px 8px",textAlign:"center"}}>
-                    <div style={{fontSize:8,color:"var(--wa-muted)",fontWeight:600,marginBottom:4}}>{t}</div>
+                    <div style={{fontSize:10.5,color:"var(--wa-muted)",fontWeight:600,marginBottom:4}}>{t}</div>
                     <div style={{fontFamily:SYNE,fontSize:16,fontWeight:800,color:col}}>{v===null?"—":v}</div>
                   </div>
                 );
@@ -661,15 +661,15 @@ function PostureRiskHeatmap({data,isAr,loading}) {
             {zones.map((z,i)=>(
               <div key={i} style={{background:grad(100-z.risk,.1),border:`1px solid ${grad(100-z.risk,.2).replace("rgba","rgba")}`,borderRadius:11,padding:"11px 10px",textAlign:"center",animation:`wa-fadeIn 300ms ${i*60}ms both`}}>
                 <div style={{fontSize:16,marginBottom:5}}>{z.icon}</div>
-                <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--wa-muted)",marginBottom:5}}>{z.label}</div>
+                <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--wa-muted)",marginBottom:5}}>{z.label}</div>
                 <div style={{fontFamily:SYNE,fontSize:18,fontWeight:800,color:sc(100-z.risk),lineHeight:1}}>{z.risk}%</div>
-                <div style={{fontSize:9,color:sc(100-z.risk),marginTop:3,fontWeight:600}}>{isAr?"مخاطرة":"risk"}</div>
+                <div style={{fontSize:11,color:sc(100-z.risk),marginTop:3,fontWeight:600}}>{isAr?"مخاطرة":"risk"}</div>
               </div>
             ))}
           </div>
           {/* Overall risk bar */}
           <div style={{background:"var(--wa-surf)",border:"1px solid var(--wa-border)",borderRadius:12,padding:"12px 14px"}}>
-            <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:10}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:10}}>
               {isAr?"المخاطر الإجمالية":"Overall Risk Profile"}
             </div>
             {zones.map((z,i)=>(
@@ -712,7 +712,7 @@ function DeptComparison({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
                     <span style={{fontSize:12,fontWeight:600,color:"var(--wa-text)"}}>{d.name}</span>
                     <div style={{display:"flex",gap:8,alignItems:"center"}}>
                       <span style={{fontSize:11,fontWeight:700,color:sc(d.avg),fontFamily:SYNE}}>{d.avg}/100</span>
-                      <span style={{fontSize:9,color:d.risk>=50?"#f87171":d.risk>=30?"#fbbf24":"#34d399",fontWeight:700}}>
+                      <span style={{fontSize:11,color:d.risk>=50?"#f87171":d.risk>=30?"#fbbf24":"#34d399",fontWeight:700}}>
                         {isAr?"خطر:":"risk:"} {d.risk}%
                       </span>
                     </div>
@@ -728,12 +728,12 @@ function DeptComparison({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
           {/* Best/worst highlight */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <div style={{background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.2)",borderRadius:11,padding:"11px 13px"}}>
-              <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--wa-muted)",marginBottom:4}}>{isAr?"الأفضل أداءً":"Top Performer"}</div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--wa-muted)",marginBottom:4}}>{isAr?"الأفضل أداءً":"Top Performer"}</div>
               <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:"#10b981",marginBottom:2}}>{sorted[0]?.name}</div>
               <div style={{fontSize:12,fontWeight:700,color:"#10b981"}}>{sorted[0]?.avg}/100</div>
             </div>
             <div style={{background:"rgba(239,68,68,.07)",border:"1px solid rgba(239,68,68,.18)",borderRadius:11,padding:"11px 13px"}}>
-              <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--wa-muted)",marginBottom:4}}>{isAr?"يحتاج دعم":"Needs Support"}</div>
+              <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--wa-muted)",marginBottom:4}}>{isAr?"يحتاج دعم":"Needs Support"}</div>
               <div style={{fontFamily:SYNE,fontSize:14,fontWeight:800,color:"#ef4444",marginBottom:2}}>{sorted[sorted.length-1]?.name}</div>
               <div style={{fontSize:12,fontWeight:700,color:"#ef4444"}}>{sorted[sorted.length-1]?.avg}/100</div>
             </div>
@@ -779,7 +779,7 @@ function BurnoutAlerts({data,isAr,loading}) {
           </div>
           {/* Trend mini */}
           <div style={{background:"var(--wa-surf)",border:"1px solid var(--wa-border)",borderRadius:11,padding:"12px 14px"}}>
-            <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
               {isAr?"اتجاه ثبات الوضعية — آخر 14 يوم":"Posture stability trend — last 14 days"}
             </div>
             <Spark data={data.daily30.slice(16).map(d=>d.score?Math.min(100,100-d.score):0)} color="#ef4444" h={40}/>
@@ -804,26 +804,26 @@ function MonthlyInsights({data,profile,isAr,loading,onAI,aiData,aiLoading,aiErro
               {l:isAr?"التغيير":"Change",          v:`${improvePct>0?"+":""}${improvePct}%`, c:improvePct>=0?"#10b981":"#ef4444"},
             ].map((m,i)=>(
               <div key={i} style={{background:"var(--wa-surf)",border:"1px solid var(--wa-border)",borderRadius:11,padding:"11px 13px",textAlign:"center"}}>
-                <div style={{fontSize:9,color:"var(--wa-muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>{m.l}</div>
+                <div style={{fontSize:11,color:"var(--wa-muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>{m.l}</div>
                 <div style={{fontFamily:SYNE,fontSize:20,fontWeight:800,color:m.c}}>{m.v||"—"}</div>
               </div>
             ))}
           </div>
           {/* 6-month spark */}
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
               {isAr?"اتجاه 6 أشهر":"6-Month Trend"}
             </div>
             <Spark data={(data.monthly6||[]).map(m=>m.score)} color="#10b981" h={48}/>
             <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
               {(data.monthly6||[]).map(m=>(
-                <div key={m.label} style={{fontSize:8,color:"var(--wa-muted)",fontWeight:600}}>{m.label}</div>
+                <div key={m.label} style={{fontSize:10.5,color:"var(--wa-muted)",fontWeight:600}}>{m.label}</div>
               ))}
             </div>
           </div>
           {/* Session count bars */}
           <div>
-            <div style={{fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
               {isAr?"جلسات/شهر":"Sessions / month"}
             </div>
             <Bars data={(data.monthly6||[]).map(m=>({v:m.count,l:m.label}))} h={42} color="#1a56db"/>
@@ -950,7 +950,7 @@ This product measures posture from a webcam. It does NOT observe hours worked, w
               {l:isAr?"تراجع داخل الجلسة":"Within-session decline", v:data.fatigueDecline==null?"—":`${data.fatigueDecline}${isAr?" نقطة":" pts"}`, c:data.fatigueDecline==null?"#64748b":data.fatigueDecline>=15?"#ef4444":data.fatigueDecline>=5?"#f59e0b":"#10b981"},
             ].map((m,i)=>(
               <div key={i} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.06)",borderRadius:9,padding:"7px 13px"}}>
-                <div style={{fontSize:9,color:"var(--wa-muted)",fontWeight:700,letterSpacing:".06em",textTransform:"uppercase"}}>{m.l}</div>
+                <div style={{fontSize:11,color:"var(--wa-muted)",fontWeight:700,letterSpacing:".06em",textTransform:"uppercase"}}>{m.l}</div>
                 <div style={{fontFamily:SYNE,fontSize:15,fontWeight:800,color:m.c,lineHeight:1.2}}>{m.v}</div>
               </div>
             ))}

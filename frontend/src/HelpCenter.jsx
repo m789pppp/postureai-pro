@@ -18,8 +18,8 @@ const FAQ = [
     category: "score",       category_ar: "النتيجة",
     q_en: "How is my posture score calculated?",
     q_ar: "كيف تُحسب نتيجة وضعيتي؟",
-    a_en: "Corvus uses 33 body landmarks and 478 face landmarks detected by our AI. It measures: shoulder alignment (30%), head angle (25%), spine curve (25%), and eye fatigue (20%). 100 = perfect, 0 = very poor.",
-    a_ar: "يستخدم Corvus 33 نقطة في الجسم و478 نقطة في الوجه. يقيس: محاذاة الكتفين (30٪)، زاوية الرأس (25٪)، انحناء العمود الفقري (25٪)، وتعب العينين (20٪).",
+    a_en: "Corvus tracks 33 body landmarks with MediaPipe Pose and derives 13 posture metrics from them. The score is a weighted average of those metrics — the heaviest are forward head position (18%), neck lean (14%), spine lean (9%), screen distance (8%) and shoulder level (7%), with trunk flexion, rotation, shoulder elevation, head tilt and others making up the rest. A metric the camera cannot measure reliably is dropped from the average rather than guessed, so the score always reflects what was actually visible. 100 = ideal, 0 = very poor.",
+    a_ar: "Corvus بيتتبع 33 نقطة في الجسم عن طريق MediaPipe Pose، وبيستخرج منها 13 مقياس للوضعية. الدرجة متوسط مرجّح للمقاييس دي — أتقلها وزناً: الرأس الأمامي (18٪)، ميل الرقبة (14٪)، ميل العمود الفقري (9٪)، مسافة الشاشة (8٪)، ومستوى الكتفين (7٪)، والباقي موزّع على انحناء الجذع ودورانه وارتفاع الكتفين وميل الرأس وغيرهم. أي مقياس الكاميرا مش قادرة تقيسه بثقة بيتشال من المتوسط بدل ما يتخمّن، فالدرجة دايماً بتعبّر عن اللي اتشاف فعلاً. 100 = مثالي، 0 = ضعيف جداً.",
   },
   {
     category: "billing",     category_ar: "الفواتير",
