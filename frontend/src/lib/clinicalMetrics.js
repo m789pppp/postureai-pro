@@ -292,3 +292,55 @@ export const NON_POSTURAL_METRICS = new Set([
   "position_penalty",
   "confidence_val",
 ]);
+
+/**
+ * Session time in ms, tolerant of every shape `created_at` takes.
+ *
+ * A Firestore `serverTimestamp()` is NULL in the local cache until the server
+ * acknowledges the write, so the session a user just finished has no usable
+ * timestamp for the length of the round trip. Every sort in the app read
+ * `created_at` and fell back to 0, which put that session at the very bottom
+ * of the user's own history — indistinguishable from "it didn't save".
+ * `created_at_ms` is a client-clock copy written alongside it.
+ */
+export function sessionTimeMs(s) {
+  const t = s?.created_at?.toDate?.()?.getTime?.()
+         ?? (s?.created_at?.seconds != null ? s.created_at.seconds * 1000 : null);
+  return t ?? s?.created_at_ms ?? 0;
+}
+
+/** Newest first. */
+export const bySessionTimeDesc = (a, b) => sessionTimeMs(b) - sessionTimeMs(a);
+
+/**
+ * "N points better than your first sessions" — the first three sessions that
+ * carry a real score, against the three most recent.
+ *
+ * Returns null rather than a number whenever the comparison would not mean
+ * anything. Three separate ways it used to mean nothing:
+ *
+ *   - Sessions with no score counted as ZERO. `(s.avg_score || 0)` turned a
+ *     session that failed to record a score into a session scored 0, and those
+ *     are almost always the earliest ones — so the oldest window averaged near
+ *     zero and the widget congratulated a first-week user on a fifty-point
+ *     improvement they had not made.
+ *   - At four sessions the two windows OVERLAPPED: slice(0,3) is [0,1,2] and
+ *     slice(-3) is [1,2,3], sharing two of three. The "comparison" was largely
+ *     a session against itself. Six is the first count at which they are
+ *     disjoint.
+ *   - A swing wider than 60 points is not posture improving, it is data. The
+ *     score range that real sessions occupy is nothing like that wide.
+ *
+ * @param {Array} sessions newest-first
+ */
+export function sessionTrend(sessions, { minSessions = 6, noise = 2, implausible = 60 } = {}) {
+  const scored = (sessions || []).filter(s => Number.isFinite(s?.avg_score) && s.avg_score > 0);
+  if (scored.length < minSessions) return null;
+  const recent3 = scored.slice(0, 3);
+  const first3  = scored.slice(-3);
+  const firstAvg = Math.round(first3.reduce((a, s) => a + s.avg_score, 0) / first3.length);
+  const lastAvg  = Math.round(recent3.reduce((a, s) => a + s.avg_score, 0) / recent3.length);
+  const diff = lastAvg - firstAvg;
+  if (Math.abs(diff) < noise || Math.abs(diff) > implausible) return null;
+  return { diff, firstAvg, lastAvg, improving: diff > 0, n: scored.length };
+}

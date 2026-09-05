@@ -22,11 +22,12 @@ import {
 } from "firebase/auth";
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc,
+  doc, getDoc, getDocFromServer, setDoc, updateDoc, addDoc, deleteDoc,
   collection, query, where, orderBy, limit, getDocs,
   onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch,
 } from "firebase/firestore";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import { bySessionTimeDesc } from "./lib/clinicalMetrics.js";
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY            || "AIzaSyADLL_muc6ooQnfr1cKDCZFX3FKYknTxiI",
@@ -541,7 +542,50 @@ export async function saveSession(uid, data) {
 
   const ref = await addDoc(collection(db,"sessions"), {
     uid, ...safeData, session_number: newCount, created_at:_serverTimestamp(),
+    // A client-clock copy of the timestamp, written alongside the server one.
+    //
+    // `serverTimestamp()` is NULL in the local cache until the server
+    // acknowledges the write — and a Firestore query that orders by a field
+    // EXCLUDES documents where that field is missing. So for the whole
+    // round-trip window the session the user just finished is invisible to
+    // its own history query, and the client-side sort falls back to 0 and
+    // buries it at the bottom. This field is always present, so ordering and
+    // display work from the instant the document exists.
+    created_at_ms: Date.now(),
   });
+
+  // ── Confirm the write actually reached the server ───────────────────
+  //
+  // THIS IS THE ONE THAT LOSES SESSIONS. `db` is initialised with
+  // persistentLocalCache, and with a local cache `addDoc()` RESOLVES AS SOON
+  // AS THE WRITE IS IN INDEXEDDB — it does not wait for the server. If the
+  // server then rejects it (a rules failure, a quota, an oversized document),
+  // the local write is rolled back silently: the promise has already
+  // resolved, so the caller's .catch() never runs, the user is told
+  // "✅ Session saved", and the session is simply not there afterwards. That
+  // is exactly the reported shape — a success message, then nothing in
+  // Sessions and nothing in the dashboard.
+  //
+  // Being offline is a different thing and must NOT be treated as a failure:
+  // the cache replays the write when the connection returns, which is the
+  // whole reason persistence is enabled. Only a real rejection throws.
+  try {
+    const snap = await getDocFromServer(ref);
+    if (!snap.exists()) {
+      const err = new Error("session write was rejected by the server");
+      err.code = "write-rejected";
+      throw err;
+    }
+  } catch (e) {
+    if (e?.code === "write-rejected") throw e;
+    // "unavailable" from getDocFromServer means we could not ASK the server,
+    // not that the write failed. The cache is holding it.
+    if (e?.code === "unavailable" || /offline|network|backend/i.test(e?.message || "")) {
+      console.warn("[saveSession] offline — write queued locally, will replay:", e?.code);
+    } else {
+      throw e;
+    }
+  }
   try {
     const newAvg   = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
     const streak   = prof?.last_session_at ? (() => {
@@ -585,6 +629,10 @@ export async function saveSession(uid, data) {
   return ref.id;
 }
 
+// Both live in lib/clinicalMetrics.js so they can be unit-tested without the
+// Firebase SDK — see the tests for why the created_at_ms fallback exists.
+const _bySessionTime = bySessionTimeDesc;
+
 export async function getUserSessions(uid) {
   // BUG FIX: this used to have no orderBy, with a comment saying "sort
   // client-side instead" — but that doesn't work: limit(50) truncates to
@@ -603,11 +651,7 @@ export async function getUserSessions(uid) {
     const snaps = await getDocs(q);
     return snaps.docs
       .map(d=>({id:d.id,...d.data()}))
-      .sort((a,b)=>{
-        const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
-        const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
-        return tb - ta;
-      });
+      .sort(_bySessionTime);
   } catch (err) {
     // failed-precondition = the uid+created_at composite index is missing
     // or still building in this Firestore project. Rather than surface
@@ -620,13 +664,7 @@ export async function getUserSessions(uid) {
       console.warn("[getUserSessions] composite index missing/building — falling back:", err.message);
       const fq = query(collection(db,"sessions"), where("uid","==",uid), limit(50));
       const snaps = await getDocs(fq);
-      return snaps.docs
-        .map(d=>({id:d.id,...d.data()}))
-        .sort((a,b)=>{
-          const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
-          const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
-          return tb - ta;
-        });
+      return snaps.docs.map(d=>({id:d.id,...d.data()})).sort(_bySessionTime);
     }
     throw err;
   }
@@ -682,9 +720,7 @@ export function onUserSessions(uid, callback, onError) {
   const sortSessions = docs => docs
     .map(d=>({id:d.id,...d.data()}))
     .sort((a,b)=>{
-      const ta = a.created_at?.toDate?.()?.getTime?.() ?? a.created_at?.seconds*1000 ?? 0;
-      const tb = b.created_at?.toDate?.()?.getTime?.() ?? b.created_at?.seconds*1000 ?? 0;
-      return tb - ta;
+      return _bySessionTime(a, b);
     });
   let fallbackUnsub = null;
   const unsub = onSnapshot(q, snap => {
