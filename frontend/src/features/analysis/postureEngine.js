@@ -144,7 +144,7 @@ const THR = {
 // gets scored actually carries weight — twice now a metric has been computed,
 // classified, alerted on and displayed while contributing 0 to the score.
 export const WEIGHTS_FRONT_KEYS = {};
-const WEIGHTS_FRONT = {
+export const WEIGHTS_FRONT = {
   // WEIGHT REBALANCE, from the sensitivity matrix in
   // postureEngine.accuracy.mjs rather than from intuition.
   //
@@ -2883,19 +2883,19 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
 
     // Legacy metrics shape (backward-compatible with App.jsx/overlays)
     metrics: {
-      neck_lean:         { value: neck.angle,       score: neck.score,     unit: "°",  label: "Neck lean",           reliable: neck.reliable },
-      head_tilt:         { value: headTilt.angle,   score: headTilt.score, unit: "°",  label: "Head tilt",           reliable: headTilt.reliable },
-      shoulder_level:    { value: shoulder.angle,   score: shoulder.score, unit: "°",  label: "Shoulder level",      reliable: shoulder.reliable, signed: shoulder.signedAngle },
-      spine_lean:        { value: spine.angle,      score: spine.score,    unit: "°",  label: "Spine lean",          reliable: spine.reliable, signed: spine.signedAngle },
-      head_yaw:          { value: yaw.angle,        score: yaw.score,      unit: "°",  label: "Head turn",           reliable: yaw.reliable },
+      neck_lean:         { value: neck.angle,       score: neck.score,     unit: "°",  label: "Neck lean",           reliable: neck.reliable, severity: neck.severity },
+      head_tilt:         { value: headTilt.angle,   score: headTilt.score, unit: "°",  label: "Head tilt",           reliable: headTilt.reliable, severity: headTilt.severity },
+      shoulder_level:    { value: shoulder.angle,   score: shoulder.score, unit: "°",  label: "Shoulder level",      reliable: shoulder.reliable, signed: shoulder.signedAngle , severity: shoulder.severity },
+      spine_lean:        { value: spine.angle,      score: spine.score,    unit: "°",  label: "Spine lean",          reliable: spine.reliable, signed: spine.signedAngle , severity: spine.severity },
+      head_yaw:          { value: yaw.angle,        score: yaw.score,      unit: "°",  label: "Head turn",           reliable: yaw.reliable, severity: yaw.severity },
       screen_distance:   { value: distCm,           score: distSc,         unit: "cm", label: "Screen distance",     calibrated: !!(distCalibFactor && distCalibFactor > 0) },
-      fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, neck_angle_deg: fhp.neckAngleDeg, reliable: fhp.reliable },
-      rounded_shoulders: { value: rounded.depth,    score: rounded.score,  unit: "depth", label: "Rounded shoulders",asymmetry: rounded.asymmetry, reliable: rounded.reliable },
-      torso_flexion:     { value: torsoFlex.shrinkPct, score: torsoFlex.score, unit: "%",  label: "Forward slouch",   reliable: torsoFlex.reliable },
-      trunk_rotation:    { value: trunkRot.angle,      score: trunkRot.score,  unit: "°",  label: "Trunk rotation",   reliable: trunkRot.reliable },
-      shoulder_elevation:{ value: shoulderElev.elevPct, score: shoulderElev.score, unit: "%", label: "Shoulder elevation (shrug)", reliable: shoulderElev.reliable, learning: shoulderElev.learning, asymmetric: shoulderElev.asymmetric ?? null },
-      elbow_angle:       { value: elbow.angle,      score: elbow.score,    unit: "°",  label: "Elbow angle",         reliable: elbow.reliable },
-      monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable },
+      fhp_index:         { value: fhp.distCm,       score: fhp.score,      unit: "cm", label: "Forward head posture",extra_load_kg: fhp.extraLoadKg, neck_angle_deg: fhp.neckAngleDeg, reliable: fhp.reliable, severity: fhp.severity },
+      rounded_shoulders: { value: rounded.depth,    score: rounded.score,  unit: "depth", label: "Rounded shoulders",asymmetry: rounded.asymmetry, reliable: rounded.reliable, severity: rounded.severity },
+      torso_flexion:     { value: torsoFlex.shrinkPct, score: torsoFlex.score, unit: "%",  label: "Forward slouch",   reliable: torsoFlex.reliable, severity: torsoFlex.severity },
+      trunk_rotation:    { value: trunkRot.angle,      score: trunkRot.score,  unit: "°",  label: "Trunk rotation",   reliable: trunkRot.reliable, severity: trunkRot.severity },
+      shoulder_elevation:{ value: shoulderElev.elevPct, score: shoulderElev.score, unit: "%", label: "Shoulder elevation (shrug)", reliable: shoulderElev.reliable, learning: shoulderElev.learning, asymmetric: shoulderElev.asymmetric ?? null , severity: shoulderElev.severity },
+      elbow_angle:       { value: elbow.angle,      score: elbow.score,    unit: "°",  label: "Elbow angle",         reliable: elbow.reliable, severity: elbow.severity },
+      monitor_height:    { value: monitor.offsetCm, score: monitor.score,  unit: "cm", label: "Monitor height offset",direction: monitor.direction, reliable: monitor.reliable, severity: monitor.severity },
       session_fatigue:   { value: fatiguePenalty,   score: Math.max(0, overall - fatiguePenalty), unit: "pts", label: "Fatigue adjustment", session_min: sessionMin },
       position_penalty:  { value: positionPenalty,  score: Math.max(0, 100 - positionPenalty),    unit: "pts", label: "Positioning adjustment", reason: qualityReason },
       confidence_val:    { value: detectionConfidence, score: detectionConfidence, unit: "%", label: "Detection confidence" },

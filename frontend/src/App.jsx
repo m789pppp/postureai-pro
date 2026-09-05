@@ -54,6 +54,11 @@ import { speakCoach, setVoiceCoachEnabled, stopSpeaking, isVoiceCoachEnabled, pr
 // the account settings page) so the coach's accent/voice/speed are reachable
 // without leaving the session.
 const VoiceCoachSettings = lazy(() => import("./VoiceCoachSettings.jsx"));
+// Turns the engine's metrics into explained findings — what is wrong, how
+// serious, why it matters, what to do, then the numbers. One source of truth
+// for that wording, so the live panel, the session summary and the reports
+// cannot describe the same measurement three different ways.
+const FindingsPanel = lazy(() => import("./FindingsPanel.jsx"));
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
@@ -5058,6 +5063,8 @@ export default function App(){
       // have to read histRef/lastAnalRef live — which is what stopped the live
       // page's own session state from being cleared when the session ended.
       score_history: hist.slice(-600),
+      // Read by the summary's FindingsPanel: the whole metrics object, so the
+      // summary can EXPLAIN the session rather than name its worst number.
       metrics: la.metrics || {},
     };
     // A report on a session that never happened.
@@ -6859,13 +6866,29 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   {isAr?"أبرز مشكلة":"Top issue to fix"}
                 </div>
                 <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
-                  {/* Was English `label` + the literal word "score" rendered
-                      unconditionally, even under the Arabic "أبرز مشكلة"
-                      heading right above it. */}
                   {isAr
                     ? `${METRIC_LABEL_AR[sessionResult.top_metric[0]]||sessionResult.top_metric[1]?.label} — النتيجة ${sessionResult.top_metric[1]?.score}/100`
                     : `${sessionResult.top_metric[1]?.label} — score ${sessionResult.top_metric[1]?.score}/100`}
                 </div>
+              </div>
+            )}
+
+            {/* The findings, explained. Naming the lowest-scoring metric tells
+                a user which number was worst; it does not tell them what to
+                change. Same panel, same wording, as the live session — so the
+                summary cannot describe a measurement differently from the
+                screen the user was just looking at. */}
+            {sessionResult?.metrics && Object.keys(sessionResult.metrics).length > 0 && (
+              <div style={{marginTop:14}}>
+                <Suspense fallback={null}>
+                  <FindingsPanel
+                    metrics={sessionResult.metrics}
+                    cs={cs} isAr={isAr}
+                    calibrated={!!calibData?.tolerances}
+                    variant="full"
+                    onCalibrate={()=>{setSessionResult(null);setShowCalibWizard(true);}}
+                  />
+                </Suspense>
               </div>
             )}
 
@@ -8226,202 +8249,24 @@ async function downloadPDF(sessionOverride, isClinical=false){
             {isAr?"القياسات المباشرة":"Live Metrics"}
           </div>
           {analysis?.metrics
-            ? (() => {
-                const HIDE = new Set(["session_fatigue","confidence_val"]);
-                const mEntries = Object.entries(analysis.metrics).filter(([k,m])=>
-                  !HIDE.has(k) && m.value!=null && m.label
-                );
-                // Sort by score ascending (worst first), cap at 3 by default
-                // Worst-first, but an UNMEASURED metric has no score to be
-                // worst at — it carries whatever default its module returns
-                // (usually 90-100), so sorting on score alone silently pushed
-                // every unmeasurable metric into the top three whenever the
-                // real ones scored lower, and hid them below the fold when
-                // they didn't. Neither is right: they are not readings.
-                // Measured metrics rank first, worst-first among themselves;
-                // unmeasured ones follow, so the user can see they exist and
-                // that nothing is being claimed about them.
-                const sorted = [...mEntries].sort((a,b)=>{
-                  const au = a[1].reliable===false, bu = b[1].reliable===false;
-                  if(au!==bu) return au?1:-1;
-                  return (a[1].score??100)-(b[1].score??100);
-                });
-                const showAll = showAllMetrics;
-                const visible = showAll ? sorted : sorted.slice(0,3);
-                return (
-                  <>
-                    {visible.map(([k,m])=>(
-                      <MetRow key={k} label={isAr?(METRIC_LABEL_AR[k]||m.label):m.label} value={m.value} unit={m.unit} score={m.score} cs={cs}
-                        dim={m.reliable===false}
-                        dimNote={isAr?"مش ظاهر في الكادر":"not in frame"}
-                      />
-                    ))}
-                    {sorted.length > 3 && (
-                      <button className="liveui-focusable" onClick={()=>setShowAllMetrics(v=>!v)}
-                        style={{width:"100%",background:"none",border:`1px solid ${cs.border}`,borderRadius:8,
-                          padding:"5px 0",fontSize:10,color:cs.muted,cursor:"pointer",marginTop:4}}>
-                        {showAllMetrics?(isAr?"إخفاء ▲":"Hide ▲"):(isAr?`+ ${sorted.length-3} مقياس ▼`:`+ ${sorted.length-3} more ▼`)}
-                      </button>
-                    )}
-                    {/* ── Detected conditions with severity badges ── */}
-                    {analysis.detectedConditions?.length > 0 && (
-                      <div style={{marginTop:10,marginBottom:4}}>
-                        <div style={{fontSize:10,fontWeight:700,color:cs.muted,textTransform:"uppercase",
-                          letterSpacing:".07em",marginBottom:6}}>
-                          {isAr?"الحالات المرصودة":"Detected Conditions"}
-                        </div>
-                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                          {analysis.detectedConditions.map((cond,i)=>{
-                            const sevColor = cond.severity==="severe"?"#C6604F"
-                              :cond.severity==="moderate"?"#f97316"
-                              :cond.severity==="mild"?"#D6A24C":"#4FAE8E";
-                            const sevLabel = cond.severity==="severe"
-                              ?(isAr?"شديد":"Severe")
-                              :cond.severity==="moderate"
-                              ?(isAr?"متوسط":"Moderate")
-                              :cond.severity==="mild"
-                              ?(isAr?"خفيف":"Mild")
-                              :(isAr?"طبيعي":"Normal");
-                            return(
-                              <div key={i} style={{display:"flex",alignItems:"center",
-                                justifyContent:"space-between",gap:6,
-                                padding:"4px 8px",borderRadius:8,
-                                background:`${sevColor}10`,
-                                border:`1px solid ${sevColor}25`,
-                              }}>
-                                <span style={{fontSize:10,color:cs.text,fontWeight:500}}>
-                                  {isAr?(CONDITION_NAME_AR[cond.name]||cond.name):cond.name}
-                                </span>
-                                <div style={{display:"flex",alignItems:"center",gap:5}}>
-                                  <span style={{fontSize:10,color:cs.muted}}>{cond.value}</span>
-                                  <span style={{fontSize:9,fontWeight:700,color:sevColor,
-                                    padding:"1px 6px",borderRadius:99,
-                                    background:`${sevColor}20`,
-                                    textTransform:"uppercase",letterSpacing:".05em",
-                                  }}>{sevLabel}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── Quality score indicator ── */}
-                    {analysis.qualityScore != null && analysis.qualityScore < 100 && (
-                      <div style={{fontSize:10,padding:"3px 8px",borderRadius:99,
-                        background:"rgba(198,96,79,.1)",color:darkMode?"#f87171":"#b91c1c",
-                        fontWeight:600,marginBottom:4,display:"inline-flex",alignItems:"center",gap:4}}>
-                        ⚠️ {analysis.qualityReason === "body_cropped"
-                          ? (isAr?"الجسم مقطوع":"Body partially visible")
-                          : analysis.qualityReason === "too_close"
-                          ? (isAr?"قريب جداً":"Too close to camera")
-                          : analysis.qualityReason === "too_far"
-                          ? (isAr?"بعيد جداً":"Too far from camera")
-                          : (isAr?"جودة منخفضة":"Low quality frame")}
-                      </div>
-                    )}
-
-                    {/* Confidence + fatigue compact row */}
-                    <div style={{display:"flex",gap:6,marginTop:8,flexWrap:"wrap"}}>
-                      {analysis.confidence!=null&&(
-                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,
-                          background:`rgba(${analysis.confidence>85?"79,174,142":analysis.confidence>70?"214,162,76":"198,96,79"},.12)`,
-                          color:analysis.confidence>85?"#4FAE8E":analysis.confidence>70?"#D6A24C":"#C6604F",
-                          fontWeight:600}}>
-                          📡 {analysis.confidence}% {isAr?"دقة الرصد":"detection"}
-                        </span>
-                      )}
-                      {analysis.metrics?.session_fatigue?.value>0&&(
-                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,
-                          background:"rgba(139,92,246,.12)",color:"#8b5cf6",fontWeight:600}}>
-                          🕐 {isAr?`تعب −${analysis.metrics.session_fatigue.value}pt`:`Fatigue −${analysis.metrics.session_fatigue.value}pt`}
-                        </span>
-                      )}
-                      {analysis.metrics?.monitor_height?.value>5&&(
-                        <span style={{fontSize:10,padding:"2px 8px",borderRadius:99,
-                          background:"rgba(214,162,76,.12)",color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>
-                          🖥 {isAr
-                            ?(analysis.metrics.monitor_height.direction==="below"?`الشاشة أسفل ${analysis.metrics.monitor_height.value}سم`:`الشاشة أعلى ${analysis.metrics.monitor_height.value}سم`)
-                            :(analysis.metrics.monitor_height.direction==="below"?`Monitor ${analysis.metrics.monitor_height.value}cm low`:`Monitor ${analysis.metrics.monitor_height.value}cm high`)
-                          }
-                        </span>
-                      )}
-                    </div>
-                  </>
-                );
-              })()
-            : (
-              <div>
-                <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0 8px"}}>
-                  {["Neck lean","Head tilt","Shoulder level","Spine lean"].map((m,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:10,color:cs.muted,flex:1}}>{isAr?["انحناء الرقبة","إمالة الرأس","مستوى الكتفين","انحناء العمود"][i]:m}</span>
-                      <div style={{width:80,height:3,borderRadius:99,
-                        background:cs.inp,overflow:"hidden"}}>
-                        <div style={{height:"100%",width: camActive?"40%":"0%",background:"rgba(148,163,184,.15)",
-                          animation: camActive?"livePulse 1.4s ease-in-out infinite":"none"}}/>
-                      </div>
-                      <span style={{fontSize:10,color:cs.muted,opacity:.5,minWidth:16,textAlign:"right"}}>—</span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{fontSize:10,color:camActive?"#D6A24C":cs.muted,textAlign:"center",padding:"2px 0",
-                  display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                  {camActive && (
-                    <span style={{width:6,height:6,borderRadius:"50%",background:"#D6A24C",animation:"livePulse 1.2s infinite",flexShrink:0}}/>
-                  )}
-                  {camActive
-                    ? (mpStatus!=="ready"
-                        ? (isAr?"جاري تحميل نموذج الذكاء الاصطناعي (أول مرة بس)...":"Loading the AI model (first time only)...")
-                        // Quality-gate failure (too close/far/body cropped) used to fall
-                        // through to the generic messages below — worst case, after 8s,
-                        // telling a user who's TOO CLOSE to "move closer", the opposite
-                        // of what they needed to hear. Surface the engine's own
-                        // qualityReason here instead, since it already knows exactly
-                        // what's wrong.
-                        : (analysis?.qualityScore != null && analysis.qualityScore < 100 && analysis?.qualityReason)
-                        ? (analysis.qualityReason === "too_close"
-                            ? (isAr?"⚠️ قريب جداً من الكاميرا — ابعد شوية":"⚠️ Too close to the camera — move back a bit")
-                            : analysis.qualityReason === "too_far"
-                            ? (isAr?"⚠️ بعيد جداً عن الكاميرا — اقترب شوية":"⚠️ Too far from the camera — move closer")
-                            : analysis.qualityReason === "body_cropped"
-                            ? (isAr?"⚠️ جزء من جسمك مش ظاهر — اتأكد إن كتافك الاتنين في الكادر":"⚠️ Part of your body is out of frame — make sure both shoulders are visible")
-                            : (isAr?"⚠️ جودة الصورة منخفضة — عدّل الإضاءة أو وضعك":"⚠️ Frame quality is low — adjust lighting or position"))
-                        : sessionTime>8
-                        ? (isAr?"لسه مش شايفينك — قرّب من الكاميرا وخلي الإضاءة كويسة":"Still not detecting you — move closer and check your lighting")
-                        : (isAr?"بنحلل وضعيتك... استنى ثانية":"Detecting your posture... one moment"))
-                    : (isAr?"ابدأ الكاميرا للتحليل":"Start camera to see metrics")}
-                </div>
-                <div style={{background:"rgba(79,174,142,.05)",border:"1px solid rgba(79,174,142,.12)",borderRadius:12,padding:"10px 12px",
-                  display: camActive ? "none" : "block" /* #13: hide tips during active session */}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#4FAE8E",marginBottom:8,textTransform:"uppercase",letterSpacing:".05em"}}>
-                    {isAr?"نصائح الوضعية الصحيحة":"Correct Posture Tips"}
-                  </div>
-                  {(isAr?[
-                    "👁️ الشاشة على مستوى العين أو أسفل بقليل",
-                    "📏 المسافة من الشاشة 50-80 سم",
-                    "🦷 الذقن موازٍ للأرض",
-                    "💺 الظهر ملاصق للكرسي — دعم أسفل الظهر",
-                    "🦵 الركبتين بزاوية 90° — القدمين على الأرض",
-                    "💪 الكتفين متساويين ومرتخيين",
-                  ]:[
-                    "👁️ Monitor top at or slightly below eye level",
-                    "📏 Screen distance: 50-80cm",
-                    "🦷 Chin parallel to floor — don't tilt head down",
-                    "💺 Back fully in chair — use lumbar support",
-                    "🦵 Knees at 90° — feet flat on floor",
-                    "💪 Shoulders level and relaxed",
-                  ]).map((tip,i,arr)=>(
-                    <div key={i} style={{
-                      fontSize:11,color:cs.muted,padding:"5px 0",lineHeight:1.5,
-                      borderBottom:i<arr.length-1?`1px solid ${cs.border}`:"none",
-                    }}>{tip}</div>
-                  ))}
-                </div>
-              </div>
-            )
-          }
+            ? (
+                // Was thirteen rows of "label … value … bar". A reading is not
+                // a finding: it never said whether the number was bad, why it
+                // would matter, or what to do differently — every screen either
+                // invented an answer or left the user to guess. FindingsPanel
+                // is that answer, written once, for every screen.
+                <Suspense fallback={<div style={{fontSize:11,color:cs.muted,padding:"8px 0"}}>
+                  {isAr?"جاري التحليل…":"Analysing…"}</div>}>
+                  <FindingsPanel
+                    metrics={analysis.metrics}
+                    cs={cs} isAr={isAr}
+                    calibrated={!!calibData?.tolerances}
+                    variant="compact"
+                    onCalibrate={()=>setShowCalibWizard(true)}
+                  />
+                </Suspense>
+              )
+            : <div style={{fontSize:11,color:cs.muted}}>{isAr?"جودة الصورة منخفضة":"Low quality frame"}</div>}
         </div>
 
         {/* Distance bar */}
