@@ -294,9 +294,23 @@ export function SymptomCorrelation({ cs, lang="en", onClose }) {
             {/* An error is not "not enough data yet" — the two used to render
                 identically, so a broken backend read as a patient one. */}
             {!loadingInsights && insightsError && (
-              <div style={{ ...card, textAlign:"center", color:"#f87171", fontSize:13 }}>
-                {isAr ? "تعذر تحميل الربط — جرّب تاني بعد شوية" : "Couldn't load correlations — try again shortly"}
+              <div style={{ ...card, textAlign:"center", color:"#f87171", fontSize:13, lineHeight:1.7 }}>
+                {/* "Try again shortly" is a lie for a permanent failure, and
+                    the two failures here are permanent: a plan that does not
+                    include this feature, and a backend that is misconfigured.
+                    Telling someone to wait for something that will never
+                    change is worse than telling them nothing. */}
+                {/upgrade|tier|403/i.test(insightsError)
+                  ? (isAr ? "الميزة دي في باقة Standard وفوق." : "This feature is on the Standard plan and above.")
+                  : /network|fetch|timeout|abort/i.test(insightsError)
+                  ? (isAr ? "مفيش اتصال بالسيرفر — اتأكد من النت وجرّب تاني" : "Can't reach the server — check your connection and retry")
+                  : (isAr ? "في مشكلة عندنا في تحميل الربط، مش عندك." : "Something is wrong on our side loading this, not on yours.")}
                 <div style={{ color:"#64748b", fontSize:11, marginTop:6 }}>{insightsError}</div>
+                <button onClick={loadInsights} style={{ marginTop:12, padding:"7px 16px", borderRadius:8,
+                  border:"1px solid rgba(148,163,184,.3)", background:"transparent", color:"#94a3b8",
+                  fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                  {isAr ? "إعادة المحاولة" : "Retry"}
+                </button>
               </div>
             )}
             {!loadingInsights && !insightsError && note && (
