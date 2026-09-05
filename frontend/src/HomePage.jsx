@@ -10,7 +10,9 @@ import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast, featureTier } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
 import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI, FamilyAPI } from "./services/api.js";
-import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
+// Lifted into its own module so the LIVE page can render the same controls
+// inline — see VoiceCoachSettings.jsx.
+import VoiceCoachSettings from "./VoiceCoachSettings.jsx";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
 import { BasicDashboard } from "./BasicFeatures.jsx";
@@ -3067,102 +3069,6 @@ function VoiceCoachUpsell({ cs, isAr, onUpgrade }) {
       <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"linear-gradient(135deg,#d4af37,#b8860b)",
         border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
         {isAr?"⭐ Elite":"⭐ Elite"}
-      </button>
-    </div>
-  );
-}
-
-// ── Voice Coach personalization block ───────────────────────────────
-function VoiceCoachSettings({ cs, isAr, lang, addToast }) {
-  const langKey = isAr ? "ar" : "en";
-  const [prefs, setPrefsState] = useState(() => getVoicePrefs());
-  const [voices, setVoices]    = useState([]);
-
-  useEffect(() => {
-    const load = () => setVoices(getAvailableVoices(langKey));
-    load();
-    // getVoices() can populate asynchronously in some browsers
-    window.speechSynthesis?.addEventListener?.("voiceschanged", load);
-    return () => window.speechSynthesis?.removeEventListener?.("voiceschanged", load);
-  }, [langKey]);
-
-  const locales = LOCALE_OPTIONS[langKey] || LOCALE_OPTIONS.en;
-  const currentLocale = prefs.locale || locales[0].code;
-
-  const update = (partial) => setPrefsState(setVoicePrefs(partial));
-
-  const preview = () => {
-    const text = isAr ? "كده صوتي هيبقى وأنت بتستخدم المدرب الصوتي." : "This is how I'll sound during your voice coaching sessions.";
-    const ok = speakCoach(text, langKey, { preview: true });
-    if (!ok) addToast?.(isAr ? "المتصفح ده مش بيدعم الأصوات" : "This browser doesn't support speech voices", "error");
-  };
-
-  return (
-    <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12, padding:"20px" }}>
-      <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:6 }}>
-        {isAr?"صوت المدرب":"Voice Coach"}
-      </div>
-      <div style={{ fontSize:12, color:cs.muted, marginBottom:16, lineHeight:1.6 }}>
-        {isAr?"اختار اللهجة والصوت اللي يناسبك أثناء الجلسات المباشرة (خطة Elite)."
-             :"Choose the accent and voice you'd like during live sessions (Elite plan)."}
-      </div>
-
-      <div style={{ marginBottom:14 }}>
-        <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
-          {isAr?"اللهجة":"Accent"}
-        </div>
-        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          {locales.map(l => (
-            <button key={l.code} onClick={()=>update({ locale:l.code, voiceURI:null })}
-              style={{ padding:"7px 14px", borderRadius:99, cursor:"pointer", fontSize:12, fontWeight:600,
-                border: currentLocale===l.code ? "1px solid rgba(16,185,129,.4)" : `1px solid ${cs.border}`,
-                background: currentLocale===l.code ? "rgba(16,185,129,.12)" : "transparent",
-                color: currentLocale===l.code ? "#10b981" : cs.muted }}>
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {voices.length > 0 && (
-        <div style={{ marginBottom:14 }}>
-          <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
-            {isAr?"الصوت":"Voice"}
-          </div>
-          <select value={prefs.voiceURI || ""} onChange={e=>update({ voiceURI: e.target.value || null })}
-            style={{ width:"100%", background:cs.inp, border:`1px solid ${cs.border}`,
-              borderRadius:8, color:cs.text, padding:"8px 10px", fontSize:12.5 }}>
-            <option value="">{isAr?"تلقائي (أفضل مطابقة)":"Automatic (best match)"}</option>
-            {voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      <div style={{ display:"flex", gap:16, marginBottom:16 }}>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
-            {isAr?"السرعة":"Speed"}: {(prefs.rate ?? (isAr?0.95:1.0)).toFixed(2)}x
-          </div>
-          <input type="range" min="0.6" max="1.4" step="0.05"
-            value={prefs.rate ?? (isAr?0.95:1.0)}
-            onChange={e=>update({ rate: parseFloat(e.target.value) })}
-            style={{ width:"100%" }} />
-        </div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:11, fontWeight:600, color:cs.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:".04em" }}>
-            {isAr?"طبقة الصوت":"Pitch"}: {(prefs.pitch ?? 1.0).toFixed(2)}
-          </div>
-          <input type="range" min="0.6" max="1.4" step="0.05"
-            value={prefs.pitch ?? 1.0}
-            onChange={e=>update({ pitch: parseFloat(e.target.value) })}
-            style={{ width:"100%" }} />
-        </div>
-      </div>
-
-      <button onClick={preview} style={{ width:"100%", padding:"9px",
-        background:"rgba(16,185,129,.1)", border:"1px solid rgba(16,185,129,.25)", borderRadius:8,
-        color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-        🔊 {isAr?"تجربة الصوت":"Preview voice"}
       </button>
     </div>
   );

@@ -13,9 +13,16 @@
 
 let _lastSpeakMs = 0;
 let _enabled = false;
+let _primed  = false;
 
-/** Minimum gap between spoken cues — voice is more intrusive than a beep */
-const SPEAK_COOLDOWN_MS = 25000;
+/**
+ * Minimum gap between spoken cues, BY SEVERITY. A single global 25s window
+ * meant a severe fault landing ten seconds after a mild one was silently
+ * dropped — the coach went quiet at exactly the moment it had the most to
+ * say. Severe cues are what the user is paying for; they wait 8s, not 25.
+ */
+const SPEAK_COOLDOWN_MS = { severe: 8000, moderate: 20000, mild: 35000 };
+const DEFAULT_COOLDOWN_MS = 25000;
 
 const PREF_KEY = "voiceCoach_prefs";
 
@@ -60,11 +67,86 @@ export function getAvailableVoices(lang = "en") {
 }
 
 export function setVoiceCoachEnabled(on) {
+  const was = _enabled;
   _enabled = !!on;
-  if (!_enabled) stopSpeaking();
+  if (!_enabled && was) stopSpeaking();
+}
+
+/**
+ * Does this device have ANY voice that can pronounce this language?
+ *
+ * Without this the coach fails in the worst possible way: with no Arabic
+ * voice installed the browser does not fall silent, it reads the Arabic
+ * string with an English voice. The user hears fluent nonsense and concludes
+ * the product is broken — which, for them, it is. Settings warns instead.
+ */
+export function hasVoiceFor(lang = "en") {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  const voices = window.speechSynthesis.getVoices?.() || [];
+  if (!voices.length) return true;   // not enumerated yet — don't cry wolf
+  return voices.some(v => v.lang?.toLowerCase().startsWith(lang));
+}
+
+/**
+ * Satisfy Chrome's autoplay gate while a real user gesture is on the stack.
+ *
+ * speechSynthesis is gesture-gated the same way audio is. The first spoken
+ * cue arrives minutes into a session, long after any click, and Chrome
+ * refuses it — silently, with no error and no event. Speaking a zero-length
+ * utterance from the Start Session click unlocks the synth for the rest of
+ * the page's life. Call it from a click handler, never from an effect.
+ */
+export function primeSpeech() {
+  // Deliberately NOT latched on success. A gesture-policy refusal is silent —
+  // speak() does not throw and fires no event — so there is no way to know the
+  // priming took. Latching on the first attempt meant that if the first one
+  // was refused (it ran outside a gesture, or the page was still loading) the
+  // coach stayed locked for the rest of the page's life with no retry. A
+  // zero-volume one-character utterance costs nothing; re-priming each session
+  // start is strictly better than one unverifiable attempt.
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  try {
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    window.speechSynthesis.speak(u);
+    _primed = true;
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Chrome stops the synthesis queue after ~15s of a backgrounded tab and does
+ * not restart it on return, so the coach goes permanently mute the first time
+ * the user switches tabs. resume() is the documented un-wedge.
+ */
+if (typeof window !== "undefined" && "speechSynthesis" in window) {
+  try {
+    document.addEventListener("visibilitychange", () => {
+      try {
+        // Deliberately does NOT cancel on hide. Chrome suspends the queue by
+        // itself; cancelling as well threw away a cue that was mid-sentence,
+        // so a one-second alt-tab silently ate a coaching cue that the
+        // per-cause backoff would then not re-issue for another five minutes.
+        // resume() is the documented un-wedge for the queue Chrome stops after
+        // ~15s in the background and never restarts on return.
+        if (!document.hidden && window.speechSynthesis.paused) window.speechSynthesis.resume();
+      } catch {}
+    });
+  } catch {}
 }
 
 export function isVoiceCoachEnabled() { return _enabled; }
+
+/**
+ * Forget the last-spoken timestamp.
+ *
+ * Called when a session starts: the cooldown is a within-session pacing rule,
+ * not a property of the app. Without this, stopping a session and starting a
+ * new one seconds later carried the old window across, and the first alert of
+ * the new session — often the one that matters, because the user has just sat
+ * down badly — was silently swallowed.
+ */
+export function resetSpeechCooldown() { _lastSpeakMs = 0; }
 
 export function stopSpeaking() {
   try { window.speechSynthesis?.cancel(); } catch {}
@@ -100,21 +182,46 @@ if (typeof window !== "undefined" && "speechSynthesis" in window) {
   } catch {}
 }
 
-export function speakCoach(text, lang = "en", { force = false, preview = false } = {}) {
+export function speakCoach(text, lang = "en", { force = false, preview = false, severity = "moderate" } = {}) {
   // `preview` is the only thing that may speak while the coach is off, and it
   // is used exclusively by the toggle confirmation and the settings preview —
   // both already behind the Elite gate at their call sites.
-  if (!preview && !_enabled) return false;
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  if (!preview && !_enabled) return "disabled";
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return "unsupported";
+  // Talking to a tab nobody is looking at is what the desktop notification is
+  // for. Chrome would also refuse it and wedge the queue.
+  if (!preview && typeof document !== "undefined" && document.hidden) return "hidden";
+
+  // Pictographs, arrows/symbols and dingbats, plus the variation selector and
+  // ZWJ that glue multi-codepoint emoji together. Kept as an alternation
+  // rather than one class because a combining mark inside a character class is
+  // a lint error (and does the wrong thing for sequences). Arabic (U+0600-
+  // U+06FF) is untouched — the previous fixed list of six symbols left every
+  // other emoji to be read aloud as its CLDR name.
+  const clean = String(text || "")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{2BFF}\u{2600}-\u{27BF}]/gu, "")
+    .replace(/[️‍]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Validate BEFORE touching the clock. This used to stamp _lastSpeakMs first
+  // and bail on an empty string afterwards, so one emoji-only cue muted the
+  // coach for the next 25 seconds without ever making a sound.
+  if (!clean) return "empty";
+
   const now = Date.now();
-  // `force` skips the rate limit only. It used to skip the entitlement too.
-  if (!force && !preview && now - _lastSpeakMs < SPEAK_COOLDOWN_MS) return false;
-  _lastSpeakMs = now;
+  // `force` and `preview` skip the rate limit — and, importantly, do NOT
+  // consume it. Toggling the coach on used to burn the window, so the first
+  // real alert within the next 25s was swallowed by the confirmation message.
+  if (!force && !preview) {
+    const gap = SPEAK_COOLDOWN_MS[severity] ?? DEFAULT_COOLDOWN_MS;
+    if (now - _lastSpeakMs < gap) return "cooldown";
+    _lastSpeakMs = now;
+  }
+
   try {
-    const synth = window.speechSynthesis;
+    const synth  = window.speechSynthesis;
+    if (synth.paused) { try { synth.resume(); } catch {} }
     synth.cancel(); // never queue up a backlog of stale cues
-    const clean = String(text || "").replace(/⚠|✓|✗|▶|⏹|🔴|🟡|🟢|🔊|🔇|🎙️|™️/gu, "").trim();
-    if (!clean) return false;
     const prefs  = loadPrefs();
     const locale = prefs.locale || (lang === "ar" ? "ar-EG" : "en-US");
     const speakNow = () => {
@@ -131,11 +238,16 @@ export function speakCoach(text, lang = "en", { force = false, preview = false }
         if (!match) match = voices.find(v => v.lang === locale);
         if (!match) match = voices.find(v => v.lang?.toLowerCase().startsWith(lang === "ar" ? "ar" : "en"));
         if (match) u.voice = match;
+        // Chrome drops long utterances mid-sentence unless nudged; a cue is
+        // one short sentence, so a single resume tick on start is enough.
+        u.onstart = () => { try { setTimeout(() => synth.resume(), 250); } catch {} };
         synth.speak(u);
       } catch {}
     };
     setTimeout(speakNow, CANCEL_SPEAK_GAP_MS);
-    return true;
-  } catch { return false; }
+    return "spoken";
+  } catch { return "error"; }
 }
 
+/** Back-compat for call sites that only wanted a boolean. */
+export function didSpeak(result) { return result === "spoken"; }
