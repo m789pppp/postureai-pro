@@ -11,7 +11,7 @@ if (typeof window !== 'undefined') {
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
-import { decimate } from "./lib/clinicalMetrics.js";
+import { decimate, sessionTrend } from "./lib/clinicalMetrics.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -4068,7 +4068,20 @@ export default function App(){
             // needs it immediately, including session save.
             if (_nowTs - lastUiPushRef.current >= 250) {
               lastUiPushRef.current = _nowTs;
-              startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(finalResult); });
+              // `overall` carries the SMOOTHED score to the UI, because that is
+              // the number everything else in the product already uses.
+              //
+              // What this fixes: the badge and the gauge read
+              // analysis.overall, which was the RAW per-frame score, while the
+              // history chart, the session average and the saved session all
+              // used `displayScore` (smoothed). Three numbers from two
+              // pipelines on one screen, and the one the user watched climbing
+              // was the jumpy one the smoother exists to tame — a single frame
+              // of a good angle spiked it several points and it fell straight
+              // back. `overall_raw` is kept for anything that genuinely wants
+              // the instantaneous value.
+              const uiResult = { ...finalResult, overall: displayScore, overall_raw: finalResult.overall };
+              startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(uiResult); });
             }
             // Privacy: pixelate the face first so the skeleton draws on top of it.
             //
@@ -4286,7 +4299,7 @@ export default function App(){
               // literally the string "undefined" wherever it got rendered.
               // gradeScore/gradeScoreAr (already imported, already used by
               // the engine's own grading) give the real label.
-              startTransition(()=>setScoreStatus({score:finalResult.overall,grade:isAr?gradeScoreAr(finalResult.overall):gradeScore(finalResult.overall)}));
+              startTransition(()=>setScoreStatus({score:displayScore,grade:isAr?gradeScoreAr(displayScore):gradeScore(displayScore)}));
             }
           }
         } else {
@@ -5153,7 +5166,14 @@ export default function App(){
           // from refs that a newly started session may already have cleared.
           queue.push({uid:user.uid,data:_sessionPayload,queuedAt:Date.now()});
           localStorage.setItem(key, JSON.stringify(queue.slice(-10))); // cap at 10 pending
-          addToast(isAr?"⚠️ فشل الحفظ — هنحاول تاني تلقائياً":"⚠️ Save failed — will retry automatically","warn");
+          // The code goes in the message. It used to reach only console.error,
+          // so a user reporting "my sessions aren't saving" could not tell
+          // anyone WHY, and neither could we — permission-denied,
+          // resource-exhausted and a rejected write all looked identical.
+          const _code = e?.code || e?.message || "unknown";
+          addToast(isAr
+            ? `⚠️ فشل حفظ الجلسة (${_code}) — محفوظة عندك وهنحاول تاني`
+            : `⚠️ Session save failed (${_code}) — kept locally, will retry`, "warn");
         }catch{
           addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
         }
@@ -7880,15 +7900,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // oldest − newest. A user who had improved by 51 points was told,
               // continuously, in amber, that he was "51 pts worse than your
               // first sessions".
-              const sess = userSessions;
-              if(sess.length < 4) return null;
-              const recent3 = sess.slice(0, 3);   // newest
-              const first3  = sess.slice(-3);     // oldest
-              const firstAvg = Math.round(first3.reduce((a,s)=>a+(s.avg_score||0),0)/first3.length);
-              const lastAvg  = Math.round(recent3.reduce((a,s)=>a+(s.avg_score||0),0)/recent3.length);
-              const diff = lastAvg - firstAvg;
-              if(Math.abs(diff) < 2) return null; // noise threshold
-              const up = diff > 0;
+              // See sessionTrend() — the guards it applies, and why each one
+              // exists, are documented there and covered by tests.
+              const tr = sessionTrend(userSessions);
+              if(!tr) return null;
+              const diff = tr.diff;
+              const up = tr.improving;
               return (
                 <div style={{
                   marginTop:8, paddingTop:8,

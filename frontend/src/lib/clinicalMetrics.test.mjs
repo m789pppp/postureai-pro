@@ -19,7 +19,7 @@
 import {
   mean, metricScore, metricValue, zoneRisk, cervicalLoadKg, neckFlexionDeg, decimate,
   sessionFatigue, weekWindows, lifetimeSessions, readingReliability,
-  fmtMeasure, NON_POSTURAL_METRICS,
+  fmtMeasure, NON_POSTURAL_METRICS, sessionTimeMs, bySessionTimeDesc, sessionTrend,
 } from "./clinicalMetrics.js";
 
 let pass = 0, fail = 0;
@@ -189,6 +189,70 @@ check("position_penalty excluded", NON_POSTURAL_METRICS.has("position_penalty"))
 check("session_fatigue excluded", NON_POSTURAL_METRICS.has("session_fatigue"));
 check("confidence_val excluded", NON_POSTURAL_METRICS.has("confidence_val"));
 check("a real metric is not excluded", !NON_POSTURAL_METRICS.has("neck_lean"));
+
+
+console.log("\na pending server timestamp must not bury the session that just ended");
+{
+  // Firestore's serverTimestamp() is NULL in the local cache until the server
+  // acknowledges the write. Every sort read created_at and fell back to 0, so
+  // the session the user had just finished sat at the BOTTOM of their own
+  // history for the length of the round trip — which reads as "it didn't save".
+  const acked   = { avg_score: 70, created_at: { seconds: 1_700_000_000 }, created_at_ms: 1_699_999_000_000 };
+  const pending = { avg_score: 80, created_at: null, created_at_ms: 1_800_000_000_000 };
+  eq("an acknowledged session uses the server time", sessionTimeMs(acked), 1_700_000_000_000);
+  eq("a pending one falls back to the client clock", sessionTimeMs(pending), 1_800_000_000_000);
+  const sorted = [acked, pending].sort(bySessionTimeDesc);
+  eq("so the newest session sorts first", sorted[0].avg_score, 80);
+  // Under the old `?? 0` fallback this same input put the new session last.
+  const oldWay = [acked, pending].sort((a,b)=>((b.created_at?.seconds*1000)||0)-((a.created_at?.seconds*1000)||0));
+  check("pins the old ordering as the regression", oldWay[0].avg_score === 70 && sorted[0].avg_score === 80);
+  eq("a session with neither is last, not NaN", sessionTimeMs({}), 0);
+  eq("a Firestore Timestamp object works", sessionTimeMs({ created_at: { toDate: () => new Date(5000) } }), 5000);
+}
+
+console.log("\nthe 'better than your first sessions' trend");
+{
+  const S = (avg_score) => ({ avg_score });
+  // newest-first, as userSessions is
+  const improving = [S(85), S(84), S(83), S(60), S(58), S(57)];
+  eq("a real improvement is reported", sessionTrend(improving)?.diff, 26);
+  check("and flagged as improving", sessionTrend(improving)?.improving === true);
+
+  // The shipped bug: `(s.avg_score||0)` counted a session that failed to
+  // record a score as a session SCORED ZERO. Those are almost always the
+  // earliest ones, so the oldest window averaged near nothing and a first-week
+  // user was congratulated on an improvement of fifty-odd points.
+  // Scores chosen so the fabricated jump is UNDER the implausible-swing
+  // ceiling: only the exclusion itself can catch this one, so the assertion
+  // cannot be satisfied by a different guard further down.
+  const withUnscored = [S(55), S(55), S(55), S(0), S(undefined), S(null)];
+  const oldRecent = Math.round((55 + 55 + 55) / 3);
+  const oldFirst  = Math.round([0, undefined, null].reduce((a, v) => a + (v || 0), 0) / 3);
+  check("the old formula fabricated a +55 improvement here",
+    oldRecent - oldFirst === 55 && 55 < 60, "and 55 is inside the plausible range, so nothing else would have stopped it");
+  eq("unscored sessions are excluded, so there is no comparison to make", sessionTrend(withUnscored), null);
+
+  // …and with enough genuinely-scored sessions alongside them, the unscored
+  // ones must not drag the baseline down either.
+  const mixed = [S(70), S(70), S(70), S(64), S(64), S(64), S(0), S(null)];
+  eq("a real comparison ignores them rather than averaging them in", sessionTrend(mixed)?.diff, 6);
+
+  eq("four sessions is not enough — the windows would overlap", sessionTrend([S(80),S(80),S(80),S(50)]), null);
+  {
+    // slice(0,3) is [0,1,2] and slice(-3) is [1,2,3]: two of three shared.
+    const four = [S(90), S(70), S(70), S(50)];
+    const overlapFirst = four.slice(-3), overlapRecent = four.slice(0,3);
+    check("pins the overlap as the reason",
+      overlapFirst.filter(x => overlapRecent.includes(x)).length === 2);
+  }
+
+  eq("a flat run reports nothing rather than noise", sessionTrend([S(80),S(80),S(81),S(80),S(79),S(80)]), null);
+  eq("an implausible swing is treated as a data problem",
+     sessionTrend([S(95),S(95),S(95),S(5),S(5),S(5)]), null);
+  eq("a decline is reported too", sessionTrend([S(55),S(55),S(55),S(85),S(85),S(85)])?.improving, false);
+  eq("no sessions at all is null", sessionTrend([]), null);
+  eq("null input is null", sessionTrend(null), null);
+}
 
 console.log(`\n${pass} passed · ${fail} failed`);
 if (fail) { failures.forEach(f => console.log("  ✗ " + f)); process.exit(1); }
