@@ -115,12 +115,15 @@ export function QAAccuracyTest({ analysis, camActive, isAr = false, cs, onClose 
   const baselineOverall = avgOverall("straight");
   const results = PHASES.map((p) => {
     if (p.expect === "highest") {
-      const isHighest = PHASES.every((other) => {
-        if (other.id === p.id) return true;
+      let beatBy = null; // { id, by } of the worst offender, if any
+      PHASES.forEach((other) => {
+        if (other.id === p.id) return;
         const o = avgOverall(other.id);
-        return o == null || baselineOverall == null || baselineOverall >= o - 2; // 2pt tolerance for noise
+        if (o != null && baselineOverall != null && o > baselineOverall + (beatBy?.by ?? -2)) {
+          beatBy = { id: other.id, by: o - baselineOverall };
+        }
       });
-      return { ...p, value: baselineOverall, pass: baselineOverall != null && isHighest };
+      return { ...p, value: baselineOverall, pass: baselineOverall != null && !beatBy, beatBy };
     }
     const metricScore = avgMetric(p.id, p.metricKey);
     const baselineMetricScore = avgMetric("straight", p.metricKey);
@@ -134,10 +137,12 @@ export function QAAccuracyTest({ analysis, camActive, isAr = false, cs, onClose 
     const lines = [
       `Corvus QA Accuracy Test — ${new Date().toISOString()}`,
       `Overall: ${passCount}/${PHASES.length} phases correct (${accuracyPct}%)`,
-      ...results.map((r) =>
-        `- ${r.id}: ${r.pass ? "PASS" : "FAIL"} (baseline overall=${baselineOverall?.toFixed(1) ?? "?"}, ` +
-        (r.metricKey ? `${r.metricKey} score ${r.baselineValue?.toFixed(1) ?? "?"} -> ${r.value?.toFixed(1) ?? "?"})` : `value=${r.value?.toFixed(1) ?? "?"})`)
-      ),
+      ...results.map((r) => {
+        if (r.expect === "highest") {
+          return `- ${r.id}: ${r.pass ? "PASS" : "FAIL"} (avg overall=${r.value?.toFixed(1) ?? "?"}${r.beatBy ? `, beaten by ${r.beatBy.id} by ${r.beatBy.by.toFixed(1)}pt` : ""})`;
+        }
+        return `- ${r.id}: ${r.pass ? "PASS" : "FAIL"} (${r.metricKey} score ${r.baselineValue?.toFixed(1) ?? "?"} -> ${r.value?.toFixed(1) ?? "?"})`;
+      }),
     ];
     navigator.clipboard?.writeText(lines.join("\n"));
   }
@@ -206,9 +211,22 @@ export function QAAccuracyTest({ analysis, camActive, isAr = false, cs, onClose 
               </div>
             </div>
             {results.map((r) => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${border}`, fontSize: 12.5 }}>
-                <span style={{ color: text }}>{isAr ? r.ar : r.en}</span>
-                <span style={{ color: r.pass ? "#34d399" : "#f87171", fontWeight: 700 }}>{r.pass ? "✓" : "✗"}</span>
+              <div key={r.id} style={{ padding: "9px 0", borderBottom: `1px solid ${border}`, fontSize: 12.5 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ color: text }}>{isAr ? r.ar : r.en}</span>
+                  <span style={{ color: r.pass ? "#34d399" : "#f87171", fontWeight: 700 }}>{r.pass ? "✓" : "✗"}</span>
+                </div>
+                <div style={{ fontSize: 11, color: muted, marginTop: 3 }}>
+                  {r.expect === "highest"
+                    ? (r.beatBy
+                        ? (isAr
+                            ? `متوسط: ${r.value?.toFixed(1) ?? "—"} — بس "${r.beatBy.id}" طلع أعلى بـ ${r.beatBy.by.toFixed(1)} نقطة`
+                            : `avg: ${r.value?.toFixed(1) ?? "—"} — but "${r.beatBy.id}" scored ${r.beatBy.by.toFixed(1)}pt higher`)
+                        : (isAr ? `متوسط السكور: ${r.value?.toFixed(1) ?? "—"}` : `avg overall score: ${r.value?.toFixed(1) ?? "—"}`))
+                    : (isAr
+                        ? `${r.metricKey}: ${r.baselineValue?.toFixed(1) ?? "—"} ← مستقيم، ${r.value?.toFixed(1) ?? "—"} ← هنا`
+                        : `${r.metricKey}: ${r.baselineValue?.toFixed(1) ?? "—"} (straight) → ${r.value?.toFixed(1) ?? "—"} (this phase)`)}
+                </div>
               </div>
             ))}
             <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
