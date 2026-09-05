@@ -339,6 +339,113 @@ except Exception as _db_init_err:
     db = None
     print(f"⚠️  Firestore client init failed: {_db_init_err}", file=sys.stderr)
 
+# ── Composite-index-independent per-user queries ──────────────────────
+#
+# WHY THIS EXISTS. Twenty-six endpoints in this file run the same shape of
+# query: `where uid == me AND <time field> >= cutoff`, often with an order_by.
+# Firestore needs a COMPOSITE INDEX for every one of those, and a composite
+# index does not come from deploying code — it comes from
+# `firebase deploy --only firestore:indexes`, a separate command that is easy
+# to forget and produces no failure anywhere if you do.
+#
+# When the index is absent, Firestore raises FAILED_PRECONDITION. That reached
+# the user as a 500, which the UI rendered as "try again shortly" — advice that
+# is false, because it will fail identically forever. Symptom Correlation,
+# Progress, streaks, score history and the weekly report were all dark at once
+# for exactly this reason, with nothing anywhere saying why.
+#
+# So: try the indexed query, and if the index is missing, fall back to the
+# single-field `uid ==` query — which needs only the automatic index Firestore
+# always maintains — and do the range filter and the sort in Python. A single
+# user's own rows are a small set; this is slower and costs more reads, but it
+# is CORRECT, and a feature that works slightly less efficiently beats a
+# feature that does not work.
+#
+# The log line carries the URL Firestore hands back, which creates the index in
+# one click. It is printed once per (collection, field) per process so a busy
+# endpoint cannot flood the logs.
+_MISSING_INDEX_SEEN = set()
+
+
+def _is_missing_index_error(e):
+    msg = str(e)
+    return ("FAILED_PRECONDITION" in msg
+            or "requires an index" in msg
+            or "The query requires an index" in msg)
+
+
+def uid_range_docs(collection, uid, field, start=None, end=None,
+                   limit=None, desc=False, fallback_cap=3000):
+    """
+    Documents for one user with `field` in [start, end), newest-first if desc.
+
+    Returns a list of dicts (NOT snapshots) — every caller of the queries this
+    replaces only ever wanted `.to_dict()`.
+    """
+    def _val(d, f):
+        return (d or {}).get(f)
+
+    def _cmp_key(v):
+        # created_at is a datetime, date is a "YYYY-MM-DD" string. Normalise
+        # both to something sortable and comparable against the cutoff.
+        if hasattr(v, "timestamp"):
+            try: return v.timestamp()
+            except Exception: return 0
+        return v
+
+    def _in_range(v):
+        if v is None: return False
+        a, b = start, end
+        # Compare like with like: a datetime cutoff against a datetime field,
+        # a "YYYY-MM-DD" cutoff against a string field.
+        if hasattr(v, "timestamp") and hasattr(a, "timestamp"):
+            v2, a2, b2 = v.timestamp(), a.timestamp(), (b.timestamp() if hasattr(b, "timestamp") else None)
+        elif isinstance(v, str) and isinstance(a, (str, type(None))):
+            v2, a2, b2 = v, a, b
+        else:
+            # Mixed types (a datetime field with a string cutoff, or vice
+            # versa) — normalise both through the day key rather than throwing.
+            v2 = _day_key(v); a2 = _day_key(a) if a is not None else None
+            b2 = _day_key(b) if b is not None else None
+        if a2 is not None and v2 < a2: return False
+        if b2 is not None and v2 >= b2: return False
+        return True
+
+    try:
+        q = db.collection(collection).where("uid", "==", uid)
+        if start is not None: q = q.where(field, ">=", start)
+        if end   is not None: q = q.where(field, "<",  end)
+        if desc: q = q.order_by(field, direction=firestore.Query.DESCENDING)
+        elif start is not None or end is not None: q = q.order_by(field)
+        if limit: q = q.limit(limit)
+        return [d.to_dict() or {} for d in q.stream()]
+    except Exception as e:
+        if not _is_missing_index_error(e):
+            raise
+        key = f"{collection}.{field}"
+        if key not in _MISSING_INDEX_SEEN:
+            _MISSING_INDEX_SEEN.add(key)
+            print(f"[firestore] MISSING COMPOSITE INDEX for {collection}(uid, {field}). "
+                  f"Serving from the un-indexed fallback — slower and more reads. "
+                  f"Deploy it with `firebase deploy --only firestore:indexes`. "
+                  f"Firestore's one-click link: {e}", file=sys.stderr)
+        rows = [d.to_dict() or {} for d in
+                db.collection(collection).where("uid", "==", uid).limit(fallback_cap).stream()]
+        rows = [r for r in rows if _in_range(_val(r, field))]
+        rows.sort(key=lambda r: _cmp_key(_val(r, field)), reverse=desc)
+        return rows[:limit] if limit else rows
+
+
+def _day_key(ts):
+    """Normalize a Firestore timestamp / datetime / iso-string into a YYYY-MM-DD key."""
+    if ts is None:
+        return None
+    if hasattr(ts, "strftime"):
+        return ts.strftime("%Y-%m-%d")
+    return str(ts)[:10]
+
+
+
 # Module-level Firebase Auth admin handle + readiness flag — same story:
 # referenced under three different undefined names (_fb_auth, firebase_auth,
 # _firebase_ok) across user-onboarding, session-revocation, and SCIM
@@ -14057,13 +14164,12 @@ def compute_gamification():
             prev_week_start_local = week_start_local - timedelta(days=7)
             week_start = prev_week_start_local - timedelta(minutes=tz_off)
 
-            wk_docs = (db.collection("sessions")
-                         .where("uid", "==", g.uid)
-                         .where("created_at", ">=", week_start)
-                         .stream())
+            # Progress's weekly challenge. Without the sessions(uid,created_at)
+            # index this raised, the whole try block below fell into its
+            # except, and the challenge card silently never rendered.
+            wk_docs = uid_range_docs("sessions", g.uid, "created_at", start=week_start)
             good_min_by_day: dict = {}
-            for sd in wk_docs:
-                d = sd.to_dict() or {}
+            for d in wk_docs:
                 sc = d.get("avg_score"); ts = d.get("created_at")
                 mins = d.get("duration_min")
                 if mins is None:
@@ -18451,23 +18557,13 @@ def get_symptom_log():
         days   = {"7d":7,"30d":30,"90d":90}.get(period, 30)
         cutoff_day = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-        docs = (db.collection("symptom_logs")
-                  .where("uid","==",uid)
-                  .where("date",">=",cutoff_day)
-                  .order_by("date", direction=firestore.Query.DESCENDING)
-                  .limit(200).stream())
-        return jsonify({"logs": [d.to_dict() for d in docs]})
+        # The History tab. Same composite-index dependency as the Insights
+        # tab beside it — both went dark together.
+        logs = uid_range_docs("symptom_logs", uid, "date",
+                              start=cutoff_day, limit=200, desc=True)
+        return jsonify({"logs": logs})
     except Exception as e:
         return safe_error(e)
-
-
-def _day_key(ts):
-    """Normalize a Firestore timestamp / datetime / iso-string into a YYYY-MM-DD key."""
-    if ts is None:
-        return None
-    if hasattr(ts, "strftime"):
-        return ts.strftime("%Y-%m-%d")
-    return str(ts)[:10]
 
 
 @app.route("/api/analytics/symptom-correlation", methods=["GET"])
@@ -18493,26 +18589,22 @@ def symptom_correlation():
         cutoff = datetime.utcnow() - timedelta(days=days)
         cutoff_day = cutoff.strftime("%Y-%m-%d")
 
-        symptom_docs = list(db.collection("symptom_logs")
-                              .where("uid","==",uid)
-                              .where("date",">=",cutoff_day)
-                              .stream())
+        # Both queries below need composite indexes that may never have been
+        # deployed — see uid_range_docs(). This screen was returning 500 and
+        # rendering "try again shortly" permanently.
+        symptom_docs = uid_range_docs("symptom_logs", uid, "date", start=cutoff_day)
         if len(symptom_docs) < MIN_DAYS:
             return jsonify({"ok": True, "insights": [],
                              "note": f"Log symptoms on at least {MIN_DAYS} different days to unlock correlations",
                              "days_logged": len(symptom_docs)})
 
-        session_docs = list(db.collection("sessions")
-                              .where("uid","==",uid)
-                              .where("created_at",">=",cutoff)
-                              .limit(1000).stream())
+        session_docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=1000)
         if not session_docs:
             return jsonify({"ok": True, "insights": [], "note": "No session data in this period"})
 
         # Aggregate sessions by day
         by_day: dict = {}
-        for s in session_docs:
-            d = s.to_dict()
+        for d in session_docs:
             day = _day_key(d.get("created_at"))
             if not day:
                 continue
@@ -18521,8 +18613,7 @@ def symptom_correlation():
         # Which symptom (severity>=3) was logged on which day
         symptom_days: dict = {}   # symptom_type -> set(days)
         all_logged_days = set()
-        for doc in symptom_docs:
-            d = doc.to_dict()
+        for d in symptom_docs:
             day = d.get("date")
             all_logged_days.add(day)
             for s in d.get("symptoms", []):
@@ -18601,25 +18692,21 @@ def _compute_symptom_insights(uid, days=90):
     cutoff = datetime.utcnow() - timedelta(days=days)
     cutoff_day = cutoff.strftime("%Y-%m-%d")
 
-    symptom_docs = list(db.collection("symptom_logs")
-                          .where("uid","==",uid).where("date",">=",cutoff_day).stream())
+    symptom_docs = uid_range_docs("symptom_logs", uid, "date", start=cutoff_day)
     if len(symptom_docs) < MIN_DAYS:
         return []
-    session_docs = list(db.collection("sessions")
-                          .where("uid","==",uid).where("created_at",">=",cutoff).limit(1000).stream())
+    session_docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=1000)
     if not session_docs:
         return []
 
     by_day = {}
-    for s in session_docs:
-        d = s.to_dict()
+    for d in session_docs:
         day = _day_key(d.get("created_at"))
         if day:
             by_day.setdefault(day, []).append(d)
 
     symptom_days = {}
-    for doc in symptom_docs:
-        d = doc.to_dict()
+    for d in symptom_docs:
         day = d.get("date")
         for s in d.get("symptoms", []):
             if s.get("severity", 0) >= 3:
