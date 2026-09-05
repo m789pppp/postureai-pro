@@ -34,8 +34,8 @@ const FEATURES = [
     // "~96% accuracy — comparable to clinical-grade ergonomic assessments" was
     // not measured against anything. No validation study exists. Describes the
     // method instead, which is genuinely differentiating on its own.
-    desc:"478-landmark MediaPipe tracking measures neck, shoulder, trunk and forward-head geometry frame by frame. Runs entirely in-browser — no video ever leaves the device.",
-    specs:[["Landmarks tracked","478 points"],["Head pose accuracy","~96%"],["Latency","< 40ms"],["Camera required","Any webcam"]],
+    desc:"MediaPipe Pose tracks 33 body landmarks in the browser and derives 13 posture metrics — neck, shoulder, trunk and forward-head geometry — frame by frame. Runs entirely on-device; no video ever leaves the machine.",
+    specs:[["Body landmarks","33 (MediaPipe Pose)"],["Posture metrics","13 per frame"],["Analysis rate","~20 fps on-device"],["Camera required","Any webcam"]],
     bullets:["Forward head posture detection (Hansraj 2014)","Shoulder asymmetry & neck tilt","OSHA-compliant elbow angle monitoring","Fatigue curve scoring (Richter 2011)"],
   },
   {
@@ -161,7 +161,7 @@ export default function ProductPage() {
       <div style={{ background:T.bg1, borderTop:"1px solid rgba(148,163,184,.06)", borderBottom:"1px solid rgba(148,163,184,.06)" }}>
         <div className="pp-wrap">
           <div className="pp-stats-bar">
-            {[["478","Landmarks tracked"],["< 40ms","Analysis latency"],["~96%","Accuracy rate"],["0 bytes","Video stored"]].map(([val,label],i,arr)=>(
+            {[["33","Body landmarks"],["13","Posture metrics"],["~20 fps","On-device analysis"],["0 bytes","Video stored"]].map(([val,label],i,arr)=>(
               <div key={label} style={{
                 padding:"28px 0", textAlign:"center",
                 borderRight: i<arr.length-1 ? "1px solid rgba(148,163,184,.06)" : "none",

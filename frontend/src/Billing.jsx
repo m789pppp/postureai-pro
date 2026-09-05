@@ -123,8 +123,8 @@ export const B2B_PLANS = {
       yearly:  import.meta.env.VITE_STRIPE_PRICE_B2B_GROWTH_YEARLY  || "",
     },
     color:"#1a56db", seats:100, popular:true,
-    features:   ["Up to 100 employees","Everything in Starter","FaceMesh 478 landmarks","3D solvePnP head pose","Advanced HR analytics","Priority support"],
-    featuresAr: ["حتى 100 موظف","كل مزايا ستارتر","كشف 478 نقطة FaceMesh","وضع رأس 3D solvePnP","تحليلات HR متقدمة","دعم أولوية"],
+    features:   ["Up to 100 employees","Everything in Starter","Custom alert rules","Clinical PDF reports","Advanced HR analytics","Priority support"],
+    featuresAr: ["حتى 100 موظف","كل مزايا ستارتر","قواعد تنبيه مخصّصة","تقارير PDF إكلينيكية","تحليلات HR متقدمة","دعم أولوية"],
   },
   b2b_enterprise: {
     id:"b2b_enterprise", name:"Enterprise", nameAr:"إنتربرايز",

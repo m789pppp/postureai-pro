@@ -479,7 +479,7 @@ function AnalyticsInline({ userSessions = [], profile, cs, isAr, tier, onOpenFul
 // ══════════════════════════════════════════════════════════════════
 // INDIVIDUAL DASHBOARD
 // ══════════════════════════════════════════════════════════════════
-function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs, isAr, setPage, startCamera,
+function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserSessions, tier, cs, isAr, setPage, startCamera,
   onCoach, onBilling, onAnalytics, onCalib, onReports, onCompare, onTrend, addToast,
   setShowGamification, setShowGrowthHub, setShowSecurityCenter, setShowAIInsights,
   setShowPredictiveAI, setShowCustomerSuccess, setShowChurnPrediction,
@@ -574,7 +574,9 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
             </div>
           </div>
           <div style={{ fontSize:13, color:cs.muted, marginBottom:14, lineHeight:1.5 }}>
-            {userSessions.length===0
+            {sessionsLoading && userSessions.length===0
+              ? (isAr?"جاري تحميل بياناتك…":"Loading your data…")
+              : userSessions.length===0
               ? (isAr?"ابدأ جلستك الأولى لتتبع وضعيتك":"Start your first session to track your posture")
               : last>=80 ? `💪 ${isAr?"وضعيتك ممتازة — استمر!":"Great posture — keep it up!"}`
               : last>=60 ? `📈 ${isAr?"وضعيتك جيدة، في تحسن":"Decent posture, improving!"}`
@@ -587,7 +589,7 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
                 cursor:"pointer", boxShadow:"0 4px 14px rgba(26,86,219,.4)" }}>
               {isAr?"▶ ابدأ جلسة":"▶ Start Session"}
             </button>
-            {userSessions.length===0 && (
+            {userSessions.length===0 && !sessionsLoading && (
               <button onClick={()=>setShowDemoSession(true)}
                 style={{ padding:"10px 18px", background:"rgba(148,163,184,.08)",
                   border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, fontSize:13, fontWeight:600,
@@ -811,6 +813,9 @@ function DashIndividual({ user, profile, userSessions, setUserSessions, tier, cs
 function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage, startCamera, onCoach, addToast, tier, tab, setTab }) {
   const last    = userSessions[0]?.avg_score || 0;
   const avg     = profile?.avg_score || (userSessions.length ? Math.round(userSessions.reduce((a,s)=>a+(s.avg_score||0),0)/userSessions.length) : 0);
+  // Whether there is anything to show at all, kept separate from the number
+  // itself so an absence never renders as a measurement of zero.
+  const hasScore = (profile?.sessions_count || 0) > 0 || userSessions.length > 0;
   const streak  = profile?.streak_days || 0;
   const gradeColor = s => s>=80?"#10b981":s>=60?"#f59e0b":"#ef4444";
 
@@ -901,15 +906,32 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
             <div style={{ fontSize:12, color:cs.muted, marginTop:3 }}>
               {isAr?`متوسط الفريق: ${teamAvg}/100`:`Team average: ${teamAvg}/100`}
             </div>
-            <div style={{ marginTop:8, height:6, borderRadius:99, background:cs.inp, position:"relative", maxWidth:220 }}>
-              <div style={{ height:6, borderRadius:99, background:gradeColor(avg), width:`${avg}%`, maxWidth:"100%" }}/>
-            </div>
-            <div style={{ fontSize:11, color:cs.muted, marginTop:3 }}>
-              {isAr?`درجتك: ${avg}/100`:`Your score: ${avg}/100`}
-              {avg>teamAvg
-                ?<span style={{ color:"#10b981", marginInlineStart:6 }}>↑ {isAr?"فوق المتوسط":"above avg"}</span>
-                :<span style={{ color:"#f59e0b", marginInlineStart:6 }}>↓ {isAr?"تحت المتوسط":"below avg"}</span>}
-            </div>
+            {/* A new employee has no score, so there is nothing to compare.
+                This rendered a 0%-wide bar, "Your score: 0/100", and — because
+                `0 > 0` is false and the ternary had no third branch — an amber
+                "↓ below average" badge. The first thing a new hire saw was the
+                product telling them they were underperforming, computed
+                entirely from the absence of data. Every other stat in this file
+                already falls back to an em-dash; this card was the one that
+                missed it. */}
+            {hasScore ? (
+              <>
+                <div style={{ marginTop:8, height:6, borderRadius:99, background:cs.inp, position:"relative", maxWidth:220 }}>
+                  <div style={{ height:6, borderRadius:99, background:gradeColor(avg), width:`${avg}%`, maxWidth:"100%" }}/>
+                </div>
+                <div style={{ fontSize:11, color:cs.muted, marginTop:3 }}>
+                  {isAr?`درجتك: ${avg}/100`:`Your score: ${avg}/100`}
+                  {Number.isFinite(teamAvg) && teamAvg > 0 && (avg>teamAvg
+                    ?<span style={{ color:"#10b981", marginInlineStart:6 }}>↑ {isAr?"فوق المتوسط":"above avg"}</span>
+                    :<span style={{ color:"#f59e0b", marginInlineStart:6 }}>↓ {isAr?"تحت المتوسط":"below avg"}</span>)}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize:11, color:cs.muted, marginTop:8, lineHeight:1.6 }}>
+                {isAr?"لسه مفيش جلسات — ابدأ أول جلسة عشان نقدر نقارن."
+                     :"No sessions yet — record your first one and this will fill in."}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1428,10 +1450,20 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 // ══════════════════════════════════════════════════════════════════
 // SESSIONS PANEL
 // ══════════════════════════════════════════════════════════════════
-function PanelSessions({ userSessions, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false, addToast }) {
+function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false, addToast }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
   const [showWeeklyIntel, setShowWeeklyIntel] = useState(false);
+
+  // Not fetched yet is not the same as none. Telling a returning user with
+  // fifty sessions to "start your first session" for the length of a Firestore
+  // round trip is the difference between a product that is loading and one
+  // that has lost their data.
+  if(sessionsLoading && !userSessions.length) return (
+    <div style={{ padding:"48px 20px", textAlign:"center", color:cs.muted, fontSize:13 }}>
+      {isAr?"جاري تحميل جلساتك…":"Loading your sessions…"}
+    </div>
+  );
 
   if(!userSessions.length) return <EmptyBlock icon="📋" cs={cs}
     title={isAr?"لا توجد جلسات":"No sessions yet"}
@@ -3426,7 +3458,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                   <span style={{ fontSize:9, color:cs.muted, fontWeight:600, textAlign:"center",
                     lineHeight:1.2 }}>{isAr?t.ar:t.en}</span>
                   {t.locked && (
-                    <span style={{ position:"absolute", top:3, insetInlineEnd:3, fontSize:7,
+                    <span style={{ position:"absolute", top:3, insetInlineEnd:3, fontSize:10,
                       fontWeight:800, letterSpacing:".04em", color:cs.muted,
                       background:cs.bg, border:`1px solid ${cs.border}`,
                       borderRadius:99, padding:"1px 4px", lineHeight:1.4 }}>
@@ -3506,7 +3538,7 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
 // ══════════════════════════════════════════════════════════════════
 export default function HomePage({
   user, profile, setProfile, cs, lang, isAr, dir,
-  userSessions, setUserSessions, allUsers, setAllUsers,
+  userSessions, sessionsLoading, setUserSessions, allUsers, setAllUsers,
   tier, setTier, mode, setMode,
   setPage, startCamera, addToast, goToBreak,
   setShowCoach, setShowBilling, setShowCompanyOnboard,
@@ -3706,7 +3738,7 @@ export default function HomePage({
       // explicit case here — same content as the individual fallback, but
       // now an intentional branch instead of an accidental one.
       if(tab==="sessions") return (
-        <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
+        <PanelSessions userSessions={userSessions} sessionsLoading={sessionsLoading} profile={profile} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
           onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin} addToast={addToast}
           onDeleteSession={handleDeleteSession}
@@ -3726,7 +3758,7 @@ export default function HomePage({
           onCoach={openCoach} addToast={addToast} tier={tier} tab={tab} setTab={setTab}/>
       );
       if(tab==="sessions") return (
-        <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
+        <PanelSessions userSessions={userSessions} sessionsLoading={sessionsLoading} profile={profile} cs={cs} isAr={isAr}
           setPage={setPage} startCamera={startCamera}
           onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin} addToast={addToast}
           onDeleteSession={handleDeleteSession}
@@ -3742,7 +3774,7 @@ export default function HomePage({
     // the hr_admin branch above handles its own "analytics" tab.
     if(tab==="analytics") return null; // handled by the effect below
     if(tab==="sessions") return (
-      <PanelSessions userSessions={userSessions} profile={profile} cs={cs} isAr={isAr}
+      <PanelSessions userSessions={userSessions} sessionsLoading={sessionsLoading} profile={profile} cs={cs} isAr={isAr}
         setPage={setPage} startCamera={startCamera}
         onDownloadPDF={downloadPDF} onDownloadClinicalPDF={(s)=>downloadPDF(s,true)} onComparisonPDF={downloadComparisonPDF} onTeamPDF={downloadTeamPDF} onLongitudinalPDF={downloadLongitudinalPDF} onPostureDNA={downloadPostureDNAReport} onShareReport={shareReport} tier={tier} isHRAdmin={isHRAdmin} addToast={addToast}
         onDeleteSession={handleDeleteSession}
@@ -3750,7 +3782,7 @@ export default function HomePage({
     );
 
     return (
-      <DashIndividual user={user} profile={profile} userSessions={userSessions} setUserSessions={setUserSessions} tier={tier}
+      <DashIndividual user={user} profile={profile} userSessions={userSessions} sessionsLoading={sessionsLoading} setUserSessions={setUserSessions} tier={tier}
         cs={cs} isAr={isAr} setPage={setPage} startCamera={startCamera}
         onCoach={openCoach} onBilling={openBilling} onAnalytics={openAnalytics}
         onCalib={openCalib} onReports={openReports} addToast={addToast}

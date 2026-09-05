@@ -495,7 +495,11 @@ This user score: ${avgScore}/100
           {/* KPI strip */}
           <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
             {[
-              { l: isAr ? "المتوسط" : "Avg",       v: `${avgScore}/100`,     c: sc(avgScore) },
+              // Same as AIInsights: zero sessions is not an average of zero.
+              // This file already guards its LLM prompt against exactly this
+              // (see the score-validity checks above) — the guard just never
+              // reached the tile the user actually looks at.
+              { l: isAr ? "المتوسط" : "Avg",       v: sessions?.length ? `${avgScore}/100` : "—", c: sessions?.length ? sc(avgScore) : "#6b82a6" },
               { l: isAr ? "هذا الأسبوع" : "Week",   v: weekAvg ? `${weekAvg}/100` : "—", c: sc(weekAvg) },
               // BUG FIX: was missing the "no data" branch that the identical
               // Trend tile further down (line ~654) has — a user with no

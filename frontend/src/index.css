@@ -836,3 +836,85 @@ a { text-decoration: none; color: inherit; }
     margin-left: 236px !important;
   }
 }
+
+/* ── INTERACTIVE STATES, APPLIED GLOBALLY ─────────────────────────
+ *
+ * The app has ~657 raw <button> elements across ~60 files, almost all of them
+ * styled with inline styles and nothing else. An audit of them found that
+ * fewer than a quarter carry a `disabled` style, real hover feedback exists in
+ * two files, and keyboard focus was unstyled almost everywhere — so most
+ * buttons in the product looked identical whether you hovered them, focused
+ * them from the keyboard, pressed them, or they were disabled. A control that
+ * gives no feedback reads as a control that is not working.
+ *
+ * Fixing that per-button is 657 edits across files that will keep growing.
+ * These rules do it once. They deliberately use properties inline styles do
+ * NOT set — filter, outline, transform — so nothing here fights or overrides a
+ * button's own colours, and any component that already implements its own
+ * richer hover keeps it.
+ *
+ * :focus-visible, not :focus — a mouse click must not leave a ring behind,
+ * only keyboard navigation should. */
+button, [role="button"], summary {
+  cursor: pointer;
+  transition: filter 140ms ease, transform 140ms ease, opacity 140ms ease;
+}
+
+button:hover:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:hover:not([aria-disabled="true"]) {
+  filter: brightness(1.12);
+}
+
+button:active:not(:disabled):not([aria-disabled="true"]),
+[role="button"]:active:not([aria-disabled="true"]) {
+  transform: translateY(0.5px) scale(0.985);
+  filter: brightness(0.96);
+}
+
+/* One visible, consistent keyboard focus ring for every interactive element.
+ * Two shadows so it reads on both light and dark surfaces: an inner light
+ * separator, then the ring itself. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #4f9cf9;
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* Disabled must LOOK disabled. Only ~23% of buttons set any disabled styling
+ * of their own, so a disabled button was commonly indistinguishable from a
+ * live one — the user clicks, nothing happens, and the product looks broken
+ * rather than unavailable. */
+button:disabled,
+button[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  filter: grayscale(0.35);
+}
+
+/* Touch targets. Pointer-coarse only, so it cannot disturb the dense desktop
+ * layouts — on a phone a control smaller than ~40px is a mis-tap waiting to
+ * happen, and several icon-only controls here are 28-32px. */
+@media (pointer: coarse) {
+  button, [role="button"] {
+    min-height: 40px;
+    min-width: 40px;
+  }
+  /* Inline text buttons ("Show more", "Retry") must not become 40px blocks. */
+  button.link-btn, [role="button"].link-btn {
+    min-height: 0;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button, [role="button"], summary { transition: none; }
+  button:active:not(:disabled), [role="button"]:active { transform: none; }
+}

@@ -85,7 +85,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
   const T = {
     en: {
       title:    "Personal Posture Calibration",
-      sub:      "Takes 10 seconds — improves your accuracy by 15-20%",
+      sub:      "Takes 10 seconds — scores you against your own neutral posture instead of a population average",
       intro1:   "Sit in your ideal upright position",
       intro2:   "Keep your back straight, chin parallel to floor",
       intro3:   "Look directly at the camera",
@@ -112,7 +112,7 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
     },
     ar: {
       title:    "معايرة وضعية شخصية",
-      sub:      "10 ثواني فقط — تحسّن دقتك بنسبة 15-20%",
+      sub:      "10 ثواني بس — بتخلي التقييم على وضعيتك الطبيعية انت، مش على متوسط عام",
       intro1:   "اقعد في وضعية مستقيمة مثالية",
       intro2:   "ظهرك مستقيم، ذقنك موازي للأرض",
       intro3:   "انظر مباشرة إلى الكاميرا",

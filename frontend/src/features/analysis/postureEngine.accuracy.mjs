@@ -114,6 +114,7 @@ function readNoisy(pose = {}, zSigmaMult = 3, { settle = 130, hold = 50, seed = 
 const HIPS_IN_SHOT = { camera: { distCm: 140 } };
 
 const val = (r, k) => r?.metrics?.[k]?.value;
+const metric = (r, k) => r?.metrics?.[k];
 const THR_SHRUG_OK = 3;   // THR.SHOULDER_ELEV.ok in postureEngine.js
 const stats = (xs) => {
   const c = xs.filter(Number.isFinite);
@@ -735,6 +736,58 @@ console.log("\nINVARIANCE — same posture, irrelevant variable changed");
   if (VERBOSE) console.log(`    camera height −15..+15cm: ${rows.map(fmt).join(", ")}`);
   const ss = stats(rows);
   check("Score stable across ±15cm camera height (spread <= 20 pts)", (ss.max - ss.min) <= 20, `spread ${fmt(ss.max - ss.min)}`);
+}
+
+{
+  // ── Plane separation: forward head is a SAGITTAL finding ──────────
+  //
+  // FHP was computed as the MAGNITUDE of the ear-to-shoulder offset,
+  // sqrt(deltaX² + deltaZ²) — the frontal and sagittal axes combined into one
+  // number. Two consequences, both visible here against known ground truth:
+  //
+  //  · A pure sideways lean, with the head exactly ZERO centimetres forward,
+  //    was reported as forward head posture: 30° of lean produced 5.8cm of
+  //    "FHP", a score of 43, a 21° neck angle and 0.3kg of "extra neck load"
+  //    — a Hansraj sagittal-flexion figure derived from a frontal-plane
+  //    displacement. The user was told to tuck their chin; the real finding
+  //    was a lateral lean, which neck_lean measures from the same two points.
+  //    One displacement, counted twice, with the wrong correction attached.
+  //
+  //  · The magnitude made it non-monotonic. A neutral head sits ~2cm BEHIND
+  //    the shoulder line, so |offset| bottomed out at +2cm of real forward
+  //    translation: a head already 2cm forward scored a perfect 100, and 0cm
+  //    and 4cm of forward head scored identically.
+  console.log("\n  Plane separation — lateral lean must not read as forward head");
+  const leanRows = [0, 10, 20, 30].map(d => {
+    const r = read({ lateralLeanDeg: d });
+    return { d, fhp: val(r, "fhp_index"), neck: val(r, "neck_lean"), load: metric(r, "fhp_index")?.extra_load_kg };
+  });
+  if (VERBOSE) leanRows.forEach(r => console.log(`    lean ${String(r.d).padStart(2)}°  fhp ${fmt(r.fhp)}cm  neck_lean ${fmt(r.neck)}°  load ${fmt(r.load)}kg`));
+  check("Pure lateral lean reports no forward head at any angle",
+    leanRows.every(r => (r.fhp ?? 0) <= 0.5),
+    `worst ${fmt(Math.max(...leanRows.map(r => r.fhp ?? 0)))}cm at ${leanRows.find(r => (r.fhp ?? 0) === Math.max(...leanRows.map(x => x.fhp ?? 0)))?.d}°`);
+  check("...and no fabricated cervical load from a frontal-plane lean",
+    leanRows.every(r => (r.load ?? 0) === 0),
+    `worst ${fmt(Math.max(...leanRows.map(r => r.load ?? 0)))}kg`);
+  check("The lean is still detected — by the metric whose job it is",
+    (leanRows[leanRows.length - 1].neck ?? 0) >= 15,
+    `neck_lean ${fmt(leanRows[leanRows.length - 1].neck)}° at 30°`);
+
+  console.log("\n  Forward head rises monotonically with actual forward head");
+  const fwdRows = [0, 2, 4, 6, 8, 10, 12].map(cm => ({ cm, fhp: val(read({ forwardHeadCm: cm }), "fhp_index") }));
+  if (VERBOSE) fwdRows.forEach(r => console.log(`    fwd ${String(r.cm).padStart(2)}cm  fhp ${fmt(r.fhp)}cm`));
+  const nonMonotonic = fwdRows.slice(1).filter((r, i) => (r.fhp ?? 0) < (fwdRows[i].fhp ?? 0) - 0.05);
+  check("More forward head never reports less forward head",
+    nonMonotonic.length === 0,
+    nonMonotonic.map(r => `${r.cm}cm dropped to ${fmt(r.fhp)}`).join(", "));
+  check("A clearly forward head is clearly reported",
+    (fwdRows.find(r => r.cm === 10)?.fhp ?? 0) >= 4,
+    `10cm forward read as ${fmt(fwdRows.find(r => r.cm === 10)?.fhp)}cm`);
+  // The exact regression: 0cm and 4cm used to be indistinguishable, and 2cm
+  // scored better than both.
+  check("Zero and four centimetres of forward head are distinguishable",
+    Math.abs((fwdRows[0].fhp ?? 0) - (fwdRows[2].fhp ?? 0)) >= 1,
+    `0cm=${fmt(fwdRows[0].fhp)} vs 4cm=${fmt(fwdRows[2].fhp)}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════

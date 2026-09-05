@@ -92,8 +92,8 @@ const B2B_PAID_PLANS = [
     color:   "#1a56db", badge: { en: "Most Popular", ar: "الأكثر طلباً" },
     price: { egp_monthly: 6999, egp_yearly: 67190, usd_monthly: 199, usd_yearly: 1910 },
     features: {
-      en: ["Up to 100 employees", "Everything in Starter", "FaceMesh 478 landmarks", "3D solvePnP head pose", "Advanced HR analytics", "Priority support"],
-      ar: ["حتى 100 موظف", "كل مزايا ستارتر", "كشف 478 نقطة FaceMesh", "وضع رأس 3D solvePnP", "تحليلات HR متقدمة", "دعم أولوية"],
+      en: ["Up to 100 employees", "Everything in Starter", "Custom alert rules", "Clinical PDF reports", "Advanced HR analytics", "Priority support"],
+      ar: ["حتى 100 موظف", "كل مزايا ستارتر", "قواعد تنبيه مخصّصة", "تقارير PDF إكلينيكية", "تحليلات HR متقدمة", "دعم أولوية"],
     },
   },
   {

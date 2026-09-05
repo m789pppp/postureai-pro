@@ -836,7 +836,12 @@ Max 290 words. Specific to ${ctx.name || "this patient"}'s actual data.`,
           {/* KPI strip */}
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
             {[
-              { lbl:isAr?"المتوسط":"Avg",   val:`${avgScore}`, unit:"/100", col:sc(avgScore) },
+              // An account with no sessions has no average. `avg([])` returns 0,
+              // and this tile rendered that as a red "0/100" — a measurement —
+              // sitting directly above this same screen's honest "No data yet,
+              // complete at least 3 sessions" empty state. The two contradicted
+              // each other, and the number is the one a reviewer believes.
+              { lbl:isAr?"المتوسط":"Avg",   val:sessions?.length?`${avgScore}`:"—", unit:sessions?.length?"/100":"", col:sessions?.length?sc(avgScore):D.c.muted },
               { lbl:isAr?"هذا الأسبوع":"Week", val:weekAvg??"—", unit:weekAvg!=null?"/100":"", col:sc(weekAvg) },
               { lbl:isAr?"الاتجاه":"Trend", val:trendPct==null?"—":(trendPct>0?"+":"")+trendPct+"%", unit:"", col:trendPct==null?D.c.muted:trendPct>=0?D.c.success:D.c.danger },
               // Was a percentage computed from the weekly posture average. Now
