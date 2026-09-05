@@ -48,8 +48,12 @@ import {
   CountdownRing, GuidanceHint, useLiveUICSS, fmtTime, scoreTierColor, alpha as liveAlpha,
   Switch, SettingsRow, SettingsDivider,
 } from "./LiveUI.jsx";
-import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, sendDesktopNotif, requestNotificationPermission, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
-import { speakCoach, setVoiceCoachEnabled, stopSpeaking, isVoiceCoachEnabled } from "./lib/voiceCoach.js";
+import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, playBreakChime, primeAudio, sendDesktopNotif, requestNotificationPermission, notificationState, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
+import { speakCoach, setVoiceCoachEnabled, stopSpeaking, isVoiceCoachEnabled, primeSpeech, hasVoiceFor, resetSpeechCooldown } from "./lib/voiceCoach.js";
+// Rendered inline in the Live session-settings panel (and, as a full card, on
+// the account settings page) so the coach's accent/voice/speed are reachable
+// without leaving the session.
+const VoiceCoachSettings = lazy(() => import("./VoiceCoachSettings.jsx"));
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
@@ -2624,6 +2628,31 @@ export default function App(){
   const[weeklyPattern,setWeeklyPattern]=useState(null); // #9 computed on session end
   const[showNotifCard,setShowNotifCard]=useState(false); // contextual notif permission
   const[sound,setSound]=useState(()=>{try{return localStorage.getItem("corvus_sound")!=="0";}catch{return true;}});
+  useEffect(()=>{try{localStorage.setItem("corvus_sound",sound?"1":"0");}catch{}},[sound]);
+
+  // OS notifications while the tab is in the background. There was no control
+  // for this at all: the alert path fired one whenever document.hidden, and
+  // the only way to stop it was to revoke permission in browser settings.
+  const[desktopNotifs,setDesktopNotifs]=useState(()=>{try{return localStorage.getItem("corvus_desktop_notifs")!=="0";}catch{return true;}});
+  useEffect(()=>{try{localStorage.setItem("corvus_desktop_notifs",desktopNotifs?"1":"0");}catch{}},[desktopNotifs]);
+  const[notifPerm,setNotifPerm]=useState(()=>notificationState());
+
+  // How hard the coach pushes. Everything below was hardcoded — the score gate
+  // (65), how long a fault had to persist before it counted (15s), and the
+  // per-cause backoff — so "stricter alerts" was not something a user could
+  // ask for. Persisted, and genuinely read by the analysis loop (it is in
+  // runLoop's dep array, which rebinds the RAF closure on change).
+  const[alertSensitivity,setAlertSensitivity]=useState(()=>{
+    try{ const v=localStorage.getItem("corvus_alert_sensitivity"); return v==="strict"||v==="relaxed"?v:"balanced"; }catch{ return "balanced"; }
+  });
+  useEffect(()=>{try{localStorage.setItem("corvus_alert_sensitivity",alertSensitivity);}catch{}},[alertSensitivity]);
+  // strict  — notices a 70 and speaks up after 8s, repeats sooner
+  // relaxed — only genuinely poor posture (55), held for half a minute
+  const SENS = alertSensitivity==="strict"
+    ? { gate:72, dwellMs: 8000, base:3*60*1000, mildBeeps:true  }
+    : alertSensitivity==="relaxed"
+    ? { gate:55, dwellMs:30000, base:12*60*1000, mildBeeps:false }
+    : { gate:65, dwellMs:15000, base:5*60*1000, mildBeeps:false };
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
   const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
@@ -2632,7 +2661,9 @@ export default function App(){
   const[showCustomAlertRules,setShowCustomAlertRules]=useState(false);
   const[showSkeleton,setShowSkeleton]=useState(()=>{try{return localStorage.getItem("corvus_show_skeleton")!=="0";}catch{return true;}});
   const[showAngles,setShowAngles]=useState(()=>{try{return localStorage.getItem("corvus_show_angles")!=="0";}catch{return true;}});
-  const playPostureAlert=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();[440,360].forEach((f,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=f;g.gain.setValueAtTime(0,ac.currentTime+i*.32);g.gain.linearRampToValueAtTime(.14,ac.currentTime+i*.32+.06);g.gain.linearRampToValueAtTime(0,ac.currentTime+i*.32+.3);o.start();o.stop(ac.currentTime+i*.32+.35);});}catch{}}; // local fallback
+  // Was an inline `new AudioContext()` per break reminder, never closed — the
+  // same leak playBeep() had. Both now share the engine's single context.
+  const playPostureAlert=()=>{ try{ playBreakChime(); }catch{} };
   const[sessionId,setSessionId]=useState(null);
   const[aiInsight,setAiInsight]=useState(null);
   const[darkMode,setDarkMode]=useState(()=>{
@@ -2965,10 +2996,13 @@ export default function App(){
   useEffect(()=>{
     if(!showBreak) return;
     if(!muted) playPostureAlert();
-    sendDesktopNotif(
+    // Respect the notification toggle, and pass a score of 100 rather than 0 —
+    // a break reminder is not a posture failure, and 0 rendered it with the
+    // red "your posture is critical" dot.
+    if(desktopNotifs) sendDesktopNotif(
       isAr?`وقت الاستراحة! مرّت ${breakIntervalMin} دقيقة — خذ استراحة دقيقتين`
           :`Break time! ${breakIntervalMin} min passed — take a 2-min stretch`,
-      0
+      100, { lang: isAr?"ar":"en" }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[showBreak]);
@@ -3371,7 +3405,29 @@ export default function App(){
 
   // Voice coach is Elite-only — sync the lib's enabled flag with both the
   // user preference and the (possibly late-loading) tier
-  useEffect(()=>{ setVoiceCoachEnabled(voiceCoach && tierAtLeast(effectiveTier,"elite")); },[voiceCoach,effectiveTier]);
+  useEffect(()=>{
+    setVoiceCoachEnabled(voiceCoach && tierAtLeast(effectiveTier,"elite"));
+    // Unmount teardown: without this a cue queued as the user navigates away
+    // keeps speaking over whatever page they landed on, with no visible source
+    // and no way to stop it short of a reload.
+    return ()=>{ try{ stopSpeaking(); }catch{} };
+  },[voiceCoach,effectiveTier]);
+
+  // Keep the notification-permission chip honest: the user can grant or block
+  // it from the browser's own UI at any time, and a cached value would keep
+  // telling them notifications are on while the OS silently drops every one.
+  useEffect(()=>{
+    const sync=()=>setNotifPerm(notificationState());
+    sync();
+    document.addEventListener("visibilitychange",sync);
+    let unsub=null;
+    try{
+      navigator.permissions?.query?.({name:"notifications"}).then(st=>{
+        st.onchange=sync; unsub=()=>{ st.onchange=null; };
+      }).catch(()=>{});
+    }catch{}
+    return ()=>{ document.removeEventListener("visibilitychange",sync); unsub?.(); };
+  },[]);
   // Normalize T_ so live dashboard always has .name and .color
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const [isMobile, setIsMobile] = React.useState(()=> typeof window !== "undefined" && window.innerWidth < 768);
@@ -4090,10 +4146,10 @@ export default function App(){
                 lightAlRef.current=now;
                 setAlertMsg({text:isAr?"الإضاءة ضعيفة جدًا — حسّن الإضاءة لقراءة أدق":"Lighting too low — improve lighting for an accurate reading",type:"warn"});
               }
-            }else if(gateScore<65){
+            }else if(gateScore<SENS.gate){
               goodSinceRef.current=0;
               if(!badRef.current)badRef.current=now;
-              else if(now-badRef.current>15000){
+              else if(now-badRef.current>SENS.dwellMs){
                 // Severity-aware cooldown: severe=5s, moderate=15s, mild=30s
                 const _sev=finalResult.overall<40?'severe':finalResult.overall<55?'moderate':'mild';
                 const _cool=_sev==='severe'?5000:_sev==='moderate'?15000:30000;
@@ -4146,10 +4202,10 @@ export default function App(){
 
                 // Exponential backoff per cause: 1st=5min, 2nd=10min, 3rd+=20min
                 // Prevents repeated same-cause spam while still alerting on genuine persistence
+                // Backoff scaled by the sensitivity setting (strict repeats
+                // sooner, relaxed later) instead of a fixed 5/10/20.
                 const causeEntry = alertCauseRef.current[causeKey] || { last: 0, count: 0 };
-                const causeCooldown = causeEntry.count === 0 ? 5*60*1000
-                                    : causeEntry.count === 1 ? 10*60*1000
-                                    : 20*60*1000;
+                const causeCooldown = SENS.base * (causeEntry.count === 0 ? 1 : causeEntry.count === 1 ? 2 : 4);
                 if(now - causeEntry.last > causeCooldown){
                   alertCauseRef.current[causeKey] = { last: now, count: causeEntry.count + 1 };
                   const displayMsg = isAr ? msgAr : msg;
@@ -4177,14 +4233,40 @@ export default function App(){
                   // away. The noisy ones are the three below.
                   const tabHidden = typeof document !== "undefined" && document.hidden;
                   const voiceOn   = isVoiceCoachEnabled();
-                  if(tabHidden){
-                    sendDesktopNotif(msg,finalResult.overall);
-                  } else if(voiceOn){
-                    speakCoach(displayMsg, isAr?"ar":"en");
-                  } else if(sound && sev !== "mild"){
-                    // Mild faults get the banner only. A beep for every small
-                    // drift is what trains people to ignore the beep.
-                    playBeep(sev);
+                  // `displayMsg`, not `msg`. The OS notification was the one
+                  // channel still hardcoded to the English string, so an
+                  // Arabic user's screen lit up in English.
+                  let handled = false;
+                  if(tabHidden && desktopNotifs){
+                    handled = sendDesktopNotif(displayMsg, finalResult.overall,
+                      { lang: isAr?"ar":"en", onClick: ()=>{} });
+                  }
+                  // A notification that could not be shown — permission denied,
+                  // an unsupported browser, or the toggle off — used to end the
+                  // event silently: no sound, no speech, and a banner on a tab
+                  // nobody is looking at. Fall through to something audible.
+                  if(!handled){
+                    // speakCoach can decline — its own severity cooldown, a
+                    // browser with no speech support, a hidden tab. Discarding
+                    // the answer meant a genuine alert from a NEW cause could
+                    // vanish because an unrelated cue happened to speak a few
+                    // seconds earlier.
+                    const spoke = (voiceOn && !tabHidden)
+                      ? speakCoach(displayMsg, isAr?"ar":"en", {severity:sev}) === "spoken"
+                      : false;
+                    // Mild faults normally get the banner only — unless the
+                    // user asked for strict, which is exactly a request to hear
+                    // about small drifts too. A beep for every small drift is
+                    // otherwise what trains people to ignore the beep.
+                    //
+                    // A HIDDEN tab is the exception: the banner is not a
+                    // channel there, nobody can see it. With no notification
+                    // (denied, unsupported, or switched off) and no beep, that
+                    // alert reached the user through nothing at all — which is
+                    // the failure this whole arbitration exists to prevent.
+                    if(!spoke && sound && (sev !== "mild" || SENS.mildBeeps || tabHidden)){
+                      playBeep(sev);
+                    }
                   }
 
                   // Smart permission: show in-app card after first real alert
@@ -4334,7 +4416,7 @@ export default function App(){
                 const causeKeyBE = (result.alerts?.[0] || "posture")
                   .toLowerCase().replace(/[\d.]+\s*(cm|°|deg|%)?/g, "").replace(/\s+/g, " ").trim().slice(0, 24) || "posture";
                 const causeEntryBE = alertCauseRef.current[causeKeyBE] || { last: 0, count: 0 };
-                const causeCoolBE = causeEntryBE.count === 0 ? 5*60*1000 : causeEntryBE.count === 1 ? 10*60*1000 : 20*60*1000;
+                const causeCoolBE = SENS.base * (causeEntryBE.count === 0 ? 1 : causeEntryBE.count === 1 ? 2 : 4);
                 if(now - causeEntryBE.last > causeCoolBE){
                 alertCauseRef.current[causeKeyBE] = { last: now, count: causeEntryBE.count + 1 };
                 const msgFb = isAr
@@ -4349,9 +4431,17 @@ export default function App(){
                 {
                   const _sevFb = smoothed<40?"severe":smoothed<55?"moderate":"mild";
                   const _hidden = typeof document !== "undefined" && document.hidden;
-                  if(_hidden) sendDesktopNotif(msgFb,smoothed);
-                  else if(isVoiceCoachEnabled()) speakCoach(msgFb, isAr?"ar":"en");
-                  else if(sound && _sevFb !== "mild") playBeep(_sevFb);
+                  let _handledFb = false;
+                  if(_hidden && desktopNotifs)
+                    _handledFb = sendDesktopNotif(msgFb, smoothed, { lang: isAr?"ar":"en" });
+                  if(!_handledFb){
+                    const _spokeFb = (isVoiceCoachEnabled() && !_hidden)
+                      ? speakCoach(msgFb, isAr?"ar":"en", {severity:_sevFb}) === "spoken"
+                      : false;
+                    // See the note in the local-engine path above: a hidden tab
+                    // has no visible banner, so mild cannot be left silent.
+                    if(!_spokeFb && sound && (_sevFb !== "mild" || SENS.mildBeeps || _hidden)) playBeep(_sevFb);
+                  }
                 }
                 } // close per-cause backoff
                 } // close if(_cool)
@@ -4386,7 +4476,12 @@ export default function App(){
         });
     }
     rafRef.current=requestAnimationFrame(runLoop);
-  },[mode,tier,sessionId,sound,t,calibData,pushScore,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles]);
+    // SENS.* and desktopNotifs are read inside this closure, so they belong in
+    // the dep array — a rAF loop keeps the closure it was scheduled with, and
+    // the effect below rebinds it on a new identity. Without them, changing
+    // sensitivity mid-session would silently do nothing until the next session.
+  },[mode,tier,sessionId,sound,t,calibData,pushScore,checkCustomAlertRules,mpStatus,faceBlur,showSkeleton,showAngles,
+     SENS.gate,SENS.dwellMs,SENS.base,SENS.mildBeeps,desktopNotifs]);
 
   // Keep the analysis loop bound to the latest state. runLoop is a useCallback
   // whose identity changes when mode / sound / faceBlur / calib change; without
@@ -4558,6 +4653,16 @@ export default function App(){
     // is a ref (synchronous, unlike previewPhase state), so checking it
     // here closes the race regardless of render timing.
     if(countdownIvRef.current) return;
+    // This is the last real user gesture before the session runs, and both
+    // audio and speech are gesture-gated by Chrome. Without priming here, the
+    // first alert arrives minutes later with no gesture on the stack: the
+    // AudioContext stays suspended and speechSynthesis.speak() is refused —
+    // both silently, with no error and no event. That is the single most
+    // likely reason the coach and the beep could be wired correctly end to
+    // end and still never make a sound.
+    try { primeAudio(); } catch {}
+    if(voiceCoach && tierAtLeast(effectiveTier,"elite")) { try { primeSpeech(); } catch {} }
+
     setPreviewPhase("countdown");
     setCountdownN(3);
     let n=3;
@@ -4614,6 +4719,12 @@ export default function App(){
       lightAlRef.current=0;
       badRef.current=null;
       alertCauseRef.current={};
+      // Same reasoning, for the spoken channel: its cooldown lives in the
+      // voiceCoach module, so it was the one alert timer NOT on this list and
+      // the only one that leaked across sessions. Stop a session and start
+      // another twenty seconds later and the new session's first cue — the
+      // one that matters, because the user has just sat down — was swallowed.
+      try{ resetSpeechCooldown(); }catch{}
       // Found alongside the runLoop-freeze bug above: subjectRejectStreakRef/
       // multiPersonShownRef/multiPersonWarning were only ever written inside
       // runLoop's subject-switch guard and never reset anywhere — including
@@ -5148,6 +5259,9 @@ export default function App(){
     // as "pause did nothing, the camera/analysis is still running" even
     // though scoring had genuinely stopped underneath.
     try{ vidRef.current?.pause?.(); }catch{}
+    // A cue queued a moment before Pause kept talking over the "Session
+    // paused" overlay — the one thing pause is meant to guarantee.
+    stopSpeaking();
     pausedAtRef.current = Date.now();
     setIsPaused(true);
   }
@@ -8407,8 +8521,73 @@ async function downloadPDF(sessionOverride, isClinical=false){
               localStorage side effect, and every tier gate byte-identical
               to before — this is a visual swap only. */}
           <div style={{display:"flex",flexDirection:"column"}}>
-            <SettingsRow cs={cs} icon={sound?"bell":"bellOff"} label={isAr?"تنبيه الوضعية":"Posture alerts"}
-              right={<Switch cs={cs} on={sound} onChange={()=>setSound(s=>{const nv=!s;try{localStorage.setItem("corvus_sound",nv?"1":"0");}catch{}return nv;})} label={isAr?"تنبيه الوضعية":"Posture alerts"}/>}/>
+            <SettingsRow cs={cs} icon={sound?"bell":"bellOff"} label={isAr?"صوت التنبيه":"Alert sound"}
+              sub={isAr?"صفّارة قصيرة لما الوضعية تسوء":"A short tone when your posture slips"}
+              right={<Switch cs={cs} on={sound} onChange={()=>setSound(s=>!s)} label={isAr?"صوت التنبيه":"Alert sound"}/>}/>
+
+            {/* Alert strictness. Everything this drives — the score gate, how
+                long a fault must persist, how soon a cue repeats, whether mild
+                drifts make a sound — was hardcoded, so "make the alerts
+                stricter" was not something a user could ask for. */}
+            <div style={{padding:"10px 2px 12px"}}>
+              <div style={{fontSize:11,fontWeight:600,color:cs.muted,marginBottom:7,letterSpacing:".03em"}}>
+                {isAr?"حساسية التنبيه":"Alert sensitivity"}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                {[
+                  {id:"relaxed", en:"Relaxed", ar:"مرن"},
+                  {id:"balanced",en:"Balanced",ar:"متوازن"},
+                  {id:"strict",  en:"Strict",  ar:"صارم"},
+                ].map(o=>(
+                  <button key={o.id} className="liveui-focusable"
+                    aria-pressed={alertSensitivity===o.id}
+                    onClick={()=>setAlertSensitivity(o.id)}
+                    style={{flex:1,padding:"7px 0",borderRadius:LT.radius.sm,cursor:"pointer",
+                      fontSize:11.5,fontWeight:700,
+                      border:`1px solid ${alertSensitivity===o.id?"rgba(79,174,142,.45)":cs.border}`,
+                      background:alertSensitivity===o.id?"rgba(79,174,142,.12)":"transparent",
+                      color:alertSensitivity===o.id?(darkMode?"#34d399":"#15803d"):cs.muted}}>
+                    {isAr?o.ar:o.en}
+                  </button>
+                ))}
+              </div>
+              <div style={{fontSize:10,color:cs.muted,marginTop:6,lineHeight:1.55}}>
+                {alertSensitivity==="strict"
+                  ? (isAr?`ينبّه تحت ${SENS.gate} بعد ${SENS.dwellMs/1000} ثانية — وكمان على الانحرافات الصغيرة.`
+                        :`Alerts below ${SENS.gate}, held for ${SENS.dwellMs/1000}s — small drifts included.`)
+                  : alertSensitivity==="relaxed"
+                  ? (isAr?`ينبّه بس تحت ${SENS.gate} وبعد ${SENS.dwellMs/1000} ثانية متواصلة.`
+                        :`Only below ${SENS.gate}, and only after ${SENS.dwellMs/1000}s of it.`)
+                  : (isAr?`ينبّه تحت ${SENS.gate} بعد ${SENS.dwellMs/1000} ثانية متواصلة.`
+                        :`Alerts below ${SENS.gate}, held for ${SENS.dwellMs/1000}s.`)}
+              </div>
+            </div>
+
+            {/* OS notifications. This fired whenever the tab was hidden with no
+                setting to stop it — and when permission was denied it fired
+                nothing at all and no other channel took over, so a
+                backgrounded session was completely silent. */}
+            <SettingsRow cs={cs} icon="bell" label={isAr?"إشعارات النظام":"Desktop notifications"}
+              sub={notifPerm==="denied"
+                    ? (isAr?"محظورة من المتصفح — فعّلها من إعدادات الموقع":"Blocked in your browser — enable it in site settings")
+                    : notifPerm==="unsupported"
+                    ? (isAr?"المتصفح ده مش بيدعمها":"Not supported by this browser")
+                    : (isAr?"لما تكون في تاب تاني":"When you're in another tab")}
+              right={notifPerm==="granted"
+                ? <Switch cs={cs} on={desktopNotifs} label={isAr?"إشعارات النظام":"Desktop notifications"}
+                    onChange={()=>setDesktopNotifs(v=>!v)}/>
+                : notifPerm==="default"
+                ? <button className="liveui-focusable" onClick={async()=>{
+                    const r=await requestNotificationPermission();
+                    setNotifPerm(r);
+                    if(r==="granted"){ setDesktopNotifs(true); addToast(isAr?"تمام — هتوصلك إشعارات وانت في تاب تاني":"Done — you'll get alerts while in another tab","success"); }
+                    else if(r==="denied") addToast(isAr?"اترفضت. تقدر تفعّلها من إعدادات الموقع في المتصفح":"Blocked. You can enable it from your browser's site settings","info");
+                  }} style={{padding:"6px 12px",borderRadius:99,fontSize:11,fontWeight:700,cursor:"pointer",
+                    border:"1px solid rgba(79,174,142,.4)",background:"rgba(79,174,142,.1)",
+                    color:darkMode?"#34d399":"#15803d"}}>
+                    {isAr?"تفعيل":"Enable"}
+                  </button>
+                : <span style={{fontSize:10.5,color:cs.muted}}>{isAr?"غير متاح":"Unavailable"}</span>}/>
             {tierAtLeast(effectiveTier,"professional") && (
               <SettingsRow cs={cs} icon="target" label={isAr?"وضع التركيز":"Focus Mode"}
                 sub={isAr?"يوقف إشعارات الإنجازات وقت الجلسة":"Mutes achievement notifications during the session"}
@@ -8420,7 +8599,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   setVoiceCoach(v=>{
                     const nv=!v;
                     try{localStorage.setItem("corvus_voice_coach",nv?"1":"0");}catch{}
-                    if(nv) speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{preview:true});
+                    if(nv){
+                      // Turning it on IS a user gesture — the only reliable
+                      // moment to unlock speech synthesis in Chrome.
+                      try{ primeSpeech(); }catch{}
+                      const r=speakCoach(isAr?"المدرب الصوتي شغّال. هساعدك تحافظ على وضعية سليمة.":"Voice coach is on. I'll help you keep a healthy posture.", isAr?"ar":"en",{preview:true});
+                      // It used to announce itself and, if the browser refused,
+                      // say nothing — leaving the switch green over a coach
+                      // that would never speak for the whole session.
+                      if(r==="unsupported") addToast(isAr?"المتصفح ده مش بيدعم النطق الصوتي":"This browser doesn't support speech","error");
+                      else if(!hasVoiceFor(isAr?"ar":"en")) addToast(isAr?"مفيش صوت عربي متثبّت على الجهاز — شوف الإعدادات تحت":"No Arabic voice installed on this device — see settings below","info");
+                    }
                     else stopSpeaking();
                     return nv;
                   });
@@ -8432,6 +8621,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 sub={isAr?"متاح في باقة Elite":"Available on Elite plan"}
                 onClick={()=>setPage("pricing")}
                 right={<span style={{fontSize:10,background:"rgba(99,102,241,.18)",color:"#818cf8",padding:"2px 7px",borderRadius:8,fontWeight:600,whiteSpace:"nowrap"}}>Elite ↗</span>}/>
+            )}
+            {/* The controls that decide how it sounds were only in the account
+                settings page — a user mid-session had to end the session, go
+                and change them, and start over. */}
+            {tierAtLeast(effectiveTier,"elite") && voiceCoach && (
+              <Suspense fallback={null}>
+                <VoiceCoachSettings cs={cs} isAr={isAr} lang={lang} addToast={addToast} compact />
+              </Suspense>
             )}
             <SettingsDivider cs={cs}/>
             {/* Desktop notification permission — show a one-tap enable row so
@@ -8758,7 +8955,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               {isAr?"نبعتلك تنبيه لو وضعيتك وحشت وانت مش شايف الشاشة — مفيش spam.":"Get notified when posture drops even when the tab is in the background. No spam."}
             </div>
             <div style={{display:"flex",gap:6}}>
-              <button className="liveui-focusable" onClick={()=>{Notification.requestPermission().catch(()=>{});setShowNotifCard(false);}} style={{
+              <button className="liveui-focusable" onClick={async()=>{const r=await requestNotificationPermission();setNotifPerm(r);if(r==="granted")setDesktopNotifs(true);setShowNotifCard(false);}} style={{
                 flex:1,background:"rgba(99,102,241,.15)",border:"1px solid rgba(99,102,241,.35)",
                 borderRadius:8,padding:"6px 0",fontSize:11,fontWeight:700,color:darkMode?"#a5b4fc":"#4338ca",cursor:"pointer"}}>
                 {isAr?"السماح ✓":"Allow ✓"}

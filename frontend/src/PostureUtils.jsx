@@ -190,23 +190,49 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
   const [snoozeCount, setSnoozeCount] = useState(0);
   const timerRef = useRef(null);
   const lastBreakRef = useRef(Date.now());
+  // Milliseconds still owed on the current interval when the timer was
+  // suspended. `enabled` is `breakReminder && camActive && !isPaused`, so
+  // every pause used to tear the timeout down and every resume scheduled a
+  // FULL fresh interval — a user who pauses for a sip of water every twenty
+  // minutes would never once be reminded to take a break, which is the whole
+  // feature. The remainder is carried across instead.
+  const remainingRef = useRef(null);
+  const startedAtRef = useRef(0);
+
+  const scheduleIn = useCallback((ms) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    startedAtRef.current = Date.now();
+    remainingRef.current = ms;
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
+      remainingRef.current = null;
+      setShowBreak(true);
+    }, ms);
+  }, []);
 
   const scheduleNext = useCallback((extraMs = 0) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const ms = intervalMin * 60 * 1000 + extraMs;
-    timerRef.current = setTimeout(() => {
-      if (enabled) setShowBreak(true);
-    }, ms);
-  }, [intervalMin, enabled]);
+    scheduleIn(intervalMin * 60 * 1000 + extraMs);
+  }, [intervalMin, scheduleIn]);
 
   useEffect(() => {
     // Turning reminders off (or ending the session) must also take down a card
     // that is already on screen — otherwise the prompt outlives the setting
     // that produced it, and the user's "off" appears not to have worked.
     if (!enabled) { setShowBreak(false); return; }
-    scheduleNext();
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [enabled, scheduleNext]);
+    // Resume what was left, or start a fresh interval if there is nothing owed.
+    scheduleIn(remainingRef.current != null && remainingRef.current > 0
+      ? remainingRef.current
+      : intervalMin * 60 * 1000);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+        // Bank the unserved portion so the next resume picks up here.
+        const served = Date.now() - startedAtRef.current;
+        remainingRef.current = Math.max(1000, (remainingRef.current ?? 0) - served);
+      }
+    };
+  }, [enabled, intervalMin, scheduleIn]);
 
   const dismiss = useCallback(() => {
     setShowBreak(false);
@@ -217,8 +243,10 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
   const snooze = useCallback((min = 5) => {
     setShowBreak(false);
     setSnoozeCount(c => c + 1);
-    scheduleNext(min * 60 * 1000);
-  }, [scheduleNext]);
+    // A snooze is the snooze length, not a whole interval on top of it. This
+    // added `min` minutes to a FULL interval, so "remind me in 5" meant 30.
+    scheduleIn(min * 60 * 1000);
+  }, [scheduleIn]);
 
   return { showBreak, dismiss, snooze, snoozeCount };
 }

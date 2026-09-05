@@ -2907,12 +2907,53 @@ export const MODES = {
 
 let _lastBeepMs = 0;
 
+/**
+ * ONE AudioContext for the page, not one per beep.
+ *
+ * This used to allocate `new AudioContext()` on every call and never close
+ * it. Chrome hard-caps a document at ~50 live contexts; past that the
+ * constructor throws, the empty catch below swallowed it, and every
+ * subsequent beep was silent. A long session — exactly the sessions where
+ * alerts matter most — went permanently mute after roughly fifty of them,
+ * with nothing in the UI to say so.
+ *
+ * A context created without a user gesture also starts "suspended", so it is
+ * resumed on each use and primed from the session-start click.
+ */
+let _ac = null;
+function audioCtx() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!_ac || _ac.state === "closed") _ac = new AC();
+    // "interrupted" is Safari/iOS only, entered on a phone call or Siri. It is
+    // not in the spec, so a check for "suspended" alone leaves the context
+    // permanently mute after the first interruption — on the platform where
+    // interruptions are most common.
+    if (_ac.state === "suspended" || _ac.state === "interrupted") _ac.resume().catch(() => {});
+    return _ac;
+  } catch { return null; }
+}
+
+/**
+ * Unlock audio while a real user gesture is on the stack (session start).
+ *
+ * Returns whether a context EXISTS, not whether it is already running:
+ * resume() is asynchronous, so the state read immediately after it is still
+ * "suspended" almost every time. A caller that treated that as failure would
+ * be wrong on nearly every call.
+ */
+export function primeAudio() {
+  return !!audioCtx();
+}
+
 export function playBeep(severity = "mild") {
   const now = Date.now();
-  if (now - _lastBeepMs < BEEP_COOLDOWN_MS) return;
+  if (now - _lastBeepMs < BEEP_COOLDOWN_MS) return false;
   _lastBeepMs = now;
   try {
-    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const ac = audioCtx();
+    if (!ac) return false;
     // severity="severe"  → 3 fast urgent pulses, high freq, louder
     // severity="moderate"→ 2 medium pulses
     // severity="mild"    → 1 soft gentle tone
@@ -2932,19 +2973,93 @@ export function playBeep(severity = "mild") {
       gain.gain.linearRampToValueAtTime(0,ac.currentTime+delay+stop);
       osc.start(ac.currentTime+delay);
       osc.stop(ac.currentTime+delay+stop+0.05);
+      // Release the nodes; a shared context that accumulates one oscillator
+      // per beep for an hour is the leak this fix was supposed to remove.
+      osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch {} };
     });
-  } catch {}
+    return true;
+  } catch { return false; }
 }
 
-export function sendDesktopNotif(msg, score) {
-  if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const icon = score < 50 ? "🔴" : score < 65 ? "🟡" : "🟢";
-  new Notification("Corvus", { body: `${icon} ${msg}`, icon: "/icon-192.png", tag: "corvus-alert" });
+/**
+ * Show an OS notification for a posture alert.
+ *
+ * Returns TRUE only if one was actually shown. The caller needs to know: this
+ * is the channel chosen when the tab is hidden, and when it silently returned
+ * (permission denied, unsupported browser, constructor threw) the user got
+ * NOTHING — no sound, no speech, and a banner on a tab they are not looking
+ * at. The alert path now falls back to audio on a false.
+ *
+ * `lang` matters because the caller had been passing the English string
+ * regardless of UI language: an Arabic user's phone lit up in English.
+ */
+/**
+ * The break-reminder chime. Two soft descending tones — deliberately unlike
+ * the posture beeps, because it means "well done, now stand up", not "you are
+ * doing something wrong".
+ *
+ * Lives here so it shares the one AudioContext. App.jsx had its own inline
+ * copy that allocated a fresh context on every break and never closed it —
+ * the same leak playBeep() had, and the same silent failure once Chrome's
+ * per-document cap was reached.
+ */
+export function playBreakChime() {
+  try {
+    const ac = audioCtx();
+    if (!ac) return false;
+    [523.25, 392].forEach((f, i) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value = f; o.type = "sine";
+      const t0 = ac.currentTime + i * 0.32;
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(0.14, t0 + 0.06);
+      g.gain.linearRampToValueAtTime(0, t0 + 0.30);
+      o.start(t0); o.stop(t0 + 0.35);
+      o.onended = () => { try { o.disconnect(); g.disconnect(); } catch {} };
+    });
+    return true;
+  } catch { return false; }
 }
 
-export function requestNotificationPermission() {
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") Notification.requestPermission().catch(() => {});
+export function sendDesktopNotif(msg, score, { lang = "en", onClick } = {}) {
+  try {
+    if (typeof window === "undefined" || !("Notification" in window)) return false;
+    if (Notification.permission !== "granted") return false;
+    const icon  = score < 50 ? "🔴" : score < 65 ? "🟡" : "🟢";
+    const isAr  = lang === "ar";
+    const n = new Notification(isAr ? "تنبيه الوضعية" : "Posture alert", {
+      body: `${icon} ${msg}`,
+      icon: "/icon-192.png",
+      // One replaceable alert, never a stack of them — but re-notify so a NEW
+      // fault while an old one is still on screen is not silently dropped.
+      tag: "corvus-alert",
+      renotify: true,
+      lang: isAr ? "ar" : "en",
+      dir:  isAr ? "rtl" : "ltr",
+      // The user is in another tab; the point of the notification is to bring
+      // them back. Without this, clicking it did nothing at all.
+      requireInteraction: false,
+    });
+    n.onclick = () => {
+      try { window.focus(); n.close(); onClick?.(); } catch {}
+    };
+    return true;
+  } catch { return false; }
+}
+
+/** "granted" | "denied" | "default" | "unsupported" */
+export function notificationState() {
+  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+  return Notification.permission;
+}
+
+/** Resolves to the resulting state, so the UI can react rather than guess. */
+export async function requestNotificationPermission() {
+  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+  if (Notification.permission !== "default") return Notification.permission;
+  try { return await Notification.requestPermission(); }
+  catch { return Notification.permission; }
 }
 
 // createFrameBuffer is already exported above as: export function createFrameBuffer
