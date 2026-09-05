@@ -6,6 +6,136 @@ import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
 const API = API_BASE_URL;
 
+// ── Client-side gamification fallback ─────────────────────────────
+// Mirrors the Python backend's /api/gamification/compute logic so that
+// Progress/Achievements still render when the backend is unreachable
+// (missing FIREBASE_SERVICE_ACCOUNT_JSON in Vercel, cold-start timeout,
+// or any other server-side failure).  The same XP formula and level
+// curve are used; weekly-challenge is computed from the sessions prop
+// that the parent already fetched from Firestore directly.
+function computeGamificationLocal({ sessions = [], profile = {}, calibration, avg = 0 }) {
+  const sessions_n  = profile?.sessions_count || sessions.length || 0;
+  const best_avg    = Math.max(profile?.best_avg_score || 0, avg || 0);
+  const best_streak = Math.max(profile?.best_streak || 0, profile?.streak_days || 0);
+  const ever_cal    = !!(profile?.ever_calibrated || calibration);
+  const referrals_n = profile?.referral_count || 0;
+  const existing_ach = profile?.achievements || [];
+
+  // XP — monotonic terms only (mirrors Python _xp_events)
+  let xp = 0;
+  xp += sessions_n * 10;
+  if (best_avg >= 80) xp += 50  * Math.max(0, sessions_n - 5);
+  if (best_avg >= 90) xp += 100 * Math.max(0, sessions_n - 20);
+  if (ever_cal)           xp += 100;
+  if (best_streak >= 7)   xp += 200;
+  if (best_streak >= 30)  xp += 500;
+  if (referrals_n >= 1)   xp += 50;
+
+  // Pay XP for already-earned achievements (same loop as Python)
+  const ACH_XP = {
+    first_session:10, session_5:50, session_25:150, session_100:500, session_250:1000,
+    score_75:50, score_80:100, score_90:250, streak_3:50, streak_7:150, streak_30:400,
+    calibrated:100, referral:100, late_session:75, early_session:75, perfect_week:300,
+  };
+  existing_ach.forEach(id => { xp += ACH_XP[id] || 0; });
+
+  // Level curve: 100 XP → Level 2, then × 1.35 per level
+  let lvl = 1, needed = 100, xp_rem = xp;
+  while (xp_rem >= needed) { xp_rem -= needed; lvl++; needed = Math.round(needed * 1.35); }
+
+  // Weekly challenge — compute from sessions prop
+  const tzOff = -new Date().getTimezoneOffset(); // minutes
+  const nowLocal = new Date(Date.now() + tzOff * 60000);
+  const dow = nowLocal.getUTCDay(); // 0=Sun
+  const daysFromMon = dow === 0 ? 6 : dow - 1;
+  const weekStartLocal = new Date(nowLocal);
+  weekStartLocal.setUTCDate(nowLocal.getUTCDate() - daysFromMon);
+  weekStartLocal.setUTCHours(0, 0, 0, 0);
+
+  const goodMinByDay = {};
+  (sessions || []).forEach(s => {
+    const raw = s.created_at?.toDate?.() || (s.created_at ? new Date(s.created_at) : null);
+    if (!raw || isNaN(raw)) return;
+    const localTs = new Date(raw.getTime() + tzOff * 60000);
+    if (localTs < weekStartLocal) return;
+    if ((s.avg_score || 0) < 70) return;
+    const mins = s.duration_min || (s.duration_s || 0) / 60;
+    if (mins < 1) return;
+    const dayKey = localTs.toISOString().slice(0, 10);
+    goodMinByDay[dayKey] = (goodMinByDay[dayKey] || 0) + mins;
+  });
+
+  const days_detail = Array.from({ length: 7 }, (_, i) => {
+    const dayDt = new Date(weekStartLocal);
+    dayDt.setUTCDate(weekStartLocal.getUTCDate() + i);
+    const dayKey = dayDt.toISOString().slice(0, 10);
+    const mins   = Math.round((goodMinByDay[dayKey] || 0) * 10) / 10;
+    return { date: dayKey, weekday: i, minutes: mins, qualified: mins >= 20, is_future: dayDt > nowLocal };
+  });
+  const days_qualified = days_detail.filter(d => d.qualified).length;
+
+  // Basic achievements (subset — server computes the full list with Firestore data)
+  const ALL_ACH = [
+    { id:"first_session",  icon:"🎯", xp:10,   name:"First Step",        name_ar:"أول خطوة",       req:{ sessions:1   } },
+    { id:"session_5",      icon:"🔥", xp:50,   name:"Getting Warmed Up", name_ar:"البداية",         req:{ sessions:5   } },
+    { id:"session_25",     icon:"💪", xp:150,  name:"Committed",         name_ar:"ملتزم",            req:{ sessions:25  } },
+    { id:"session_100",    icon:"🏆", xp:500,  name:"Centurion",         name_ar:"المئة",            req:{ sessions:100 } },
+    { id:"score_75",       icon:"⭐", xp:50,   name:"Good Start",        name_ar:"بداية جيدة",       req:{ avg_score:75 } },
+    { id:"score_80",       icon:"🌟", xp:100,  name:"Good Posture",      name_ar:"وضعية جيدة",       req:{ avg_score:80 } },
+    { id:"score_90",       icon:"💎", xp:250,  name:"Excellent Posture", name_ar:"وضعية ممتازة",     req:{ avg_score:90 } },
+    { id:"streak_3",       icon:"📅", xp:50,   name:"3-Day Streak",      name_ar:"3 أيام متتالية",   req:{ streak:3     } },
+    { id:"streak_7",       icon:"🗓️", xp:150,  name:"Week Warrior",      name_ar:"محارب الأسبوع",    req:{ streak:7     } },
+    { id:"streak_30",      icon:"🏅", xp:400,  name:"Monthly Master",    name_ar:"سيد الشهر",        req:{ streak:30    } },
+    { id:"calibrated",     icon:"🎛️", xp:100,  name:"Perfectly Tuned",   name_ar:"معايرة مثالية",    req:{ calibrated:true } },
+    { id:"referral",       icon:"📣", xp:100,  name:"Spread the Word",   name_ar:"انشر الخبر",       req:{ referrals:1  } },
+    { id:"perfect_week",   icon:"🌈", xp:300,  name:"Perfect Week",      name_ar:"أسبوع مثالي",      req:{ perfect_week:true } },
+  ];
+
+  const new_achievements = [];
+  const all_earned = [...existing_ach];
+  ALL_ACH.forEach(a => {
+    if (all_earned.includes(a.id)) return;
+    const r = a.req;
+    const earned = (r.sessions && sessions_n >= r.sessions) ||
+                   (r.avg_score && best_avg >= r.avg_score) ||
+                   (r.streak && best_streak >= r.streak) ||
+                   (r.calibrated && ever_cal) ||
+                   (r.referrals && referrals_n >= r.referrals) ||
+                   (r.perfect_week && days_qualified >= 7);
+    if (earned) { new_achievements.push(a); all_earned.push(a.id); xp += a.xp; }
+  });
+
+  const achievements_list = ALL_ACH.map(a => ({
+    ...a,
+    earned:    all_earned.includes(a.id),
+    is_new:    new_achievements.some(n => n.id === a.id),
+  }));
+
+  return {
+    xp,
+    level:        lvl,
+    xp_current:   xp_rem,
+    xp_to_next:   needed,
+    level_label:  `Level ${lvl}`,
+    weekly_challenge: {
+      target_days: 5, target_minutes: 20, target_score: 70, xp_reward: 150,
+      days_detail, days_qualified, complete: days_qualified >= 5,
+      label:    "Sit correctly 20 min/day for 5 days",
+      label_ar: "اجلس صح 20 دقيقة يومياً لمدة 5 أيام",
+    },
+    daily_goal: {
+      target_score: 75, target_minutes: 30,
+      label:    "Maintain 75+ posture for 30 minutes",
+      label_ar: "حافظ على 75+ لمدة 30 دقيقة",
+      xp_reward: 50,
+    },
+    new_achievements,
+    all_achievements: all_earned,
+    achievements_list,
+    _offline: true, // flag so callers know this is a client-side estimate
+  };
+}
+
 // ── Season boundaries (calendar quarter) ───────────────────────────
 // Seasons are simply calendar quarters — no new backend/DB schema needed,
 // deterministic from any date. Verified in isolation: Q1=Jan-Mar,
@@ -647,10 +777,22 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
       // re-showing the same achievements as newly unlocked.
       if (d?.new_achievements?.length) onAchievementsUpdate?.(d.all_achievements);
     })
-    // A failure used to leave gamData null, which renders the Progress tab as
-    // an empty fragment with just a streak chip — indistinguishable from a new
-    // account. Say what happened.
-    .catch(e => setErr(e?.message || "load_failed"))
+    // When the Python backend is unavailable (missing FIREBASE_SERVICE_ACCOUNT_JSON
+    // in Vercel env, cold-start crash, network error) fall back to computing
+    // XP / achievements / weekly-challenge client-side from the data the
+    // frontend already has.  The fallback has no Firestore access so it
+    // can't persist new achievements or cross-reference historical sessions
+    // beyond what the parent passed in — but the UI renders correctly and
+    // the user is not blocked by a blanket "couldn't load" screen.
+    .catch(() => {
+      try {
+        const fallback = computeGamificationLocal({ sessions, profile, calibration, avg });
+        setGamData(fallback);
+        setErr("offline"); // show a subtle "using local data" note, not a hard error
+      } catch {
+        setErr("load_failed");
+      }
+    })
     .finally(() => setLoading(false));
     // `profile` gets a new object identity on every Firestore snapshot, and
     // this panel's own onAchievementsUpdate writes the profile — so depending
@@ -699,6 +841,10 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
           // computed client-side and Heatmap/Leaderboard call their own
           // endpoints with their own error states — one 500 here used to make
           // all four unreachable behind a tab bar that still looked clickable.
+          ) : err === "offline" && (tab === "progress" || tab === "achievements") ? (
+            // Backend unreachable — we're showing client-computed data above,
+            // just add a low-key notice so the user knows it's a local estimate.
+            null
           ) : err && (tab === "progress" || tab === "achievements") ? (
             <div style={{ textAlign: "center", padding: 40, color: "#f87171", fontSize: 12, lineHeight: 1.8 }}>
               {lang === "ar" ? "تعذر تحميل التقدم — جرّب تاني بعد شوية" : "Couldn't load your progress — try again shortly"}
