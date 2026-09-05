@@ -2623,7 +2623,7 @@ export default function App(){
   const[streakAlert,setStreakAlert]=useState(false); // #10 streak protection shown
   const[weeklyPattern,setWeeklyPattern]=useState(null); // #9 computed on session end
   const[showNotifCard,setShowNotifCard]=useState(false); // contextual notif permission
-  const[sound,setSound]=useState(true);
+  const[sound,setSound]=useState(()=>{try{return localStorage.getItem("corvus_sound")!=="0";}catch{return true;}});
   // Elite voice coach — persisted preference; actual enablement is tier-gated below
   const[voiceCoach,setVoiceCoach]=useState(()=>{try{return localStorage.getItem("corvus_voice_coach")==="1";}catch{return false;}});
   const[faceBlur,setFaceBlur]=useState(()=>{try{return localStorage.getItem("corvus_face_blur")==="1";}catch{return false;}});
@@ -8408,13 +8408,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
               to before — this is a visual swap only. */}
           <div style={{display:"flex",flexDirection:"column"}}>
             <SettingsRow cs={cs} icon={sound?"bell":"bellOff"} label={isAr?"تنبيه الوضعية":"Posture alerts"}
-              right={<Switch cs={cs} on={sound} onChange={()=>setSound(s=>!s)} label={isAr?"تنبيه الوضعية":"Posture alerts"}/>}/>
+              right={<Switch cs={cs} on={sound} onChange={()=>setSound(s=>{const nv=!s;try{localStorage.setItem("corvus_sound",nv?"1":"0");}catch{}return nv;})} label={isAr?"تنبيه الوضعية":"Posture alerts"}/>}/>
             {tierAtLeast(effectiveTier,"professional") && (
               <SettingsRow cs={cs} icon="target" label={isAr?"وضع التركيز":"Focus Mode"}
                 sub={isAr?"يوقف إشعارات الإنجازات وقت الجلسة":"Mutes achievement notifications during the session"}
                 right={<Switch cs={cs} tone="purple" on={focusMode} onChange={()=>setFocusMode(f=>!f)} label={isAr?"وضع التركيز":"Focus Mode"}/>}/>
             )}
-            {tierAtLeast(effectiveTier,"elite") && (
+            {tierAtLeast(effectiveTier,"elite") ? (
               <SettingsRow cs={cs} icon="mic" label={isAr?"المدرب الصوتي":"Voice coach"}
                 right={<Switch cs={cs} tone="green" on={voiceCoach} label={isAr?"المدرب الصوتي":"Voice coach"} onChange={()=>{
                   setVoiceCoach(v=>{
@@ -8425,7 +8425,36 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     return nv;
                   });
                 }}/>}/>
+            ) : (
+              /* Show the row for all tiers so users know it exists — tapping
+                 it explains the upgrade path instead of silently doing nothing. */
+              <SettingsRow cs={cs} icon="mic" label={isAr?"المدرب الصوتي":"Voice coach"}
+                sub={isAr?"متاح في باقة Elite":"Available on Elite plan"}
+                onClick={()=>setPage("pricing")}
+                right={<span style={{fontSize:10,background:"rgba(99,102,241,.18)",color:"#818cf8",padding:"2px 7px",borderRadius:8,fontWeight:600,whiteSpace:"nowrap"}}>Elite ↗</span>}/>
             )}
+            <SettingsDivider cs={cs}/>
+            {/* Desktop notification permission — show a one-tap enable row so
+                users don't have to wait for a bad-posture alert to get prompted. */}
+            {"Notification" in window && (() => {
+              const perm = Notification.permission;
+              if (perm === "granted") return (
+                <SettingsRow cs={cs} icon="bell" label={isAr?"إشعارات سطح المكتب":"Desktop notifications"}
+                  sub={isAr?"مفعّلة — ستصلك تنبيهات عند إخفاء التبويب":"Enabled — alerts sent when tab is hidden"}
+                  right={<span style={{fontSize:10,color:"#10b981",fontWeight:600}}>✓ {isAr?"مفعّل":"On"}</span>}/>
+              );
+              if (perm === "denied") return (
+                <SettingsRow cs={cs} icon="bellOff" label={isAr?"إشعارات سطح المكتب":"Desktop notifications"}
+                  sub={isAr?"محظورة — افتح إعدادات المتصفح للسماح":"Blocked — allow in browser settings"}
+                  right={<span style={{fontSize:10,color:"#ef4444",fontWeight:600}}>✗ {isAr?"محظور":"Blocked"}</span>}/>
+              );
+              return (
+                <SettingsRow cs={cs} icon="bell" label={isAr?"إشعارات سطح المكتب":"Desktop notifications"}
+                  sub={isAr?"تنبيهات عند إخفاء التبويب":"Alerts when the tab is hidden"}
+                  onClick={()=>requestNotificationPermission()}
+                  right={<span style={{fontSize:10,background:"rgba(245,158,11,.15)",color:"#fbbf24",padding:"2px 7px",borderRadius:8,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap"}}>{isAr?"تفعيل":"Enable"}</span>}/>
+              );
+            })()}
             <SettingsDivider cs={cs}/>
             <SettingsRow cs={cs} icon={faceBlur?"eyeOff":"eye"} label={isAr?"إخفاء الوجه":"Face blur"}
               right={<Switch cs={cs} tone="purple" on={faceBlur} label={isAr?"إخفاء الوجه":"Face blur"} onChange={()=>{ setFaceBlur(v=>{ const nv=!v; try{localStorage.setItem("corvus_face_blur",nv?"1":"0");}catch{} return nv; }); }}/>}/>
