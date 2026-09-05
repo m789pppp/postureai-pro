@@ -57,6 +57,16 @@ export const db = (()=>{
   try{
     return initializeFirestore(fbApp, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      // Without this, a single `undefined` value anywhere in a write —
+      // even deeply nested, e.g. inside saveSession()'s large `metrics`
+      // object coming straight from the posture engine — makes the SDK
+      // reject the ENTIRE document client-side before it reaches the
+      // server. That's an all-or-nothing failure for one stray optional
+      // field, and it's the kind of thing that only shows up for some
+      // postures/frames, not others — exactly the "sometimes a whole
+      // session just doesn't save" shape of bug. Firestore then simply
+      // omits any undefined field instead of failing the write.
+      ignoreUndefinedProperties: true,
     });
   }catch(e){
     // Falls back to a plain in-memory Firestore instance if persistence

@@ -7960,7 +7960,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             on-video badge already uses: `analysis && score>0`). */}
         {analysis && score>0 && (
           <div style={{padding:"16px 14px 4px",display:"flex",justifyContent:"center"}}>
-            <ScoreGauge cs={cs} score={scoreStatus?.score||score} grade={scoreStatus?.grade}/>
+            <ScoreGauge cs={cs} score={score} grade={isAr?gradeScoreAr(score):gradeScore(score)}/>
           </div>
         )}
 
