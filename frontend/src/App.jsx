@@ -84,6 +84,7 @@ import SessionComparison from "./SessionComparison.jsx";
 import TrendChart from "./TrendChart.jsx";
 import { ShareCard }        from "./ShareCard.jsx";
 import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
+import { QAAccuracyTest } from "./QAAccuracyTest.jsx";
 import { ProductTour, TourTrigger } from "./ProductTour.jsx";
 import AnnouncementsBar    from "./AnnouncementsBar.jsx";
 import SecurityCenter       from "./SecurityCenter.jsx";
@@ -2803,6 +2804,7 @@ export default function App(){
 
   // Calibration (personal baseline)
   const[showCalibWizard,setShowCalibWizard]=useState(false);
+  const[showQATest,setShowQATest]=useState(false); // dev-only structured accuracy test
   const { calibration: savedCalib } = useCalibration(profile?.uid);
   const [calibData, setCalibData] = useState(null);
   const [calibStale, setCalibStale] = useState(false); // true when calibration >30 days old
@@ -6519,6 +6521,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         set the state and nothing happened: no modal, no error, just a
         dead button. Mounted here too so it actually opens on this page. */}
     {showCalibWizard&&<ErrorBoundary key="calibwizard-live"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast(isAr?"تم حفظ المعايرة ✓":"Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
+    {showQATest&&<ErrorBoundary key="qatest-live"><QAAccuracyTest analysis={analysis} camActive={camActive} isAr={isAr} cs={cs} onClose={()=>setShowQATest(false)}/></ErrorBoundary>}
     {/* The 4 modals below are triggered from buttons on THIS page (Billing/
         Upgrade, Custom Alert Rules, Onboarding restart, Company setup) but
         were previously only ever mounted inside the page==="home" branch —
@@ -7246,6 +7249,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
             backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,
           }}><Icon name={isFs?"collapse":"expand"} size={15} color="#e2e8f0"/></button>
+
+          {/* QA accuracy-test trigger — dev/founder tool, not part of the
+              normal user flow. Deliberately small and unlabeled-by-default
+              (icon only) so it doesn't read as a real feature to regular
+              users, but still reachable without digging through devtools. */}
+          {camActive && (
+            <button className="liveui-focusable" onClick={()=>setShowQATest(true)}
+              title={isAr?"اختبار دقة QA":"QA accuracy test"}
+              aria-label={isAr?"اختبار دقة QA":"QA accuracy test"} style={{
+              position:"absolute",bottom:8,
+              left:isAr?"auto":8, right:isAr?8:"auto", zIndex:20,
+              width:32,height:32,borderRadius:8,
+              background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
+              backdropFilter:"blur(6px)",color:"#e2e8f0",cursor:"pointer",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,
+            }}>🧪</button>
+          )}
 
           {/* AI model loading overlay — the camera permission/feed itself
               resolves in a couple seconds, but the pose-detection model
