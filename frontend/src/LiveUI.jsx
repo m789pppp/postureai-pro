@@ -414,34 +414,44 @@ export function LiveHeader({
     ? (isAr ? `المدرب ${aiCoachStatus.progress}%` : `Coach ${aiCoachStatus.progress}%`)
     : (isAr ? "المدرب..." : "Coach…");
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingBottom: 12, borderBottom: `1px solid ${cs.border}`, marginBottom: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          {onBack && <IconBtn name="back" label={isAr ? "رجوع" : "Back"} onClick={onBack} cs={cs} />}
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: LT.font.base, fontWeight: 800, color: cs.text, letterSpacing: "-.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {isAr ? "تحليل الوضعية المباشر" : "Live Posture Analysis"}
-            </div>
-            {tierLabel && <div style={{ fontSize: LT.font.xs, color: cs.muted, fontWeight: 600, marginTop: 1 }}>{tierLabel}</div>}
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      gap: 10, padding: "12px 14px",
+      borderBottom: `1px solid ${cs.border}`,
+    }}>
+      {/* Left: back + title + tier */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: "0 1 auto" }}>
+        {onBack && <IconBtn name="back" label={isAr ? "رجوع" : "Back"} onClick={onBack} cs={cs} />}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: LT.font.base, fontWeight: 800, color: cs.text, letterSpacing: "-.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {isAr ? "تحليل الوضعية المباشر" : "Live Posture Analysis"}
           </div>
-        </div>
-        {/* Only 2 icon controls now (theme, language) — a 3rd "settings" gear
-            here duplicated the "Session settings" toggle already lower on
-            the page, and at header size read as a near-twin of the theme
-            sun icon (both circle+rays), confusing rather than useful. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          {showUpgrade && <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs} style={{ height: 34 }}>{isAr ? "ترقية" : "Upgrade"}</Btn>}
-          <IconBtn name={darkMode ? "sun" : "moon"} label={isAr ? "تبديل السمة" : "Toggle theme"} onClick={onToggleDark} cs={cs} />
-          <IconBtn name="globe" label={isAr ? "اللغة" : "Language"} onClick={onToggleLang} cs={cs} />
-          {onOpenSettings && <IconBtn name="settings" label={isAr ? "الإعدادات" : "Settings"} onClick={onOpenSettings} cs={cs} />}
+          {tierLabel && <div style={{ fontSize: LT.font.xs, color: cs.muted, fontWeight: 600, marginTop: 1 }}>{tierLabel}</div>}
         </div>
       </div>
-      {/* One status row, not two stacked ones — pose-detection and AI-coach
-          readiness are related facts a user reads together at a glance. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-        <StatusPill icon={mpIcon} label={`${isAr ? "الذكاء الاصطناعي" : "AI"}: ${mpLabel}`} tone={mpTone} cs={cs} pulse={mpStatus === "loading"} title={mpTitle} />
+
+      {/* Centre: status pills — compact, no labels repeated */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+        <StatusPill icon={mpIcon} label={`${isAr ? "الذكاء" : "AI"}: ${mpLabel}`} tone={mpTone} cs={cs} pulse={mpStatus === "loading"} title={mpTitle} />
         {aiCoachStatus && <StatusPill icon={coachIcon} label={coachLabel} tone={coachTone} cs={cs} pulse={!aiCoachStatus.ready && !aiCoachStatus.error} />}
-        {camActive && <StatusPill icon="clock" label={timeLabel} tone="neutral" cs={cs} />}
+        {camActive && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "4px 10px", borderRadius: 99,
+            background: "rgba(79,174,142,.12)", border: "1px solid rgba(79,174,142,.3)",
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4FAE8E", animation: "pulse 1.5s ease-in-out infinite", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#4FAE8E", fontVariantNumeric: "tabular-nums", letterSpacing: ".02em" }}>{timeLabel}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Right: utility icons */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        {showUpgrade && <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs} style={{ height: 30, fontSize: 11 }}>{isAr ? "ترقية" : "Upgrade"}</Btn>}
+        <IconBtn name={darkMode ? "sun" : "moon"} label={isAr ? "تبديل السمة" : "Toggle theme"} onClick={onToggleDark} cs={cs} />
+        <IconBtn name="globe" label={isAr ? "اللغة" : "Language"} onClick={onToggleLang} cs={cs} />
+        {onOpenSettings && <IconBtn name="settings" label={isAr ? "الإعدادات" : "Settings"} onClick={onOpenSettings} cs={cs} />}
       </div>
     </div>
   );
