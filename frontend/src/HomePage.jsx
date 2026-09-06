@@ -3123,20 +3123,20 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const unreadNotifCount = useUnreadNotificationsCount(profile?.uid || user?.uid);
   const nav = (()=>{
     if(userRole==="hr_admin"||userRole==="platform_admin") return [
-      { id:"home",      icon:"⊞",  en:"Overview",   ar:"النظرة العامة" },
+      { id:"home",      icon:"🏠",  en:"Overview",   ar:"النظرة العامة" },
       { id:"employees", icon:"👥", en:"Employees",  ar:"الموظفون" },
       { id:"alerts",    icon:"🔔", en:"Alerts",     ar:"التنبيهات", badge:atRisk },
       { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
     ];
     if(userRole==="employee") return [
-      { id:"home",     icon:"⊞",  en:"Dashboard", ar:"الرئيسية" },
+      { id:"home",     icon:"🏠",  en:"Dashboard", ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",  ar:"جلساتي" },
       { id:"team",     icon:"👥", en:"Team",       ar:"الفريق" },
       { id:"coach",    icon:"🤖", en:"AI Coach",   ar:"مدرب AI" },
       { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
     ];
     return [
-      { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
+      { id:"home",     icon:"🏠",  en:"Dashboard",  ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
       { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
     ];
@@ -3415,18 +3415,18 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
   const onLockedTool = () => setShowBilling?.(true);
 
   const tabs = userRole==="hr_admin"||userRole==="platform_admin" ? [
-    { id:"home",      icon:"⊞", en:"Overview", ar:"نظرة" },
+    { id:"home",      icon:"🏠", en:"Overview", ar:"نظرة" },
     { id:"employees", icon:"👥",en:"Team",      ar:"فريق" },
     { id:"live",      icon:"▶",  en:"Session",  ar:"جلسة", special:true },
     { id:"alerts",    icon:"🔔",en:"Alerts",    ar:"تنبيهات", badge:atRisk },
     { id:"sessions",  icon:"📋",en:"History",   ar:"السجل" },
   ] : userRole==="employee" ? [
-    { id:"home",     icon:"⊞", en:"Home",    ar:"الرئيسية" },
+    { id:"home",     icon:"🏠", en:"Home",    ar:"الرئيسية" },
     { id:"team",     icon:"👥",en:"Team",     ar:"الفريق" },
     { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
     { id:"sessions", icon:"📋",en:"History",  ar:"السجل" },
   ] : [
-    { id:"home",     icon:"⊞", en:"Home",    ar:"الرئيسية" },
+    { id:"home",     icon:"🏠", en:"Home",    ar:"الرئيسية" },
     { id:"sessions", icon:"📋",en:"History", ar:"السجل" },
     { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
     { id:"analytics",icon:"📊",en:"Analytics",ar:"تحليلات" },

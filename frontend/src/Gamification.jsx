@@ -803,8 +803,15 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
       profile?.ever_calibrated, profile?.weekly_challenges_completed,
       avg, calibration, sessions?.length]);
 
-  const TABS = [t.progress, t.achievements, t.season, t.heatmap, t.leaderboard];
-  const KEYS = ["progress", "achievements", "season", "heatmap", "leaderboard"];
+  // Leaderboard fundamentally cannot work for a personal account — it
+  // compares you against company colleagues, and an individual account has
+  // none. Previously this tab was always shown and, when opened, explained
+  // there was nothing to compare — a dead end rather than a real feature.
+  // Hiding it entirely for accounts with no company_id is more honest than
+  // showing a tab that can never do anything for this user.
+  const hasCompany = !!profile?.company_id;
+  const TABS = hasCompany ? [t.progress, t.achievements, t.season, t.heatmap, t.leaderboard] : [t.progress, t.achievements, t.season, t.heatmap];
+  const KEYS = hasCompany ? ["progress", "achievements", "season", "heatmap", "leaderboard"] : ["progress", "achievements", "season", "heatmap"];
   const isPro = tierAtLeast(tier, "professional");
 
   return (
