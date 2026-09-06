@@ -1311,3 +1311,30 @@ export function useNotifications() {
   }, []);
   return { push, queue: Q };
 }
+
+/**
+ * Lightweight unread-count-only listener, for a bell badge in the main
+ * nav/header — so notifications are discoverable without digging into
+ * Settings first. Same query + `dismissed` filter as NotificationsHub
+ * itself (including the synthetic "Welcome to Corvus" for brand-new
+ * users with zero real notifications yet), so the badge number can
+ * never disagree with what the hub actually shows.
+ */
+export function useUnreadNotificationsCount(uid) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!uid) { setCount(0); return; }
+    const q = query(
+      collection(db, "users", uid, "notifications"),
+      orderBy("created_at", "desc"),
+      limit(50)
+    );
+    const unsub = onSnapshot(q, snap => {
+      const items = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(n => !n.dismissed);
+      const unread = items.length === 0 ? 1 /* the synthetic welcome notif */ : items.filter(n => !n.read).length;
+      setCount(unread);
+    }, () => setCount(0));
+    return unsub;
+  }, [uid]);
+  return count;
+}
