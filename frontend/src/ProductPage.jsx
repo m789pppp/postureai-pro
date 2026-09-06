@@ -99,6 +99,11 @@ export default function ProductPage() {
           .pp-wrap { padding:0 16px; }
           .pp-stats-bar { grid-template-columns:1fr 1fr; }
         }
+        /* At 360px the two-up bar gives each tile ~164px for a headline number
+           and its caption — "On-device analysis" wrapped mid-phrase. */
+        @media(max-width:430px){
+          .pp-stats-bar { grid-template-columns:1fr; }
+        }
       `}</style>
 
       {/* ── Hero ── */}
