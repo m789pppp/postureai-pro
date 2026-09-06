@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { Icon } from "./LiveUI.jsx";
 
 /* ── Design tokens ───────────────────────────────────────────────── */
 const SPRING = "cubic-bezier(0.16,1,0.3,1)";
@@ -31,6 +32,10 @@ const DEMO_PROFILE = {
 };
 
 /* ── Primitive components ────────────────────────────────────────── */
+// Names Btn should draw as line icons rather than print as text.
+const ICON_NAMES = new Set(["forward","back","play","checkCircle","target","user",
+  "building","sparkle","clock","camera","trophy","chevronDown","refresh","plug","shield"]);
+
 function Btn({ children, onClick, variant = "primary", size = "base", disabled, icon, loading, fullWidth, style: sx = {} }) {
   const [hov, setHov] = useState(false);
   const pad = { xs: "5px 12px", sm: "8px 16px", base: "11px 22px", lg: "14px 30px" };
@@ -50,7 +55,11 @@ function Btn({ children, onClick, variant = "primary", size = "base", disabled, 
         display: "inline-flex", alignItems: "center", justifyContent: "center",
         gap: 7, padding: pad[size], fontSize: fs[size], fontWeight: 700,
         borderRadius: 10, cursor: disabled || loading ? "not-allowed" : "pointer",
-        opacity: disabled ? .45 : 1,
+        // A disabled primary kept its full-saturation gradient AND its glow at
+        // 45% opacity, which reads as an enabled button that is broken rather
+        // than one that is waiting for you. Desaturate it too.
+        opacity: disabled ? .5 : 1,
+        filter: disabled ? "grayscale(.7)" : "none",
         fontFamily: "'DM Sans',system-ui,sans-serif",
         whiteSpace: "nowrap", width: fullWidth ? "100%" : undefined,
         transition: `all 220ms ${SPRING}`,
@@ -58,9 +67,15 @@ function Btn({ children, onClick, variant = "primary", size = "base", disabled, 
         background: v.bg, color: v.c, border: v.border, boxShadow: v.sh || "none",
         ...sx,
       }}>
+      {/* `icon` used to be a raw string rendered as text, which is how
+          "→ Let's get started →" ended up with an arrow on both sides. It now
+          takes an Icon name; anything else still renders as text so existing
+          call sites are unaffected. */}
       {loading
         ? <span style={{ animation: "ob-spin 750ms linear infinite", display: "inline-block" }}>⟳</span>
-        : icon && <span style={{ fontSize: "1.1em" }}>{icon}</span>}
+        : icon && (ICON_NAMES.has(icon)
+            ? <Icon name={icon} size={size === "lg" ? 15 : 13} color="currentColor" />
+            : <span style={{ fontSize: "1.1em" }}>{icon}</span>)}
       {children}
     </button>
   );
@@ -105,7 +120,7 @@ function Input({ label, value, onChange, placeholder, type = "text", hint }) {
       <input type={type} value={value} onChange={onChange} placeholder={placeholder}
         onFocus={() => setFoc(true)} onBlur={() => setFoc(false)}
         style={{ width: "100%", padding: "10px 13px", background: "rgba(255,255,255,.05)", border: `1.5px solid ${foc ? "#1a56db" : "rgba(148,163,184,.12)"}`, borderRadius: 9, color: "#e8f0fe", fontSize: 13, outline: "none", fontFamily: "'DM Sans',system-ui,sans-serif", boxShadow: foc ? "0 0 0 3px rgba(26,86,219,.14)" : "none", transition: "border-color 150ms, box-shadow 150ms" }} />
-      {hint && <div style={{ fontSize: 10, color: "#475569", marginTop: 4 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 10, color: "#8b9bb4", marginTop: 4 }}>{hint}</div>}
     </div>
   );
 }
@@ -119,7 +134,7 @@ function StepAccountType({ isAr, onNext, setProfile }) {
   const [chosen, setChosen] = useState(null);
   const types = [
     {
-      id:"individual", icon:"🧑‍💻",
+      id:"individual", ico:"user",
       en:"Individual", ar:"مستخدم فردي",
       desc:"Personal posture tracking, AI coaching, and wellness reports — just for you.",
       descAr:"تتبع وضعيتك الشخصية، AI Coach، وتقارير صحية شخصية.",
@@ -128,7 +143,7 @@ function StepAccountType({ isAr, onNext, setProfile }) {
       featuresAr:["داشبورد شخصي","AI Coach","تقارير PDF","تتبع التقدم"],
     },
     {
-      id:"company", icon:"🏢",
+      id:"company", ico:"building",
       en:"Company / Team", ar:"شركة / فريق",
       desc:"Monitor your entire team, HR analytics, at-risk alerts, and org-level reports.",
       descAr:"راقب الفريق كاملاً، HR analytics، تنبيهات الخطر، وتقارير المؤسسة.",
@@ -139,8 +154,12 @@ function StepAccountType({ isAr, onNext, setProfile }) {
   ];
   return (
     <div style={{padding:"8px 0"}}>
-      <div style={{textAlign:"center",marginBottom:28}}>
-        <div style={{fontSize:36,marginBottom:12}}>🎯</div>
+      <div style={{textAlign:"center",marginBottom:20}}>
+        <div style={{width:52,height:52,borderRadius:15,margin:"0 auto 14px",
+          background:"rgba(26,86,219,.14)",border:"1px solid rgba(26,86,219,.28)",
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Icon name="target" size={25} color="#60a5fa"/>
+        </div>
         <h2 style={{fontFamily:SYNE,fontSize:22,fontWeight:800,letterSpacing:"-.02em",marginBottom:8,color:"#e8f0fe"}}>
           {isAr?"كيف ستستخدم Corvus؟":"How will you use Corvus?"}
         </h2>
@@ -148,10 +167,10 @@ function StepAccountType({ isAr, onNext, setProfile }) {
           {isAr?"اختر نوع حسابك — التجربة مختلفة تماماً لكل نوع":"Choose your account type — each gets a fully different experience"}
         </p>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:28}}>
+      <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:20}}>
         {types.map(t=>(
           <button key={t.id} onClick={()=>setChosen(t.id)} style={{
-            width:"100%",textAlign:isAr?"right":"left",padding:"18px 20px",borderRadius:14,cursor:"pointer",
+            width:"100%",textAlign:isAr?"right":"left",padding:"15px 17px",borderRadius:14,cursor:"pointer",
             background:chosen===t.id?`linear-gradient(135deg,${t.color}18,${t.color}08)`:"rgba(255,255,255,.02)",
             border:`2px solid ${chosen===t.id?t.color:"rgba(148,163,184,.1)"}`,
             transition:`all 200ms ${SPRING}`,
@@ -161,7 +180,9 @@ function StepAccountType({ isAr, onNext, setProfile }) {
               <div style={{width:48,height:48,borderRadius:12,flexShrink:0,
                 background:chosen===t.id?`${t.color}22`:"rgba(255,255,255,.06)",
                 border:`1.5px solid ${chosen===t.id?t.color+"44":"rgba(148,163,184,.1)"}`,
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>{t.icon}</div>
+                display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Icon name={t.ico} size={22} color={chosen===t.id?t.color:"#8b9bb4"}/>
+              </div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                   <span style={{fontFamily:SYNE,fontSize:16,fontWeight:800,color:chosen===t.id?t.color:"#e8f0fe"}}>
@@ -171,7 +192,9 @@ function StepAccountType({ isAr, onNext, setProfile }) {
                     <span style={{fontSize:10,fontWeight:700,color:t.color,
                       background:`${t.color}18`,border:`1px solid ${t.color}44`,
                       borderRadius:99,padding:"2px 8px"}}>
-                      {isAr?"✓ تم الاختيار":"✓ Selected"}
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                        <Icon name="checkCircle" size={10} color={t.color}/>{isAr?"تم الاختيار":"Selected"}
+                      </span>
                     </span>
                   )}
                 </div>
@@ -182,7 +205,7 @@ function StepAccountType({ isAr, onNext, setProfile }) {
                   {(isAr?t.featuresAr:t.features).map((f,i)=>(
                     <span key={i} style={{fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:99,
                       background:chosen===t.id?`${t.color}15`:"rgba(255,255,255,.04)",
-                      color:chosen===t.id?t.color:"#475569",
+                      color:chosen===t.id?t.color:"#8b9bb4",
                       border:`1px solid ${chosen===t.id?t.color+"30":"rgba(148,163,184,.08)"}`}}>
                       {f}
                     </span>
@@ -202,10 +225,10 @@ function StepAccountType({ isAr, onNext, setProfile }) {
           }));
           onNext();
         }}>
-        {isAr?"التالي ←":"Continue →"}
+        {isAr?"التالي":"Continue"}
       </Btn>
       {!chosen&&(
-        <div style={{textAlign:"center",fontSize:11,color:"#475569",marginTop:10}}>
+        <div style={{textAlign:"center",fontSize:11.5,color:"#8b9bb4",marginTop:10}}>
           {isAr?"اختر نوع الحساب للمتابعة":"Select an account type to continue"}
         </div>
       )}
@@ -228,7 +251,7 @@ function StepWelcome({ isAr, onNext, name, acctType }) {
           display:"flex",alignItems:"center",justifyContent:"center",
           fontSize:42,boxShadow:isCompany?"0 12px 40px rgba(5,150,105,.45)":"0 12px 40px rgba(26,86,219,.45)",
           animation:show?"ob-bounceIn 600ms cubic-bezier(.16,1,.3,1) both":"none",
-        }}>{isCompany?"🏢":"◈"}</div>
+        }}>{isCompany?<Icon name="building" size={40} color="#fff"/>:"◈"}</div>
       </div>
       <div style={{opacity:show?1:0,transform:show?"none":"translateY(16px)",transition:`all 500ms 150ms ${SPRING}`}}>
         <div style={{fontSize:10,fontWeight:800,letterSpacing:".16em",textTransform:"uppercase",
@@ -236,7 +259,7 @@ function StepWelcome({ isAr, onNext, name, acctType }) {
           {isCompany?(isAr?"منصة HR للقوى العاملة":"HR WORKFORCE PLATFORM"):(isAr?"منصة ذكاء الوضعية بالـ AI":"AI POSTURE INTELLIGENCE")}
         </div>
         <h1 style={{fontFamily:SYNE,fontSize:"clamp(24px,5vw,38px)",fontWeight:800,letterSpacing:"-.035em",lineHeight:1.1,marginBottom:16}}>
-          {isAr?`أهلاً ${firstName}! 👋`:`Welcome, ${firstName}! 👋`}
+          {isAr?`أهلاً ${firstName}!`:`Welcome, ${firstName}!`}
         </h1>
         <p style={{fontSize:14,color:"#94a3b8",lineHeight:1.75,maxWidth:460,margin:"0 auto 28px"}}>
           {isCompany
@@ -246,24 +269,34 @@ function StepWelcome({ isAr, onNext, name, acctType }) {
       </div>
       <div style={{opacity:show?1:0,transition:"opacity 500ms 300ms",display:"flex",flexWrap:"wrap",gap:8,justifyContent:"center",marginBottom:32}}>
         {(isCompany
-          ?(isAr?["👥 نظرة عامة للفريق","📊 HR Analytics","🔔 تنبيهات الخطر","📋 تقارير المؤسسة","🔒 أمان مؤسسي"]:["👥 Team overview","📊 HR Analytics","🔔 At-risk alerts","📋 Org reports","🔒 Enterprise security"])
-          :(isAr?["🧠 ذكاء AI فوري","📈 تحليلات شخصية","🤖 AI Coach","📋 تقارير PDF","🏆 تتبع التقدم"]:["🧠 Real-time AI","📈 Personal analytics","🤖 AI Coach","📋 PDF reports","🏆 Progress tracking"])
-        ).map((f,i)=>(
+          /* The chips carried an emoji each — 🧠 📈 🤖 📋 🏆, and ☑️ which
+              renders as a bare white box on several platforms. Same five
+              claims, one icon language. */
+          ?(isAr?[["users","نظرة عامة للفريق"],["barChart","HR Analytics"],["bell","تنبيهات الخطر"],["fileText","تقارير المؤسسة"],["lock","أمان مؤسسي"]]
+                :[["users","Team overview"],["barChart","HR Analytics"],["bell","At-risk alerts"],["fileText","Org reports"],["lock","Enterprise security"]])
+          :(isAr?[["eye","ذكاء AI فوري"],["trend","تحليلات شخصية"],["sparkle","AI Coach"],["fileText","تقارير PDF"],["trophy","تتبع التقدم"]]
+                :[["eye","Real-time AI"],["trend","Personal analytics"],["sparkle","AI Coach"],["fileText","PDF reports"],["trophy","Progress tracking"]])
+        ).map(([ico,f],i)=>(
           <span key={i} style={{
             background:isCompany?"rgba(5,150,105,.1)":"rgba(26,86,219,.1)",
             border:`1px solid ${isCompany?"rgba(5,150,105,.22)":"rgba(26,86,219,.22)"}`,
             borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:600,
             color:isCompany?"#34d399":"#60a5fa",
             animation:show?`ob-fadeIn 300ms ${400+i*60}ms both`:"none",
-          }}>{f}</span>
+            display:"inline-flex",alignItems:"center",gap:6,
+          }}><Icon name={ico} size={14} color="currentColor"/>{f}</span>
         ))}
       </div>
       <div style={{opacity:show?1:0,transition:"opacity 500ms 500ms"}}>
-        <Btn size="lg" onClick={onNext} fullWidth icon="→">
-          {isAr?"هيا نبدأ ←":"Let's get started →"}
+        {/* Was icon="→" AND a "→" in the label, so the button read
+             "→ Let's get started →". */}
+        <Btn size="lg" onClick={onNext} fullWidth>
+          {isAr?"هيا نبدأ":"Let's get started"}
         </Btn>
-        <div style={{fontSize:11,color:"#475569",marginTop:12}}>
-          {isAr?"⏱ سيستغرق الإعداد أقل من 3 دقائق":"⏱ Setup takes less than 3 minutes"}
+        <div style={{fontSize:11.5,color:"#8b9bb4",marginTop:12,
+          display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <Icon name="clock" size={12} color="#8b9bb4"/>
+          {isAr?"سيستغرق الإعداد أقل من 3 دقائق":"Setup takes less than 3 minutes"}
         </div>
       </div>
       <style>{`
@@ -320,12 +353,14 @@ function StepProfile({ isAr, profile, setProfile, onNext, onBack }) {
         background:isCompany?"rgba(16,185,129,.06)":"rgba(59,130,246,.06)",
         border:`1px solid ${isCompany?"rgba(16,185,129,.2)":"rgba(59,130,246,.2)"}`,
         borderRadius:10,marginBottom:24}}>
-        <span style={{fontSize:18}}>{isCompany?"🏢":"🧑‍💻"}</span>
+        <span style={{display:"inline-flex",flexShrink:0}}>
+          <Icon name={isCompany?"building":"user"} size={18} color={isCompany?"#34d399":"#60a5fa"}/>
+        </span>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:isCompany?"#34d399":"#60a5fa"}}>
             {isCompany?(isAr?"حساب شركة":"Company Account"):(isAr?"حساب فردي":"Individual Account")}
           </div>
-          <div style={{fontSize:10,color:"#475569"}}>
+          <div style={{fontSize:10,color:"#8b9bb4"}}>
             {isCompany
               ?(isAr?"سيُفعَّل HR Panel والـ Team Analytics بعد الإعداد":"HR Panel and Team Analytics will be activated after setup")
               :(isAr?"سيُفعَّل الداشبورد الشخصي والـ AI Coach":"Personal dashboard and AI Coach will be activated")}
@@ -333,8 +368,12 @@ function StepProfile({ isAr, profile, setProfile, onNext, onBack }) {
         </div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <Btn variant="ghost" onClick={onBack} size="base">{isAr?"→ رجوع":"← Back"}</Btn>
-        <Btn onClick={onNext} fullWidth>{isAr?"التالي ←":"Continue →"}</Btn>
+        {/* Arrows were typed into the labels, so they never mirrored with the
+             layout and they drifted between steps ("Continue →", "Looks great!
+             Continue →", "Skip for now →", "3 selected → Continue"). The icon
+             carries the direction and flips with `isAr`. */}
+        <Btn variant="ghost" onClick={onBack} size="base" icon={isAr?"forward":"back"}>{isAr?"رجوع":"Back"}</Btn>
+        <Btn onClick={onNext} fullWidth>{isAr?"التالي":"Continue"}</Btn>
       </div>
     </div>
   );
@@ -377,12 +416,14 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
         borderRadius: 12, marginBottom: 24,
         background: "rgba(26,86,219,.1)", border: "1.5px solid rgba(26,86,219,.45)",
       }}>
-        <span style={{ fontSize: 28, flexShrink: 0 }}>💻</span>
+        <span style={{ display:"inline-flex", flexShrink: 0 }}>
+          <Icon name="laptop" size={26} color="#60a5fa"/>
+        </span>
         <div>
           <div style={{ fontFamily: SYNE, fontSize: 13, fontWeight: 700, color: "#60a5fa", marginBottom: 2 }}>
             {isAr ? "لابتوب / كمبيوتر" : "Laptop / Desktop"}
           </div>
-          <div style={{ fontSize: 11, color: "#475569" }}>
+          <div style={{ fontSize: 11, color: "#8b9bb4" }}>
             {isAr ? "كاميرا أمامية، جلوس على المكتب" : "Front camera, sitting at desk"}
           </div>
         </div>
@@ -395,7 +436,7 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
         </div>
         {cameraOk === null && (
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <div style={{ fontSize: 11, color: "#475569", flex: 1 }}>
+            <div style={{ fontSize: 11, color: "#8b9bb4", flex: 1 }}>
               {isAr ? "تحتاج Corvus للوصول إلى كاميرتك للتحليل الآني" : "Corvus needs camera access for real-time analysis"}
             </div>
             <Btn size="sm" variant="secondary" onClick={checkCamera} loading={checking} icon="📷">
@@ -413,7 +454,7 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
             <div style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>
               ⚠️ {isAr ? "تعذّر الوصول للكاميرا" : "Camera access denied"}
             </div>
-            <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: "#8b9bb4", lineHeight: 1.6 }}>
               {isAr
                 ? "اذهب إلى إعدادات المتصفح ← الخصوصية ← الكاميرا وأضف corvus.io للمواقع المسموح بها"
                 : "Go to browser Settings → Privacy → Camera → allow corvus.io"}
@@ -423,9 +464,9 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack} icon={isAr?"forward":"back"}>{isAr ? "رجوع" : "Back"}</Btn>
         <Btn onClick={() => { setProfile(p => ({ ...p, mode })); onNext(); }} fullWidth>
-          {isAr ? "التالي ←" : "Continue →"}
+          {isAr ? "التالي" : "Continue"}
         </Btn>
       </div>
     </div>
@@ -444,20 +485,20 @@ function StepGoals({ isAr, profile, setProfile, onNext, onBack }) {
   const isCompany = profile.acct_type === "company";
 
   const individualGoals = [
-    { id: "reduce_pain",    icon: "💪", en: "Reduce back/neck pain",          ar: "تقليل آلام الظهر والرقبة" },
-    { id: "productivity",   icon: "⚡", en: "Improve productivity",            ar: "تحسين الإنتاجية" },
-    { id: "habits",         icon: "🎯", en: "Build healthy work habits",       ar: "بناء عادات عمل صحية" },
-    { id: "remote",         icon: "🏠", en: "Support remote work wellness",    ar: "دعم صحة العمل عن بُعد" },
+    { id: "reduce_pain",    ico: "heartPulse", en: "Reduce back/neck pain",     ar: "تقليل آلام الظهر والرقبة" },
+    { id: "productivity",   ico: "trend",      en: "Improve productivity",       ar: "تحسين الإنتاجية" },
+    { id: "habits",         ico: "target",     en: "Build healthy work habits",  ar: "بناء عادات عمل صحية" },
+    { id: "remote",         ico: "laptop",     en: "Support remote work wellness", ar: "دعم صحة العمل عن بُعد" },
   ];
   const companyGoals = [
-    { id: "reduce_pain",    icon: "💪", en: "Reduce back/neck pain",          ar: "تقليل آلام الظهر والرقبة" },
-    { id: "productivity",   icon: "⚡", en: "Improve productivity",            ar: "تحسين الإنتاجية" },
-    { id: "team_health",    icon: "👥", en: "Track team wellness",             ar: "تتبع صحة الفريق" },
-    { id: "prevent_burnout",icon: "🔥", en: "Prevent employee burnout",        ar: "منع الإنهاك الوظيفي" },
-    { id: "roi",            icon: "📈", en: "Prove wellness ROI",              ar: "إثبات عائد الاستثمار الصحي" },
-    { id: "habits",         icon: "🎯", en: "Build healthy work habits",       ar: "بناء عادات عمل صحية" },
-    { id: "remote",         icon: "🏠", en: "Support remote work wellness",    ar: "دعم صحة العمل عن بُعد" },
-    { id: "compliance",     icon: "🛡️", en: "HR compliance & reporting",       ar: "الامتثال وتقارير HR" },
+    { id: "reduce_pain",    ico: "heartPulse", en: "Reduce back/neck pain",     ar: "تقليل آلام الظهر والرقبة" },
+    { id: "productivity",   ico: "trend",      en: "Improve productivity",       ar: "تحسين الإنتاجية" },
+    { id: "team_health",    ico: "users",      en: "Track team wellness",        ar: "تتبع صحة الفريق" },
+    { id: "prevent_burnout",ico: "crystal",    en: "Prevent employee burnout",   ar: "منع الإنهاك الوظيفي" },
+    { id: "roi",            ico: "barChart",   en: "Prove wellness ROI",         ar: "إثبات عائد الاستثمار الصحي" },
+    { id: "habits",         ico: "target",     en: "Build healthy work habits",  ar: "بناء عادات عمل صحية" },
+    { id: "remote",         ico: "laptop",     en: "Support remote work wellness", ar: "دعم صحة العمل عن بُعد" },
+    { id: "compliance",     ico: "shield",     en: "HR compliance & reporting",  ar: "الامتثال وتقارير HR" },
   ];
   // BUG FIX: this used to be one flat list shown to everyone — an
   // individual user would see "Track team wellness", "Prevent employee
@@ -492,24 +533,28 @@ function StepGoals({ isAr, profile, setProfile, onNext, onBack }) {
               animation: `ob-fadeIn 300ms ${i * 40}ms both`,
               transform: on ? "scale(1.02)" : "scale(1)",
             }}>
-              <span style={{ fontSize: 20 }}>{g.icon}</span>
+              <span style={{ display:"inline-flex", flexShrink:0 }}>
+                <Icon name={g.ico} size={18} color={on ? "#34d399" : "#8b9bb4"}/>
+              </span>
               <span style={{ fontSize: 12, fontWeight: on ? 700 : 500, color: on ? "#34d399" : "#94a3b8", lineHeight: 1.3 }}>
                 {isAr ? g.ar : g.en}
               </span>
-              {on && <span style={{ marginLeft: "auto", fontSize: 13, color: "#34d399" }}>✓</span>}
+              {on && <span style={{ marginInlineStart: "auto", display:"inline-flex" }}>
+                <Icon name="checkCircle" size={14} color="#34d399"/>
+              </span>}
             </button>
           );
         })}
       </div>
 
-      <div style={{ fontSize: 11, color: "#475569", marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: "#8b9bb4", marginBottom: 20 }}>
         {selected.length === 0 ? (isAr ? "اختر هدفاً واحداً على الأقل" : "Select at least one goal") : `${selected.length} ${isAr ? "أهداف مختارة" : "goals selected"}`}
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack} icon={isAr?"forward":"back"}>{isAr ? "رجوع" : "Back"}</Btn>
         <Btn onClick={() => { setProfile(p => ({ ...p, goals: selected })); onNext(); }} fullWidth disabled={selected.length === 0}>
-          {isAr ? "التالي ←" : "Continue →"}
+          {isAr ? "التالي" : "Continue"}
         </Btn>
       </div>
     </div>
@@ -522,14 +567,21 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
   const [animating, setAnimating] = useState(false);
   const bars = DEMO_SESSIONS.slice(-7).map(s => s.avg_score);
   const maxB = Math.max(...bars);
+  // Bars were drawn as v/max — with seven scores all between 78 and 95 that
+  // is 82%..100%, so the "preview of your real data" rendered as seven
+  // identical full-height blocks: a chart shape with no chart in it. Scaling
+  // across the observed range instead (with a floor so the lowest bar is
+  // still a bar) is what makes the week read as a week.
+  const minB = Math.min(...bars);
+  const span = Math.max(1, maxB - minB);
   const avgScore = Math.round(bars.reduce((a, b) => a + b, 0) / bars.length);
 
   useEffect(() => { setTimeout(() => setAnimating(true), 100); }, []);
 
   const TABS = [
-    { id: "dashboard", icon: "⊞",  en: "Dashboard",   ar: "لوحة التحكم" },
-    { id: "analytics", icon: "📊", en: "Analytics",    ar: "التحليلات" },
-    { id: "ai",        icon: "🧠", en: "AI Insights",  ar: "رؤى AI" },
+    { id: "dashboard", ico: "grid", en: "Dashboard",   ar: "لوحة التحكم" },
+    { id: "analytics", ico: "barChart", en: "Analytics",    ar: "التحليلات" },
+    { id: "ai",        ico: "brain",    en: "AI Insights",  ar: "رؤى AI" },
   ];
 
   return (
@@ -554,12 +606,12 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: "9px 14px", background: "none", border: "none",
             borderBottom: `2px solid ${tab === t.id ? "#1a56db" : "transparent"}`,
-            color: tab === t.id ? "#60a5fa" : "#475569",
+            color: tab === t.id ? "#60a5fa" : "#8b9bb4",
             fontSize: 11, fontWeight: 700, cursor: "pointer",
             display: "flex", alignItems: "center", gap: 6,
             transition: "color 150ms",
           }}>
-            <span>{t.icon}</span> {isAr ? t.ar : t.en}
+            <Icon name={t.ico} size={13} color="currentColor"/> {isAr ? t.ar : t.en}
           </button>
         ))}
       </div>
@@ -571,20 +623,20 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
             {[
               { l: isAr ? "متوسط الصحة" : "Health Avg", v: avgScore, sfx: "/100", c: sc(avgScore) },
               { l: isAr ? "الجلسات" : "Sessions",       v: 14,        sfx: "",      c: "#1a56db"    },
-              { l: isAr ? "السلسلة" : "Streak",          v: 4,         sfx: " 🔥",  c: "#f59e0b"    },
+              { l: isAr ? "السلسلة" : "Streak",          v: 4,         sfx: isAr ? " أيام" : "d", c: "#f59e0b" },
             ].map((m, i) => (
               <div key={i} style={{ background: `${m.c}0a`, border: `1px solid ${m.c}20`, borderRadius: 12, padding: "12px 14px", textAlign: "center", animation: animating ? `ob-fadeIn 350ms ${i * 80}ms both` : "none" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#475569", marginBottom: 6 }}>{m.l}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#8b9bb4", marginBottom: 6 }}>{m.l}</div>
                 <div style={{ fontFamily: SYNE, fontSize: 22, fontWeight: 800, color: m.c, lineHeight: 1 }}>{m.v}{m.sfx}</div>
               </div>
             ))}
           </div>
           {/* Bar chart */}
           <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(148,163,184,.08)", borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#475569", marginBottom: 10 }}>{isAr ? "آخر 7 أيام" : "Last 7 days"}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "#8b9bb4", marginBottom: 10 }}>{isAr ? "آخر 7 أيام" : "Last 7 days"}</div>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 56 }}>
               {bars.map((v, i) => {
-                const pct = Math.round((v / maxB) * 100);
+                const pct = Math.round(30 + ((v - minB) / span) * 70);
                 const color = sc(v);
                 return (
                   <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%" }}>
@@ -595,7 +647,7 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
                         transition: `height 600ms ${i * 60}ms ${SPRING}`, opacity: .85,
                       }} />
                     </div>
-                    <div style={{ fontSize: 8, color: "#475569" }}>{"SMTWTFS"[i]}</div>
+                    <div style={{ fontSize: 8, color: "#8b9bb4" }}>{"SMTWTFS"[i]}</div>
                   </div>
                 );
               })}
@@ -630,12 +682,12 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
       {tab === "ai" && (
         <div style={{ animation: "ob-fadeIn 250ms both" }}>
           {[
-            { icon: "💡", color: "#10b981", title: isAr ? "وضعيتك تتحسن" : "Your posture is improving", body: isAr ? "تحسّن بنسبة 8% مقارنةً بالأسبوع الماضي. حافظ على هذا المستوى!" : "You've improved 8% vs last week. Keep this momentum going!" },
-            { icon: "⚠️", color: "#f59e0b", title: isAr ? "اضبط ارتفاع الشاشة" : "Adjust your monitor height", body: isAr ? "كاميرا الجانب تشير إلى ميل الرأس للأمام. ارفع الشاشة 3-4 سم." : "Side camera detects forward head tilt. Raise monitor by 3-4cm." },
-            { icon: "🔮", color: "#7c3aed", title: isAr ? "توقع الأسبوع القادم" : "Next week forecast", body: isAr ? "بناءً على الاتجاه الحالي، متوسطك سيصل 80/100 الأسبوع القادم." : "Based on your current trend, you'll hit 80/100 next week." },
+            { ico: "bulb", color: "#10b981", title: isAr ? "وضعيتك تتحسن" : "Your posture is improving", body: isAr ? "تحسّن بنسبة 8% مقارنةً بالأسبوع الماضي. حافظ على هذا المستوى!" : "You've improved 8% vs last week. Keep this momentum going!" },
+            { ico: "alertTriangle", color: "#f59e0b", title: isAr ? "اضبط ارتفاع الشاشة" : "Adjust your monitor height", body: isAr ? "كاميرا الجانب تشير إلى ميل الرأس للأمام. ارفع الشاشة 3-4 سم." : "Side camera detects forward head tilt. Raise monitor by 3-4cm." },
+            { ico: "crystal", color: "#7c3aed", title: isAr ? "توقع الأسبوع القادم" : "Next week forecast", body: isAr ? "بناءً على الاتجاه الحالي، متوسطك سيصل 80/100 الأسبوع القادم." : "Based on your current trend, you'll hit 80/100 next week." },
           ].map((item, i) => (
             <div key={i} style={{ background: `${item.color}08`, border: `1px solid ${item.color}18`, borderRadius: 11, padding: "12px 14px", marginBottom: 10, display: "flex", gap: 10, animation: `ob-fadeIn 300ms ${i * 100}ms both` }}>
-              <div style={{ width: 32, height: 32, borderRadius: 9, background: `${item.color}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{item.icon}</div>
+              <div style={{ width: 32, height: 32, borderRadius: 9, background: `${item.color}14`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={item.ico} size={16} color={item.color}/></div>
               <div>
                 <div style={{ fontFamily: SYNE, fontSize: 12, fontWeight: 700, color: "#e8f0fe", marginBottom: 3 }}>{item.title}</div>
                 <div style={{ fontSize: 11, color: "#94a3b8", lineHeight: 1.6 }}>{item.body}</div>
@@ -646,9 +698,9 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
       )}
 
       <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack} icon={isAr?"forward":"back"}>{isAr ? "رجوع" : "Back"}</Btn>
         <Btn onClick={onNext} fullWidth>
-          {isAr ? "يبدو رائعاً! التالي ←" : "Looks great! Continue →"}
+          {isAr ? "يبدو رائعاً! التالي" : "Looks great! Continue"}
         </Btn>
       </div>
     </div>
@@ -656,13 +708,18 @@ function StepDemoWorkspace({ isAr, onNext, onBack }) {
 }
 
 /* ── Step 5: Interactive walkthrough ─────────────────────────────── */
-function StepWalkthrough({ isAr, onNext, onBack }) {
+function StepWalkthrough({ isAr, profile, onNext, onBack }) {
   const [step, setStep] = useState(0);
   const [completed, setCompleted] = useState([]);
 
-  const tours = [
+  const isCompany = profile?.acct_type === "company";
+  // The HR-dashboard tour ("Workforce Intel", department health, a PDF for
+  // your C-suite) was shown to everyone, so an individual who had just chosen
+  // a personal account in step 1 was walked through a screen they do not have
+  // — the same gap already fixed in StepGoals and StepIntegrations.
+  const allTours = [
     {
-      id: "session", icon: "▶", color: "#1a56db",
+      id: "session", ico: "play", color: "#1a56db",
       title:   isAr ? "بدء جلسة" : "Start a Session",
       titleAr: "بدء جلسة",
       steps: isAr
@@ -670,7 +727,7 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
         : ["Press 'Start New Session' on the home screen", "Camera will start and begin analysis automatically", "Watch your real-time score on screen"],
     },
     {
-      id: "insights", icon: "🧠", color: "#7c3aed",
+      id: "insights", ico: "brain", color: "#7c3aed",
       title:   isAr ? "رؤى AI" : "AI Insights",
       titleAr: "رؤى AI",
       steps: isAr
@@ -678,7 +735,7 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
         : ["From home screen, tap 'AI Insights'", "Choose a tab: Executive Summary, Trends, or Fatigue", "Press 'Generate Analysis' for personalised recommendations"],
     },
     {
-      id: "hr",      icon: "📊", color: "#0891b2",
+      id: "hr",      ico: "barChart", color: "#0891b2",
       title:   isAr ? "لوحة HR" : "HR Dashboard",
       titleAr: "لوحة HR",
       steps: isAr
@@ -686,7 +743,7 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
         : ["Tap 'Workforce Intel' or HR in the bottom nav", "Browse department health and risk indicators", "Export a PDF report ready for your C-suite"],
     },
     {
-      id: "alerts",  icon: "🔔", color: "#10b981",
+      id: "alerts",  ico: "bell", color: "#10b981",
       title:   isAr ? "الإشعارات" : "Notifications",
       titleAr: "الإشعارات",
       steps: isAr
@@ -695,7 +752,11 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
     },
   ];
 
-  const current = tours[step];
+  const tours = allTours.filter(t => isCompany || t.id !== "hr");
+  // `step` is an index into a list whose length depends on account type, and
+  // a user can go Back and change that. Clamp rather than index off the end.
+  const safeStep = Math.min(step, tours.length - 1);
+  const current = tours[safeStep];
   const allDone = completed.length === tours.length;
 
   const markDone = (id) => { if (!completed.includes(id)) setCompleted(p => [...p, id]); };
@@ -711,7 +772,7 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
             {isAr ? "تعلّم كيفية استخدام أهم الميزات" : "Learn how to use the key features"}
           </p>
         </div>
-        <div style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
+        <div style={{ fontSize: 11, color: "#8b9bb4", fontWeight: 600 }}>
           {completed.length}/{tours.length} {isAr ? "مكتمل" : "done"}
         </div>
       </div>
@@ -724,12 +785,13 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
             <button key={t.id} onClick={() => setStep(i)} style={{
               display: "flex", alignItems: "center", gap: 7, padding: "7px 13px",
               borderRadius: 99, cursor: "pointer", fontSize: 11, fontWeight: 700,
-              background: step === i ? `${t.color}14` : done ? "rgba(16,185,129,.08)" : "transparent",
-              border: `1.5px solid ${step === i ? `${t.color}45` : done ? "rgba(16,185,129,.3)" : "rgba(148,163,184,.12)"}`,
-              color: step === i ? t.color : done ? "#34d399" : "#475569",
+              background: safeStep === i ? `${t.color}14` : done ? "rgba(16,185,129,.08)" : "transparent",
+              border: `1.5px solid ${safeStep === i ? `${t.color}45` : done ? "rgba(16,185,129,.3)" : "rgba(148,163,184,.12)"}`,
+              color: safeStep === i ? t.color : done ? "#34d399" : "#8b9bb4",
               transition: `all 180ms`,
             }}>
-              {done ? "✓" : t.icon} {isAr ? t.titleAr : t.title}
+              <Icon name={done ? "checkCircle" : t.ico} size={13} color="currentColor"/>
+              {isAr ? t.titleAr : t.title}
             </button>
           );
         })}
@@ -738,7 +800,7 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
       {/* Current tour */}
       <div key={current.id} style={{ background: `${current.color}08`, border: `1px solid ${current.color}20`, borderRadius: 14, padding: 18, marginBottom: 16, animation: "ob-fadeIn 250ms both" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 11, background: `${current.color}14`, border: `1px solid ${current.color}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{current.icon}</div>
+          <div style={{ width: 40, height: 40, borderRadius: 11, background: `${current.color}14`, border: `1px solid ${current.color}25`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name={current.ico} size={19} color={current.color}/></div>
           <div style={{ fontFamily: SYNE, fontSize: 14, fontWeight: 800, color: "#e8f0fe" }}>{isAr ? current.titleAr : current.title}</div>
         </div>
 
@@ -753,21 +815,22 @@ function StepWalkthrough({ isAr, onNext, onBack }) {
 
         <div style={{ marginTop: 14 }}>
           <Btn variant="success" size="sm" onClick={() => markDone(current.id)} disabled={completed.includes(current.id)}>
-            {completed.includes(current.id) ? `✓ ${isAr ? "مكتمل" : "Done!"}` : (isAr ? "✓ فهمت!" : "✓ Got it!")}
+            <Icon name="checkCircle" size={13} color="currentColor"/>
+            {completed.includes(current.id) ? (isAr ? "مكتمل" : "Done!") : (isAr ? "فهمت!" : "Got it!")}
           </Btn>
         </div>
       </div>
 
       {/* Progress */}
       <ProgressBar value={completed.length} max={tours.length} h={5} />
-      <div style={{ fontSize: 10, color: "#475569", marginTop: 6, marginBottom: 16 }}>
+      <div style={{ fontSize: 10, color: "#8b9bb4", marginTop: 6, marginBottom: 16 }}>
         {isAr ? `${completed.length} من ${tours.length} جولات مكتملة` : `${completed.length} of ${tours.length} tours complete`}
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack} icon={isAr?"forward":"back"}>{isAr ? "رجوع" : "Back"}</Btn>
         <Btn onClick={onNext} fullWidth variant={allDone ? "primary" : "secondary"}>
-          {allDone ? (isAr ? "ممتاز! التالي ←" : "Excellent! Continue →") : (isAr ? "تخطي للآن ←" : "Skip for now →")}
+          {allDone ? (isAr ? "ممتاز! التالي" : "Excellent! Continue") : (isAr ? "تخطي للآن" : "Skip for now")}
         </Btn>
       </div>
     </div>
@@ -786,14 +849,14 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
   // company/HR-oriented and don't make sense for an individual account —
   // same gap as StepGoals had.
   const individualOptions = [
-    { id: "slack",  icon: "💬", name: "Slack",               desc: isAr ? "تنبيهات في قنواتك" : "Alerts in your channels",       color: "#4A154B" },
-    { id: "gcal",   icon: "📅", name: "Google Calendar",     desc: isAr ? "جدولة الجلسات تلقائياً" : "Auto-schedule sessions",    color: "#1A73E8" },
+    { id: "slack",  mark: "S", name: "Slack",               desc: isAr ? "تنبيهات في قنواتك" : "Alerts in your channels",       color: "#7C3AED" },
+    { id: "gcal",   mark: "G", name: "Google Calendar",     desc: isAr ? "جدولة الجلسات تلقائياً" : "Auto-schedule sessions",    color: "#1A73E8" },
   ];
   const companyOptions = [
-    { id: "slack",  icon: "💬", name: "Slack",               desc: isAr ? "تنبيهات في قنواتك" : "Alerts in your channels",       color: "#4A154B" },
-    { id: "teams",  icon: "🟦", name: "Microsoft Teams",     desc: isAr ? "تحديثات الفريق" : "Team health updates",              color: "#6264A7" },
-    { id: "gcal",   icon: "📅", name: "Google Calendar",     desc: isAr ? "جدولة الجلسات تلقائياً" : "Auto-schedule sessions",    color: "#1A73E8" },
-    { id: "jira",   icon: "🔵", name: "Jira",                desc: isAr ? "تذاكر HR تلقائية" : "Auto HR tickets",                 color: "#0052CC" },
+    { id: "slack",  mark: "S", name: "Slack",               desc: isAr ? "تنبيهات في قنواتك" : "Alerts in your channels",       color: "#7C3AED" },
+    { id: "teams",  mark: "T", name: "Microsoft Teams",     desc: isAr ? "تحديثات الفريق" : "Team health updates",              color: "#6264A7" },
+    { id: "gcal",   mark: "G", name: "Google Calendar",     desc: isAr ? "جدولة الجلسات تلقائياً" : "Auto-schedule sessions",    color: "#1A73E8" },
+    { id: "jira",   mark: "J", name: "Jira",                desc: isAr ? "تذاكر HR تلقائية" : "Auto HR tickets",                 color: "#0052CC" },
   ];
   const options = isCompany ? companyOptions : individualOptions;
 
@@ -828,10 +891,19 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
               borderRadius: 12, transition: `all 200ms ${SPRING}`,
               animation: `ob-fadeIn 300ms ${i * 70}ms both`,
             }}>
-              <span style={{ fontSize: 24, flexShrink: 0 }}>{opt.icon}</span>
+              {/* Was an emoji per service, two of which (🟦 Teams, 🔵 Jira)
+                   were literally coloured squares. A monogram in the brand's
+                   colour says which service it is without pretending to be
+                   the logo. */}
+              <span style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+                background: `${opt.color}22`, border: `1px solid ${opt.color}45`,
+                color: "#e8f0fe", fontWeight: 800, fontSize: 14,
+                display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                {opt.mark}
+              </span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: SYNE, fontSize: 13, fontWeight: 700, color: "#e8f0fe" }}>{opt.name}</div>
-                <div style={{ fontSize: 11, color: "#475569" }}>{opt.desc}</div>
+                <div style={{ fontSize: 11, color: "#8b9bb4" }}>{opt.desc}</div>
               </div>
               {isSelected
                 ? <span style={{ fontSize: 12, fontWeight: 700, color: "#34d399", display: "flex", alignItems: "center", gap: 5 }}>✓ {isAr ? "مُختار" : "Selected"}</span>
@@ -845,9 +917,9 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 10 }}>
-        <Btn variant="ghost" onClick={onBack}>{isAr ? "→ رجوع" : "← Back"}</Btn>
+        <Btn variant="ghost" onClick={onBack} icon={isAr?"forward":"back"}>{isAr ? "رجوع" : "Back"}</Btn>
         <Btn onClick={() => { setProfile(p => ({ ...p, interestedIntegrations: selected })); onNext(); }} fullWidth>
-          {selected.length > 0 ? (isAr ? `${selected.length} مُختارة ← التالي` : `${selected.length} selected → Continue`) : (isAr ? "تخطي للآن ←" : "Skip for now →")}
+          {selected.length > 0 ? (isAr ? `التالي · ${selected.length} مُختارة` : `Continue · ${selected.length} selected`) : (isAr ? "تخطي للآن" : "Skip for now")}
         </Btn>
       </div>
     </div>
@@ -876,17 +948,22 @@ function StepFinish({ isAr, profile, onComplete }) {
     // BUG FIX: was reading `profile.userType`, a field nothing in this
     // wizard ever sets (the account-type step writes `acct_type`) — this
     // always showed "Individual" here, even for company signups.
-    { icon: "🎯", label: isAr ? "الدور" : "Role",          value: profile.acct_type === "company" ? (isAr ? "شركة" : "Company") : (isAr ? "فردي" : "Individual") },
-    { icon: "💻", label: isAr ? "وضع الكاميرا" : "Mode",   value: profile.mode || "Laptop" },
-    { icon: "🎯", label: isAr ? "الأهداف" : "Goals",       value: `${(profile.goals||[]).length} ${isAr ? "أهداف" : "selected"}` },
-    { icon: "🔌", label: isAr ? "التكاملات" : "Integrations", value: `${(profile.interestedIntegrations||[]).length} ${isAr ? "مُختارة" : "selected"}` },
+    // Role and Goals both used 🎯, so two of the four summary rows carried
+    // the same glyph.
+    { ico: "user",    label: isAr ? "الدور" : "Role",          value: profile.acct_type === "company" ? (isAr ? "شركة" : "Company") : (isAr ? "فردي" : "Individual") },
+    { ico: "laptop",  label: isAr ? "وضع الكاميرا" : "Mode",   value: profile.mode || "Laptop" },
+    { ico: "target",  label: isAr ? "الأهداف" : "Goals",       value: `${(profile.goals||[]).length} ${isAr ? "أهداف" : "selected"}` },
+    { ico: "plug",    label: isAr ? "التكاملات" : "Integrations", value: `${(profile.interestedIntegrations||[]).length} ${isAr ? "مُختارة" : "selected"}` },
   ];
 
   return (
     <div style={{ textAlign: "center", padding: "24px 16px" }}>
       {/* Celebration */}
-      <div style={{ fontSize: 64, marginBottom: 16, animation: confetti ? "ob-bounceIn 600ms cubic-bezier(.16,1,.3,1) both" : "none" }}>
-        🎉
+      <div style={{ width: 72, height: 72, borderRadius: "50%", margin: "0 auto 18px",
+        background: "rgba(16,185,129,.12)", border: "1px solid rgba(16,185,129,.3)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        animation: confetti ? "ob-bounceIn 600ms cubic-bezier(.16,1,.3,1) both" : "none" }}>
+        <Icon name="checkCircle" size={36} color="#10b981"/>
       </div>
 
       <div style={{ background: "linear-gradient(135deg,#1a56db,#0891b2)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", fontFamily: SYNE, fontSize: "clamp(24px,4vw,36px)", fontWeight: 800, letterSpacing: "-.03em", marginBottom: 8 }}>
@@ -899,13 +976,15 @@ function StepFinish({ isAr, profile, onComplete }) {
 
       {/* Setup summary */}
       <div style={{ background: "rgba(255,255,255,.03)", border: "1px solid rgba(148,163,184,.1)", borderRadius: 14, padding: "16px 20px", marginBottom: 24, textAlign: "left" }}>
-        <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".09em", color: "#475569", marginBottom: 12 }}>{isAr ? "ملخص الإعداد" : "Setup Summary"}</div>
+        <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".09em", color: "#8b9bb4", marginBottom: 12 }}>{isAr ? "ملخص الإعداد" : "Setup Summary"}</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
           {summary.map((s, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", animation: `ob-fadeIn 300ms ${i * 80}ms both` }}>
-              <span style={{ fontSize: 16 }}>{s.icon}</span>
+              <span style={{ display:"inline-flex", flexShrink:0 }}>
+                <Icon name={s.ico} size={16} color="#60a5fa"/>
+              </span>
               <div>
-                <div style={{ fontSize: 10, color: "#475569", fontWeight: 600 }}>{s.label}</div>
+                <div style={{ fontSize: 10.5, color: "#8b9bb4", fontWeight: 600 }}>{s.label}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#e8f0fe" }}>{s.value}</div>
               </div>
             </div>
@@ -915,23 +994,23 @@ function StepFinish({ isAr, profile, onComplete }) {
 
       {/* What's next */}
       <div style={{ marginBottom: 28, textAlign: "left" }}>
-        <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".09em", color: "#475569", marginBottom: 12 }}>{isAr ? "الخطوات التالية" : "What's Next"}</div>
+        <div style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".09em", color: "#8b9bb4", marginBottom: 12 }}>{isAr ? "الخطوات التالية" : "What's Next"}</div>
         {[
-          { icon: "▶", text: isAr ? "ابدأ أول جلسة — سيعطيك الذكاء الاصطناعي تحليلاً فورياً" : "Start your first session — our AI will give you instant analysis", color: "#1a56db" },
-          { icon: "📊", text: isAr ? "بعد 3 جلسات ستُفتح التحليلات المتقدمة" : "After 3 sessions, advanced analytics will unlock", color: "#0891b2" },
-          { icon: "🔮", text: isAr ? "بعد أسبوع ستبدأ التنبيهات التنبؤية" : "After a week, predictive burnout alerts will activate", color: "#7c3aed" },
+          { ico: "play",     text: isAr ? "ابدأ أول جلسة — سيعطيك الذكاء الاصطناعي تحليلاً فورياً" : "Start your first session — our AI will give you instant analysis", color: "#1a56db" },
+          { ico: "barChart", text: isAr ? "بعد 3 جلسات ستُفتح التحليلات المتقدمة" : "After 3 sessions, advanced analytics will unlock", color: "#0891b2" },
+          { ico: "crystal",  text: isAr ? "بعد أسبوع ستبدأ التنبيهات التنبؤية" : "After a week, predictive burnout alerts will activate", color: "#7c3aed" },
         ].map((item, i) => (
           <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: i < 2 ? "1px solid rgba(148,163,184,.08)" : "none", animation: `ob-fadeIn 300ms ${i * 100}ms both` }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${item.color}14`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: item.color, flexShrink: 0 }}>{item.icon}</div>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: `${item.color}14`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={item.ico} size={14} color={item.color}/></div>
             <div style={{ fontSize: 12, color: "#94a3b8", lineHeight: 1.6, paddingTop: 4 }}>{item.text}</div>
           </div>
         ))}
       </div>
 
-      <Btn size="lg" fullWidth onClick={onComplete} icon="▶">
-        {isAr ? "ابدأ أول جلسة الآن ←" : "Start My First Session →"}
+      <Btn size="lg" fullWidth onClick={onComplete} icon="play">
+        {isAr ? "ابدأ أول جلسة الآن" : "Start My First Session"}
       </Btn>
-      <div style={{ marginTop: 10, fontSize: 11, color: "#475569" }}>
+      <div style={{ marginTop: 10, fontSize: 11, color: "#8b9bb4" }}>
         {isAr ? "يمكنك دائماً إعادة هذا الإعداد من الإعدادات" : "You can always redo this setup from Settings"}
       </div>
     </div>
@@ -1015,6 +1094,24 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
 
   const progress = Math.round((step / (STEPS.length - 1)) * 100);
 
+  // Whether the step content is scrolled short of its end — drives the fade
+  // at the bottom of the content region.
+  const scrollRef = useRef(null);
+  const [fade, setFade] = useState(false);
+  const updateFade = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setFade(el.scrollHeight - el.scrollTop - el.clientHeight > 12);
+  }, []);
+  useEffect(() => {
+    // Re-measure on step change and on resize; the step is swapped in with an
+    // animation, so measure after it has laid out.
+    const t = setTimeout(updateFade, 320);
+    updateFade();
+    window.addEventListener("resize", updateFade);
+    return () => { clearTimeout(t); window.removeEventListener("resize", updateFade); };
+  }, [step, updateFade]);
+
   const goNext = () => { setDir("forward"); setStep(s => Math.min(s + 1, STEPS.length - 1)); };
   const goBack = () => { setDir("back");    setStep(s => Math.max(s - 1, 0)); };
 
@@ -1025,7 +1122,7 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
     <StepDevice       isAr={isAr} profile={profile} setProfile={setProfile} onNext={goNext} onBack={goBack} />,
     <StepGoals        isAr={isAr} profile={profile} setProfile={setProfile} onNext={goNext} onBack={goBack} />,
     <StepDemoWorkspace isAr={isAr} onNext={goNext} onBack={goBack} />,
-    <StepWalkthrough  isAr={isAr} onNext={goNext} onBack={goBack} />,
+    <StepWalkthrough  isAr={isAr} profile={profile} onNext={goNext} onBack={goBack} />,
     <StepIntegrations isAr={isAr} profile={profile} setProfile={setProfile} onNext={goNext} onBack={goBack} />,
     <StepFinish       isAr={isAr} profile={profile} onComplete={() => onComplete?.(profile)} />,
   ];
@@ -1035,63 +1132,94 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
       position: "fixed", inset: 0,
       background: "rgba(2,8,20,.96)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
       zIndex: 9500, display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "16px",
+      // 16px of page padding on a 390px phone cost the modal 32px of the
+      // height it was already short of — step 1's Continue button sat below
+      // the fold with no sign it was there.
+      padding: "10px",
     }}>
       <div style={{
         background: "linear-gradient(145deg,#0a1428 0%,#07112a 100%)",
         border: "1px solid rgba(148,163,184,.09)",
-        borderRadius: 22, width: "min(580px,96vw)", maxHeight: "92dvh",
+        borderRadius: 22, width: "min(580px,96vw)", maxHeight: "96dvh",
         display: "flex", flexDirection: "column", overflow: "hidden",
         boxShadow: "0 32px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(26,86,219,.12)",
         direction: isAr ? "rtl" : "ltr",
         animation: "ob-slideUp 400ms cubic-bezier(0.16,1,0.3,1) both",
       }}>
 
-        {/* ── Header ── */}
-        <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid rgba(148,163,184,.07)", flexShrink: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            {/* Logo */}
-            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff" }}>◈</div>
-              <span style={{ fontFamily: SYNE, fontSize: 14, fontWeight: 800, letterSpacing: "-.025em", color: "#e8f0fe" }}>Corvus <span style={{ color: "#60a5fa" }}>Pro</span></span>
+        {/* ── Header ──
+            Was three progress indicators stacked on top of each other: a
+            "1 / 9" counter, a thin progress bar, and a row of nine labelled
+            pills. Nine pills never fit — the row clipped mid-word ("…
+            Integrations | A") on every screen size, which is the first thing
+            a new user saw of the product. One indicator instead: the current
+            step named in words, and a nine-segment rail that always fits
+            because it carries no text. */}
+        <div style={{ padding: "16px 22px 14px", borderBottom: "1px solid rgba(148,163,184,.07)", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+              <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff", flexShrink: 0 }}>◈</div>
+              <span style={{ fontFamily: SYNE, fontSize: 14, fontWeight: 800, letterSpacing: "-.025em", color: "#e8f0fe", whiteSpace: "nowrap" }}>Corvus <span style={{ color: "#60a5fa" }}>Pro</span></span>
             </div>
-            {/* Step indicator + skip */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ fontSize: 11, color: "#475569", fontWeight: 600 }}>
-                {step + 1} / {STEPS.length}
-              </span>
-              {step < STEPS.length - 1 && (
-                <button onClick={onSkip} style={{ background: "none", border: "none", fontSize: 11, color: "#475569", cursor: "pointer", fontWeight: 600, padding: "4px 0" }}>
-                  {isAr ? "تخطي الإعداد" : "Skip setup"}
-                </button>
-              )}
-            </div>
+            {/* Skip is the escape hatch from a nine-step wizard, and it was
+                #475569 on #0a1428 — about 2.4:1, under half the minimum
+                readable contrast, on the one control someone in a hurry is
+                looking for. */}
+            {step < STEPS.length - 1 && (
+              <button onClick={onSkip} style={{
+                background: "rgba(148,163,184,.07)", border: "1px solid rgba(148,163,184,.16)",
+                borderRadius: 8, fontSize: 11.5, color: "#94a3b8", cursor: "pointer",
+                fontWeight: 600, padding: "6px 12px", whiteSpace: "nowrap", flexShrink: 0,
+              }}>
+                {isAr ? "تخطي الإعداد" : "Skip setup"}
+              </button>
+            )}
           </div>
 
-          {/* Progress bar */}
-          <ProgressBar value={progress} h={3} color="linear-gradient(90deg,#1a56db,#0891b2)" />
-
-          {/* Step pills */}
-          <div style={{ display: "flex", gap: 4, marginTop: 12, overflowX: "auto" }}>
+          {/* Segmented rail — one segment per step, no labels to clip. */}
+          <div style={{ display: "flex", gap: 3, marginTop: 14 }} role="progressbar"
+            aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={STEPS.length}
+            aria-label={isAr ? "تقدّم الإعداد" : "Setup progress"}>
             {STEPS.map((s, i) => (
               <div key={s.id} style={{
-                flexShrink: 0, fontSize: 9, fontWeight: 700, padding: "3px 9px", borderRadius: 99,
-                background: i === step ? "rgba(26,86,219,.18)" : i < step ? "rgba(16,185,129,.1)" : "transparent",
-                border: `1px solid ${i === step ? "rgba(26,86,219,.35)" : i < step ? "rgba(16,185,129,.25)" : "rgba(148,163,184,.08)"}`,
-                color: i === step ? "#60a5fa" : i < step ? "#34d399" : "#475569",
-                transition: "all 250ms",
-              }}>
-                {i < step ? "✓ " : ""}{s.label}
-              </div>
+                flex: 1, height: 3, borderRadius: 99,
+                background: i < step ? "#10b981"
+                          : i === step ? "linear-gradient(90deg,#1a56db,#0891b2)"
+                          : "rgba(148,163,184,.14)",
+                transition: "background 300ms",
+              }}/>
             ))}
+          </div>
+
+          {/* The step you are on, named — which is what the nine pills were
+              trying and failing to say. */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 9 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "#e8f0fe" }}>
+              {STEPS[step].label}
+            </span>
+            <span style={{ fontSize: 11, color: "#8b9bb4", fontWeight: 600 }}>
+              {isAr ? `خطوة ${step + 1} من ${STEPS.length}` : `Step ${step + 1} of ${STEPS.length}`}
+            </span>
           </div>
         </div>
 
-        {/* ── Content ── */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-          <div key={step} style={{ animation: `ob-${dir === "forward" ? "slideInRight" : "slideInLeft"} 280ms ${SPRING} both` }}>
-            {STEP_COMPS[step]}
+        {/* ── Content ──
+            Nine steps of varying height inside a capped modal: on a phone the
+            taller ones scroll, and a scrolling region whose bottom edge is a
+            hard line gives no hint that the primary button is below it. The
+            fade appears only while there is actually more to scroll to. */}
+        <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+          <div ref={scrollRef} onScroll={updateFade}
+            style={{ height: "100%", overflowY: "auto", padding: "18px 22px" }}>
+            <div key={step} style={{ animation: `ob-${dir === "forward" ? "slideInRight" : "slideInLeft"} 280ms ${SPRING} both` }}>
+              {STEP_COMPS[step]}
+            </div>
           </div>
+          <div aria-hidden="true" style={{
+            position: "absolute", left: 0, right: 0, bottom: 0, height: 44,
+            background: "linear-gradient(to top,#08122b 15%,rgba(8,18,43,0))",
+            pointerEvents: "none", opacity: fade ? 1 : 0, transition: "opacity 180ms",
+          }}/>
         </div>
       </div>
 
