@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, deleteAuthUser, logOut } from "./firebase.js";
+import { useUnreadNotificationsCount } from "./NotificationsHub.jsx";
 import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast, featureTier } from "./lib/tierQuality.js";
@@ -3117,23 +3118,27 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   setShowSymptomCorrelation,
   setShowAPIMarketplace, setShowWhiteLabel, setShowMultiTenant, setShowAuditSystem,
   setShowAIReports, setShowSessionComparison, setShowTrendChart, setShowWorkforceAnalytics,
-  setShowCalibWizard, setShowDashboard,
+  setShowCalibWizard, setShowDashboard, setShowNotificationsHub,
 }) {
+  const unreadNotifCount = useUnreadNotificationsCount(profile?.uid || user?.uid);
   const nav = (()=>{
     if(userRole==="hr_admin"||userRole==="platform_admin") return [
       { id:"home",      icon:"⊞",  en:"Overview",   ar:"النظرة العامة" },
       { id:"employees", icon:"👥", en:"Employees",  ar:"الموظفون" },
       { id:"alerts",    icon:"🔔", en:"Alerts",     ar:"التنبيهات", badge:atRisk },
+      { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
     ];
     if(userRole==="employee") return [
       { id:"home",     icon:"⊞",  en:"Dashboard", ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",  ar:"جلساتي" },
       { id:"team",     icon:"👥", en:"Team",       ar:"الفريق" },
       { id:"coach",    icon:"🤖", en:"AI Coach",   ar:"مدرب AI" },
+      { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
     ];
     return [
       { id:"home",     icon:"⊞",  en:"Dashboard",  ar:"الرئيسية" },
       { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
+      { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
     ];
   })();
 
@@ -3286,7 +3291,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         {/* Main nav */}
         <nav style={{ padding:"8px 8px 4px", display:"flex", flexDirection:"column", gap:2 }}>
           {nav.map(item=>(
-            <button key={item.id} onClick={()=>setTab(item.id)}
+            <button key={item.id} onClick={()=>item.action?item.action():setTab(item.id)}
               onMouseEnter={()=>setHov(item.id)} onMouseLeave={()=>setHov(null)}
               style={{ display:"flex", alignItems:"center", gap:9, width:"100%",
                 padding:"8px 11px", border:"none", borderRadius:7, cursor:"pointer",
@@ -3573,6 +3578,7 @@ export default function HomePage({
   setShowCertModal,
 }) {
   const [tab,    setTab]    = useState("home");
+  const mobileUnreadNotifCount = useUnreadNotificationsCount(profile?.uid || user?.uid);
   const [mobile, setMobile] = useState(()=>typeof window!=="undefined" && window.matchMedia("(max-width:767px)").matches);
   // Default currency by timezone — Egypt → EGP (Kashier), everyone else → USD (Stripe).
   // Matches the same Egypt/Gulf split documented in Billing.jsx. User can still toggle.
@@ -3622,6 +3628,9 @@ export default function HomePage({
   // ── Tools (for sidebar + mobile nav) ─────────────────────────────
   const isPro_   = tierAtLeast(tier, "professional");
   const tools = [
+    { id:"t-notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات",
+      badge: mobileUnreadNotifCount,
+      onClick:()=>setShowNotificationsHub?.(true) },
     { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
       onClick:()=>setShowGamification?.(true) },
     ...(isAdmin ? [{ id:"t-growth", icon:"🚀", en:"Growth Hub", ar:"مركز النمو",
@@ -3839,6 +3848,7 @@ export default function HomePage({
           setShowSessionComparison={setShowSessionComparison} setShowTrendChart={setShowTrendChart}
           setShowWorkforceAnalytics={setShowWorkforceAnalytics}
           setShowCalibWizard={setShowCalibWizard} setShowDashboard={setShowDashboard}
+          setShowNotificationsHub={setShowNotificationsHub}
         />}
 
       <main style={{ flex:1, minWidth:0, marginLeft:mobile?0:(isAr?0:236), marginRight:mobile?0:(isAr?236:0), display:"flex", flexDirection:"column" }}>
