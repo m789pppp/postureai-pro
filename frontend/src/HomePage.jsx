@@ -18,6 +18,18 @@ import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, Pa
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
 import { BasicDashboard } from "./BasicFeatures.jsx";
 import { WeeklyIntelligenceButton, WeeklyIntelligenceModal } from "./WeeklyIntelligence.jsx";
+// One icon language for the whole product. The sidebar was built out of emoji
+// (🏆 🤖 🧠 🔮 🩺 next to a geometric ⊞), so a single nav column mixed flat
+// glyphs with full-colour OS stickers that render differently on Windows,
+// macOS and Android. Icon() is the same stroke-only set the Live page uses.
+import { Icon as NavIcon } from "./LiveUI.jsx";
+
+// Emoji stayed as the fallback for anything not yet mapped, so an unmapped
+// entry degrades to what it showed before instead of rendering nothing.
+function ItemIcon({ item, size, color, style }) {
+  if (item?.ico) return <NavIcon name={item.ico} size={size} color={color} style={style} />;
+  return <span style={{ fontSize:size, ...style }}>{item?.icon}</span>;
+}
 
 // ─── Role detection ────────────────────────────────────────────────
 function role(profile, isAdmin, isHRAdmin) {
@@ -86,9 +98,15 @@ function Ring({ score = 0, size = 100, cs, showValue = true }) {
   return (
     <svg width={size} height={size} style={{ transform:"rotate(-90deg)", flexShrink:0 }}>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={cs.border} strokeWidth={6}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={6}
-        strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
-        style={{ transition:"stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)" }}/>
+      {/* strokeLinecap="round" paints its round cap even when the dash length
+          is 0, so a user with no sessions got a small red dot at the top of an
+          otherwise empty gauge — which reads as an alert, on a screen whose
+          own centre already says "—". No value, no arc. */}
+      {pct > 0 && (
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={6}
+          strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
+          style={{ transition:"stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)" }}/>
+      )}
       {/* Callers that draw their own centered value pass showValue={false};
           otherwise two copies of the score render on the same center point. */}
       {showValue && (
@@ -235,11 +253,21 @@ function WeekChart({ sessions, cs }) {
 }
 
 // ─── Empty state ───────────────────────────────────────────────────
-function EmptyBlock({ icon, title, desc, action, onAction, cs }) {
+// `icon` used to be an emoji rendered at 42px — a full-colour OS sticker as
+// the largest element on an otherwise empty screen, and the first impression
+// a new user gets of the Sessions tab. `ico` takes a line-icon name instead
+// and draws it inside a soft disc; `icon` still works for any call site not
+// yet converted.
+function EmptyBlock({ icon, ico, tone="#3b82f6", title, desc, action, onAction, cs }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
       gap:12, padding:"48px 24px", textAlign:"center" }}>
-      <span style={{ fontSize:42 }}>{icon}</span>
+      {ico ? (
+        <span style={{ width:56, height:56, borderRadius:"50%", background:`${tone}1f`,
+          display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
+          <NavIcon name={ico} size={26} color={tone}/>
+        </span>
+      ) : <span style={{ fontSize:42 }}>{icon}</span>}
       <div style={{ fontSize:16, fontWeight:700, color:cs.text }}>{title}</div>
       <div style={{ fontSize:13, color:cs.muted, maxWidth:320, lineHeight:1.6 }}>{desc}</div>
       {action&&onAction&&(
@@ -588,14 +616,18 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
               style={{ padding:"10px 22px", background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 color:"#fff", border:"none", borderRadius:8, fontSize:13, fontWeight:700,
                 cursor:"pointer", boxShadow:"0 4px 14px rgba(26,86,219,.4)" }}>
-              {isAr?"▶ ابدأ جلسة":"▶ Start Session"}
+              <span style={{ display:"inline-flex", alignItems:"center", gap:7, justifyContent:"center" }}>
+                <NavIcon name="play" size={13} color="#fff"/>{isAr?"ابدأ جلسة":"Start Session"}
+              </span>
             </button>
             {userSessions.length===0 && !sessionsLoading && (
               <button onClick={()=>setShowDemoSession(true)}
                 style={{ padding:"10px 18px", background:"rgba(148,163,184,.08)",
                   border:`1px solid ${cs.border}`, color:cs.text, borderRadius:8, fontSize:13, fontWeight:600,
                   cursor:"pointer" }}>
-                {isAr?"👀 شاهد جلسة تجريبية":"👀 Watch a Demo Session"}
+                <span style={{ display:"inline-flex", alignItems:"center", gap:7, justifyContent:"center" }}>
+                  <NavIcon name="eye" size={14} color={cs.text}/>{isAr?"شاهد جلسة تجريبية":"Watch a Demo Session"}
+                </span>
               </button>
             )}
           </div>
@@ -641,20 +673,65 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
           onStartReal={()=>{ setShowDemoSession(false); setPage("live"); setTimeout(()=>startCamera?.(),200); }}/>
       , document.body)}
 
-      {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
-        {/* gradeColor(0) falls into the "s>=60? ... : red" branch, so a
-            brand-new user with zero sessions (last===0, already shown as
-            "—" above) got a red/danger-colored stat card on their very
-            first visit — nothing is actually bad yet. */}
-        <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={last?gradeColor(last):cs.muted} cs={cs}/>
-        <StatCard label={isAr?"المتوسط":"Average"} value={avg||"—"} color="#3b82f6" cs={cs}/>
-        <StatCard label={isAr?"هذا الشهر":"This Month"} value={month||"—"} sub={isAr?"جلسة":"sessions"} color="#f59e0b" cs={cs}/>
-        {/* Was `??` here vs `||` at every other sessions_count fallback in this
-            file (lines 374/1014/1384) — harmless in practice but inconsistent;
-            aligned to the same convention used everywhere else. */}
-        <StatCard label={isAr?"الإجمالي":"Total"} value={(profile?.sessions_count||userSessions.length)||"—"} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
-      </div>
+      {/* Stats
+          Four tiles reading "LAST SESSION —", "AVERAGE —", "THIS MONTH —
+          sessions", "TOTAL — sessions" were the first thing a new user saw:
+          four boxes of nothing, with a stray unit label under an em-dash. A
+          number that does not exist yet should not be dressed up as a
+          measurement — so before the first session the same strip says what
+          it is waiting for, and while sessions are still loading it shows
+          placeholders rather than zeros that will change under the reader. */}
+      {(()=>{
+        const total = profile?.sessions_count || userSessions.length || 0;
+        if (sessionsLoading && !userSessions.length) return (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
+            {[0,1,2,3].map(i=>(
+              <div key={i} style={{ background:cs.card, border:`1px solid ${cs.border}`,
+                borderRadius:10, padding:"14px 16px" }}>
+                <div style={{ height:9, width:"58%", borderRadius:4, background:cs.inp, marginBottom:9 }}/>
+                <div style={{ height:20, width:"38%", borderRadius:5, background:cs.inp }}/>
+              </div>
+            ))}
+          </div>
+        );
+        if (total === 0) return (
+          <div style={{ background:cs.card, border:`1px dashed ${cs.border}`, borderRadius:12,
+            padding:"16px 18px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+            <div style={{ width:40, height:40, borderRadius:10, flexShrink:0,
+              background:"rgba(59,130,246,.12)", display:"flex", alignItems:"center",
+              justifyContent:"center", color:"#3b82f6" }}>
+              <NavIcon name="barChart" size={20} color="#3b82f6"/>
+            </div>
+            <div style={{ flex:1, minWidth:200 }}>
+              <div style={{ fontSize:13.5, fontWeight:700, color:cs.text }}>
+                {isAr?"لا توجد قياسات بعد":"No measurements yet"}
+              </div>
+              <div style={{ fontSize:12, color:cs.muted, marginTop:3, lineHeight:1.5 }}>
+                {isAr
+                  ? "بعد أول جلسة سيظهر هنا: درجة آخر جلسة، متوسطك، عدد جلسات هذا الشهر، والإجمالي."
+                  : "After your first session this row shows your last score, your average, sessions this month, and your total."}
+              </div>
+            </div>
+          </div>
+        );
+        return (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))", gap:10 }}>
+            {/* gradeColor(0) falls into the "s>=60? ... : red" branch, so a
+                brand-new user with zero sessions (last===0, already shown as
+                "—" above) got a red/danger-colored stat card on their very
+                first visit — nothing is actually bad yet. */}
+            <StatCard label={isAr?"آخر جلسة":"Last Session"} value={last||"—"} color={last?gradeColor(last):cs.muted} cs={cs}/>
+            <StatCard label={isAr?"المتوسط":"Average"} value={avg||"—"} color="#3b82f6" cs={cs}/>
+            {/* The unit ("sessions") used to render under an em-dash, so an
+                empty tile still asserted a unit it had no value for. */}
+            <StatCard label={isAr?"هذا الشهر":"This Month"} value={month||"0"} sub={isAr?"جلسة":"sessions"} color="#f59e0b" cs={cs}/>
+            {/* Was `??` here vs `||` at every other sessions_count fallback in this
+                file (lines 374/1014/1384) — harmless in practice but inconsistent;
+                aligned to the same convention used everywhere else. */}
+            <StatCard label={isAr?"الإجمالي":"Total"} value={total} sub={isAr?"جلسة":"sessions"} color="#a855f7" cs={cs}/>
+          </div>
+        );
+      })()}
 
       {/* Week chart */}
       {userSessions.length>0&&(
@@ -669,7 +746,7 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
         padding:"16px 18px", display:"flex", alignItems:"center", gap:16 }}>
         <div style={{ width:46, height:46, borderRadius:10, flexShrink:0,
           background:"rgba(16,185,129,.12)", display:"flex", alignItems:"center",
-          justifyContent:"center", fontSize:22 }}>🎯</div>
+          justifyContent:"center" }}><NavIcon name="target" size={22} color="#10b981"/></div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
             {isAr?"معايرة الكاميرا":"Camera Calibration"}
@@ -798,7 +875,7 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
           </div>
         </div>
       ) : (
-        <EmptyBlock icon="🎯" cs={cs}
+        <EmptyBlock ico="target" cs={cs}
           title={isAr?"لا توجد جلسات":"No sessions yet"}
           desc={isAr?"اضغط ابدأ جلسة وتأكد من السماح للكاميرا":"Click Start Session and allow camera access"}
           action={isAr?"ابدأ الآن":"Start Now"}
@@ -1066,7 +1143,9 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
               <button onClick={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}
                 style={{ padding:"9px 18px", background:"linear-gradient(135deg,#1a56db,#0891b2)",
                   color:"#fff", border:"none", borderRadius:8, fontSize:12.5, fontWeight:700, cursor:"pointer" }}>
-                ▶ {isAr?"ابدأ جلسة":"Start Session"}
+                <span style={{ display:"inline-flex", alignItems:"center", gap:7, justifyContent:"center" }}>
+                  <NavIcon name="play" size={12} color="currentColor"/>{isAr?"ابدأ جلسة":"Start Session"}
+                </span>
               </button>
               <button onClick={()=>onCoach?.()}
                 style={{ padding:"9px 16px", background:"rgba(99,102,241,.12)",
@@ -1405,7 +1484,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
         </div>
         <div style={{ maxHeight:420, overflowY:"auto" }}>
           {filtered.length===0 ? (
-            <EmptyBlock icon="👥" cs={cs}
+            <EmptyBlock ico="users" cs={cs}
               title={isAr?"لا يوجد موظفون":"No employees yet"}
               desc={isAr?"أرسل دعوات للموظفين للبدء":"Invite your team to get started"}
               action={isAr?"دعوة الآن":"Invite Now"} onAction={onInvite}/>
@@ -1466,7 +1545,7 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
     </div>
   );
 
-  if(!userSessions.length) return <EmptyBlock icon="📋" cs={cs}
+  if(!userSessions.length) return <EmptyBlock ico="list" cs={cs}
     title={isAr?"لا توجد جلسات":"No sessions yet"}
     desc={isAr?"ابدأ جلستك الأولى وستظهر هنا":"Start your first session and it will appear here"}
     action={isAr?"ابدأ جلسة":"Start Session"}
@@ -2026,11 +2105,19 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
   ];
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:600 }}>
+    // Was maxWidth:600 with no centring, so on a 1440px screen every Settings
+    // card sat hard against the left edge of a ~1200px content area with half
+    // the page empty. Wider, and centred in the space it has.
+    <div style={{ display:"flex", flexDirection:"column", gap:16, maxWidth:760,
+      width:"100%", marginInline:"auto" }}>
 
-      {/* User header */}
+      {/* User header
+          A four-child flex row with no wrap: avatar, identity, Sign Out and the
+          account switcher. On a 390px phone the switcher was pushed off the
+          right edge of the card entirely and "Sign Out" broke across two
+          lines. Wrapping lets the two actions drop onto their own row. */}
       <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:14,
-        padding:"20px 22px", display:"flex", gap:16, alignItems:"center" }}>
+        padding:"20px 22px", display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
         <div style={{ flexShrink:0, display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
           <div style={{ position:"relative" }}>
             {profile?.photoURL
@@ -2042,8 +2129,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               style={{ position:"absolute", bottom:0, right:isAr?"auto":0, left:isAr?0:"auto", width:24, height:24,
                 background:"#1a56db", borderRadius:"50%", cursor:"pointer",
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:12, border:`2px solid ${cs.card}` }}>
-              📷
+                border:`2px solid ${cs.card}`, color:"#fff" }}>
+              <NavIcon name="camera" size={12} color="#fff"/>
               <input ref={avatarFileRef} type="file" accept="image/*" style={{ display:"none" }}
                 onChange={async e=>{
                   const file=e.target.files[0]; if(!file) return;
@@ -2090,15 +2177,22 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               const color = isCompanyAcct ? "#a78bfa" : "#60a5fa";
               return <span style={{ fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:99, background:`${color}15`, color, border:`1px solid ${color}25` }}>{label}</span>;
             })()}
-            {hasGoogle&&<span style={{ fontSize:10, color:"#4285f4", fontWeight:600 }}>🔵 Google</span>}
-            {hasEmail&&<span style={{ fontSize:10, color:"#10b981", fontWeight:600 }}>📧 Email</span>}
+            {hasGoogle&&<span style={{ fontSize:10, color:"#4285f4", fontWeight:700,
+              display:"inline-flex", alignItems:"center", gap:4 }}>
+              <span style={{ fontSize:11, fontWeight:800, lineHeight:1 }}>G</span>Google</span>}
+            {hasEmail&&<span style={{ fontSize:10, color:"#10b981", fontWeight:600,
+              display:"inline-flex", alignItems:"center", gap:4 }}>
+              <NavIcon name="mail" size={11} color="#10b981"/>Email</span>}
           </div>
         </div>
         <button onClick={onSignOut}
           style={{ padding:"8px 14px", background:"rgba(239,68,68,.1)",
             border:"1px solid rgba(239,68,68,.2)", borderRadius:8,
-            color:"#f87171", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-          {isAr?"⏻ خروج":"⏻ Sign Out"}
+            color:"#f87171", fontSize:12, fontWeight:700, cursor:"pointer",
+            whiteSpace:"nowrap", flexShrink:0 }}>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:6 }}>
+            <NavIcon name="logout" size={13} color="#f87171"/>{isAr?"خروج":"Sign Out"}
+          </span>
         </button>
         {AccountSwitcher && (
           <AccountSwitcher
@@ -2109,12 +2203,17 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         )}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs
+          Five equal flex:1 columns inside 390px gave "Notifications" ~66px, so
+          it wrapped or clipped. The row scrolls horizontally on narrow screens
+          instead, with each tab keeping its natural width. */}
       <div style={{ display:"flex", gap:4, background:cs.card,
-        border:`1px solid ${cs.border}`, borderRadius:10, padding:4 }}>
+        border:`1px solid ${cs.border}`, borderRadius:10, padding:4,
+        overflowX:"auto", scrollbarWidth:"none" }}>
         {tabs.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)}
-            style={{ flex:1, padding:"8px 4px", border:"none", borderRadius:7, cursor:"pointer",
+            style={{ flex:"1 0 auto", padding:"8px 12px", border:"none", borderRadius:7,
+              cursor:"pointer", whiteSpace:"nowrap",
               background:tab===t.id?"rgba(59,130,246,.15)":"transparent",
               color:tab===t.id?"#60a5fa":cs.muted,
               fontSize:11, fontWeight:tab===t.id?700:500, transition:"all .12s" }}>
@@ -2208,13 +2307,16 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                     border:`1px solid ${cs.border}`, borderRadius:8,
                     color:cs.text, fontSize:12, fontWeight:600, cursor:"pointer",
                     display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                  {lang==="ar"?"🇬🇧 Switch to English":"🇪🇬 التبديل للعربية"}
+                  <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", gap:7 }}>
+                    <NavIcon name="globe" size={14} color={cs.text}/>
+                    {lang==="ar"?"Switch to English":"التبديل للعربية"}
+                  </span>
                 </button>
                 <button onClick={()=>setDarkMode?.(!darkMode)}
                   style={{ padding:"10px 16px", background:cs.inp,
                     border:`1px solid ${cs.border}`, borderRadius:8,
                     color:cs.text, fontSize:13, cursor:"pointer" }}>
-                  {darkMode?"☀️":"🌙"}
+                  <NavIcon name={darkMode?"sun":"moon"} size={15} color={cs.text}/>
                 </button>
               </div>
             </div>
@@ -2230,7 +2332,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             <button onClick={onReferral} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ fontSize:18 }}>🤝</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="users" size={18} color="#3b82f6"/></span>
                 <span>
                   <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"برنامج الإحالة":"Referral Program"}</div>
                   <div style={{ fontSize:11, color:cs.muted }}>{isAr?"اكسب رصيد لما أصحابك يشتركوا":"Earn credit when friends sign up"}</div>
@@ -2240,7 +2342,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </button>
             <button onClick={onIntegrations} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ fontSize:18 }}>🔌</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="plug" size={18} color="#3b82f6"/></span>
                 <span>
                   <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"التكاملات":"Integrations"}</div>
                   <div style={{ fontSize:11, color:cs.muted }}>Slack, Teams, Zapier, Webhooks…</div>
@@ -2250,7 +2352,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </button>
             <button onClick={onNotifications} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", textAlign:isAr?"right":"left" }}>
               <span style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <span style={{ fontSize:18 }}>🔔</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="bell" size={18} color="#3b82f6"/></span>
                 <span>
                   <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الإشعارات":"Notifications"}</div>
                   <div style={{ fontSize:11, color:cs.muted }}>{isAr?"إنجازات، رؤى AI، تنبيهات":"Achievements, AI insights, alerts"}</div>
@@ -2277,7 +2379,9 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:`1px solid ${hasGoogle?"rgba(66,133,244,.3)":cs.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <span style={{ fontSize:22 }}>🔵</span>
+                <span style={{ width:26, height:26, borderRadius:"50%", flexShrink:0,
+                  background:"rgba(66,133,244,.14)", color:"#4285f4", fontWeight:800, fontSize:14,
+                  display:"inline-flex", alignItems:"center", justifyContent:"center" }}>G</span>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>Google</div>
                   <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
@@ -2304,7 +2408,9 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:`1px solid ${hasEmail?"rgba(16,185,129,.25)":cs.border}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                  <span style={{ fontSize:22 }}>📧</span>
+                  <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}>
+                    <NavIcon name="mail" size={20} color="#10b981"/>
+                  </span>
                   <div>
                     <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
                       {isAr?"بريد إلكتروني + كلمة مرور":"Email + Password"}
@@ -2337,10 +2443,13 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             {/* Info note */}
             <div style={{ padding:"12px 14px", background:"rgba(59,130,246,.05)",
               border:"1px solid rgba(59,130,246,.15)", borderRadius:9 }}>
-              <div style={{ fontSize:11, color:"rgba(147,197,253,.8)", lineHeight:1.6 }}>
-                {isAr
-                  ?"💡 كل الحسابات المرتبطة تستخدم نفس بيانات الوضعية والجلسات. يمكنك تسجيل الدخول بأي منها."
-                  :"💡 All linked accounts share the same posture data and sessions. Sign in with any of them."}
+              <div style={{ fontSize:11, color:"rgba(147,197,253,.8)", lineHeight:1.6,
+                display:"flex", alignItems:"flex-start", gap:8 }}>
+                <NavIcon name="infoCircle" size={13} color="rgba(147,197,253,.8)"
+                  style={{ flexShrink:0, marginTop:1 }}/>
+                <span>{isAr
+                  ?"كل الحسابات المرتبطة تستخدم نفس بيانات الوضعية والجلسات. يمكنك تسجيل الدخول بأي منها."
+                  :"All linked accounts share the same posture data and sessions. Sign in with any of them."}</span>
               </div>
             </div>
           </div>
@@ -2386,7 +2495,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           </div>
           <button onClick={onBillingHistory} style={{ width:"100%", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
             <span style={{ display:"flex", alignItems:"center", gap:10 }}>
-              <span style={{ fontSize:18 }}>📄</span>
+              <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="fileText" size={18} color="#3b82f6"/></span>
               <span style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?"الفواتير والاستخدام":"Invoices & Usage"}</span>
             </span>
             <span style={{ color:cs.muted }}>›</span>
@@ -2473,7 +2582,10 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           )}
           {isPro(tier)&&(
             <div style={{ fontSize:13, color:"#10b981", fontWeight:600, textAlign:"center", padding:"8px" }}>
-              ✅ {isAr?"أنت على خطة مدفوعة. شكراً!":"You're on a paid plan. Thank you!"}
+              <span style={{ display:"inline-flex", alignItems:"center", gap:7, justifyContent:"center" }}>
+                <NavIcon name="checkCircle" size={14} color="currentColor"/>
+                {isAr?"أنت على خطة مدفوعة. شكراً!":"You're on a paid plan. Thank you!"}
+              </span>
             </div>
           )}
         </div>
@@ -2512,7 +2624,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer", marginBottom:10,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <span style={{ fontSize:22 }}>💬</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="chat" size={20} color="#3b82f6"/></span>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
                     {isAr?"المساعدة والدعم":"Help & Support"}
@@ -2529,7 +2641,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:`1px solid ${cs.border}`, cursor:"pointer",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <span style={{ fontSize:22 }}>🔐</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="shield" size={20} color="#f59e0b"/></span>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
                     {isAr?"المصادقة الثنائية (2FA)":"Two-Factor Authentication"}
@@ -2553,7 +2665,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:`1px solid ${cs.border}` }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                 <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                  <span style={{ fontSize:22 }}>💻</span>
+                  <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="laptop" size={20} color="#3b82f6"/></span>
                   <div>
                     <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
                       {isAr?"الجلسات النشطة":"Active Sessions"}
@@ -2590,7 +2702,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:`1px solid ${cs.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <span style={{ fontSize:22 }}>🔑</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="key" size={20} color="#f59e0b"/></span>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
                     {isAr?"تغيير كلمة المرور":"Change Password"}
@@ -2612,7 +2724,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
               borderRadius:10, border:"1px solid rgba(239,68,68,.12)",
               display:"flex", justifyContent:"space-between", alignItems:"center" }}>
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                <span style={{ fontSize:22 }}>🚪</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="logout" size={20} color="#f87171"/></span>
                 <div>
                   <div style={{ fontSize:13, fontWeight:600, color:"#f87171" }}>
                     {isAr?"تسجيل الخروج":"Sign Out"}
@@ -2636,7 +2748,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             <div style={{ padding:"14px 16px", background:cs.card||"rgba(255,255,255,.02)",
               borderRadius:10, border:`1px solid ${cs.border}`, marginBottom:12 }}>
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                <span style={{ fontSize:22 }}>📦</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="download" size={20} color="#3b82f6"/></span>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
                     {isAr?"تنزيل بياناتي":"Download my data"}
@@ -2661,7 +2773,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             <div style={{ padding:"14px 16px", background:"rgba(239,68,68,.04)",
               borderRadius:10, border:"1px solid rgba(239,68,68,.15)" }}>
               <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                <span style={{ fontSize:22 }}>⚠️</span>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="alertTriangle" size={20} color="#f87171"/></span>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:"#f87171" }}>
                     {isAr?"حذف الحساب":"Delete Account"}
@@ -2818,7 +2930,7 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
         borderRadius:10, border:`1px solid ${cs.border}`,
         display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
         <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-          <span style={{ fontSize:22 }}>🔔</span>
+          <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="bell" size={20} color="#3b82f6"/></span>
           <div>
             <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
               {isAr?"إشعارات الدفع":"Push Notifications"}
@@ -3123,22 +3235,19 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   const unreadNotifCount = useUnreadNotificationsCount(profile?.uid || user?.uid);
   const nav = (()=>{
     if(userRole==="hr_admin"||userRole==="platform_admin") return [
-      { id:"home",      icon:"🏠",  en:"Overview",   ar:"النظرة العامة" },
-      { id:"employees", icon:"👥", en:"Employees",  ar:"الموظفون" },
-      { id:"alerts",    icon:"🔔", en:"Alerts",     ar:"التنبيهات", badge:atRisk },
-      { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
+      { id:"home",      icon:"⊞", ico:"grid",  en:"Overview",   ar:"النظرة العامة" },
+      { id:"employees", icon:"👥", ico:"users", en:"Employees",  ar:"الموظفون" },
+      { id:"alerts",    icon:"🔔", ico:"bell", en:"Alerts",     ar:"التنبيهات", badge:atRisk },
     ];
     if(userRole==="employee") return [
-      { id:"home",     icon:"🏠",  en:"Dashboard", ar:"الرئيسية" },
-      { id:"sessions", icon:"📋", en:"Sessions",  ar:"جلساتي" },
-      { id:"team",     icon:"👥", en:"Team",       ar:"الفريق" },
-      { id:"coach",    icon:"🤖", en:"AI Coach",   ar:"مدرب AI" },
-      { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
+      { id:"home",     icon:"⊞", ico:"grid",  en:"Dashboard", ar:"الرئيسية" },
+      { id:"sessions", icon:"📋", ico:"list", en:"Sessions",  ar:"جلساتي" },
+      { id:"team",     icon:"👥", ico:"users", en:"Team",       ar:"الفريق" },
+      { id:"coach",    icon:"🤖", ico:"sparkle", en:"AI Coach",   ar:"مدرب AI" },
     ];
     return [
-      { id:"home",     icon:"🏠",  en:"Dashboard",  ar:"الرئيسية" },
-      { id:"sessions", icon:"📋", en:"Sessions",   ar:"جلساتي" },
-      { id:"notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات", badge:unreadNotifCount, action:()=>setShowNotificationsHub?.(true) },
+      { id:"home",     icon:"⊞", ico:"grid",  en:"Dashboard",  ar:"الرئيسية" },
+      { id:"sessions", icon:"📋", ico:"list", en:"Sessions",   ar:"جلساتي" },
     ];
   })();
 
@@ -3157,15 +3266,15 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       id: "analytics",
       header: { en:"Analytics & AI", ar:"التحليلات والذكاء الاصطناعي" },
       items: [
-        { id:"t-workforce", icon:"🏭", en:"Workforce",      ar:"قوى العمل",
+        { id:"t-workforce", icon:"🏭", ico:"factory", en:"Workforce",      ar:"قوى العمل",
           onClick:()=>{ getAllUsers?.().then(setAllUsers); setShowWorkforceAnalytics?.(true); }},
-        { id:"t-reports",   icon:"📋", en:"Team Reports",   ar:"تقارير الفريق",
+        { id:"t-reports",   icon:"📋", ico:"fileText", en:"Team Reports",   ar:"تقارير الفريق",
           locked:!pro, lockLabel:"PRO",
           onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIReports?.(true); } else setShowBilling?.(true); }},
-        { id:"t-insights",  icon:"🧠", en:"AI Insights",    ar:"رؤى AI",
+        { id:"t-insights",  icon:"🧠", ico:"brain", en:"AI Insights",    ar:"رؤى AI",
           locked:!elite, lockLabel:"ELITE",
           onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
-        { id:"t-predict",   icon:"🔮", en:"Burnout AI",     ar:"AI إرهاق",
+        { id:"t-predict",   icon:"🔮", ico:"crystal", en:"Burnout AI",     ar:"AI إرهاق",
           locked:!elite, lockLabel:"ELITE",
           onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
       ],
@@ -3174,19 +3283,19 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       id: "enterprise",
       header: { en:"Enterprise", ar:"المؤسسات" },
       items: [
-        { id:"t-audit", icon:"📜", en:"Audit Log",   ar:"سجل المراجعة", onClick:()=>setShowAuditSystem?.(true) },
-        { id:"t-api",   icon:"🔌", en:"API Market",  ar:"سوق API",      onClick:()=>setShowAPIMarketplace?.(true) },
-        { id:"t-wl",    icon:"🏷️", en:"White-label", ar:"علامتي التجارية", onClick:()=>setShowWhiteLabel?.(true) },
+        { id:"t-audit", icon:"📜", ico:"scroll", en:"Audit Log",   ar:"سجل المراجعة", onClick:()=>setShowAuditSystem?.(true) },
+        { id:"t-api",   icon:"🔌", ico:"plug", en:"API Market",  ar:"سوق API",      onClick:()=>setShowAPIMarketplace?.(true) },
+        { id:"t-wl",    icon:"🏷️", ico:"tag", en:"White-label", ar:"علامتي التجارية", onClick:()=>setShowWhiteLabel?.(true) },
       ],
     },
     ...(isAdmin ? [{
       id: "admin",
       header: { en:"Platform Admin", ar:"إدارة المنصة" },
       items: [
-        { id:"t-growth",  icon:"🚀", en:"Growth Hub",    ar:"مركز النمو",     onClick:()=>setShowGrowthHub?.(true) },
-        { id:"t-success", icon:"💡", en:"Cust. Success", ar:"نجاح العملاء",   onClick:()=>setShowCustomerSuccess?.(true) },
-        { id:"t-churn",   icon:"📉", en:"Churn AI",      ar:"توقع التسرب",   onClick:()=>setShowChurnPrediction?.(true) },
-        { id:"t-tenant",  icon:"🏢", en:"Multi-tenant",  ar:"متعدد المستأجرين", onClick:()=>setShowMultiTenant?.(true) },
+        { id:"t-growth",  icon:"🚀", ico:"rocket", en:"Growth Hub",    ar:"مركز النمو",     onClick:()=>setShowGrowthHub?.(true) },
+        { id:"t-success", icon:"💡", ico:"bulb", en:"Cust. Success", ar:"نجاح العملاء",   onClick:()=>setShowCustomerSuccess?.(true) },
+        { id:"t-churn",   icon:"📉", ico:"trendDown", en:"Churn AI",      ar:"توقع التسرب",   onClick:()=>setShowChurnPrediction?.(true) },
+        { id:"t-tenant",  icon:"🏢", ico:"building", en:"Multi-tenant",  ar:"متعدد المستأجرين", onClick:()=>setShowMultiTenant?.(true) },
       ],
     }] : []),
   ] : [
@@ -3194,27 +3303,27 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       id: "track",
       header: { en:"Track & Improve", ar:"المتابعة والتحسين" },
       items: [
-        { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم", onClick:()=>setShowGamification?.(true) },
-        { id:"t-symptoms", icon:"🩹", en:"Symptom Log", ar:"سجل الأعراض", onClick:()=>setShowSymptomCorrelation?.(true) },
+        { id:"t-progress", icon:"🏆", ico:"trophy", en:"Progress",    ar:"التقدم", onClick:()=>setShowGamification?.(true) },
+        { id:"t-symptoms", icon:"🩹", ico:"heartPulse", en:"Symptom Log", ar:"سجل الأعراض", onClick:()=>setShowSymptomCorrelation?.(true) },
       ],
     },
     {
       id: "analytics",
       header: { en:"Analytics & AI", ar:"التحليلات والذكاء الاصطناعي" },
       items: [
-        { id:"t-coach",    icon:"🤖", en:"AI Coach",      ar:"AI Coach",
+        { id:"t-coach",    icon:"🤖", ico:"sparkle", en:"AI Coach",      ar:"AI Coach",
           onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowCoach?.(true); }},
-        { id:"t-reports",  icon:"📋", en:"AI Reports",    ar:"تقارير AI",
+        { id:"t-reports",  icon:"📋", ico:"fileText", en:"AI Reports",    ar:"تقارير AI",
           locked:!pro, lockLabel:"PRO",
           onClick:()=>{ if(pro){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIReports?.(true); } else setShowBilling?.(true); }},
-        { id:"t-compare",  icon:"📊", en:"Compare",       ar:"مقارنة الجلسات",
+        { id:"t-compare",  icon:"📊", ico:"compare", en:"Compare",       ar:"مقارنة الجلسات",
           onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowSessionComparison?.(true); }},
-        { id:"t-trend",    icon:"📈", en:"Trend",         ar:"مسار التحسن",
+        { id:"t-trend",    icon:"📈", ico:"trend", en:"Trend",         ar:"مسار التحسن",
           onClick:()=>{ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowTrendChart?.(true); }},
-        { id:"t-insights", icon:"🧠", en:"AI Insights",   ar:"رؤى AI",
+        { id:"t-insights", icon:"🧠", ico:"brain", en:"AI Insights",   ar:"رؤى AI",
           locked:!elite, lockLabel:"ELITE",
           onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowAIInsights?.(true); } else setShowBilling?.(true); }},
-        { id:"t-predict",  icon:"🔮", en:"Predictive AI", ar:"AI تنبؤي",
+        { id:"t-predict",  icon:"🔮", ico:"crystal", en:"Predictive AI", ar:"AI تنبؤي",
           locked:!elite, lockLabel:"ELITE",
           onClick:()=>{ if(elite){ uid&&getUserSessions(uid).then(setUserSessions).catch(()=>{}); setShowPredictiveAI?.(true); } else setShowBilling?.(true); }},
       ],
@@ -3223,7 +3332,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       id: "care",
       header: { en:"Care", ar:"الرعاية" },
       items: [
-        { id:"t-marketplace", icon:"🩺", en:"Find a Physiotherapist", ar:"أخصائيو العلاج الطبيعي",
+        { id:"t-marketplace", icon:"🩺", ico:"stethoscope", en:"Find a Physiotherapist", ar:"أخصائيو العلاج الطبيعي",
           onClick:()=>setPage("marketplace") },
       ],
     },
@@ -3233,13 +3342,13 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       items: [
         // "Platform Admin" opens the legacy inline Admin screen (payments
         // approval), which is the one this menu has always reached.
-        { id:"t-admin",  icon:"🔧", en:"Payments Admin",  ar:"إدارة المدفوعات", onClick:()=>setPage("admin") },
+        { id:"t-admin",  icon:"🔧", ico:"wrench", en:"Payments Admin",  ar:"إدارة المدفوعات", onClick:()=>setPage("admin") },
         // AdminDashboard was mounted, and its opener WAS passed down here — but
         // HomePage never destructured it, so nothing could call it. It is also
         // the only place that opens Feature Flags and Onboarding Analytics, so
         // three finished panels were stranded behind one missing line.
-        { id:"t-admindash", icon:"📊", en:"Admin Dashboard", ar:"لوحة المشرف", onClick:()=>setShowAdmin?.(true) },
-        { id:"t-growth", icon:"🚀", en:"Growth Hub",     ar:"مركز النمو",  onClick:()=>setShowGrowthHub?.(true) },
+        { id:"t-admindash", icon:"📊", ico:"barChart", en:"Admin Dashboard", ar:"لوحة المشرف", onClick:()=>setShowAdmin?.(true) },
+        { id:"t-growth", icon:"🚀", ico:"rocket", en:"Growth Hub",     ar:"مركز النمو",  onClick:()=>setShowGrowthHub?.(true) },
       ],
     }] : []),
   ];
@@ -3276,11 +3385,17 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                   for paying users. Routed through the same featureTier()
                   ladder. */}
               {(()=>{const ft=featureTier(tier);
-                return ft==="elite"?"Elite ✦":ft==="professional"?"Pro":ft==="basic"?"Basic":"Free";})()}
+                return ft==="elite"?(isAr?"إيليت":"Elite"):ft==="professional"?(isAr?"برو":"Pro")
+                      :ft==="basic"?(isAr?"أساسي":"Basic"):(isAr?"مجاني":"Free");})()}
               {" · "}
-              {userRole==="platform_admin"?"🛡 Platform Admin":
-               userRole==="hr_admin"?"🏢 Company HR":
-               userRole==="employee"?"👤 Employee":"🧑‍💻 Individual"}
+              {/* Was an emoji per role — 🛡 🏢 👤 🧑‍💻 — inside a 9px uppercase
+                  label, where a full-colour sticker at that size is just
+                  noise. The role word alone carries the meaning. */}
+              {/* Also untranslated: this line stayed English in Arabic mode
+                  while every other label around it flipped. */}
+              {userRole==="platform_admin"?(isAr?"مشرف المنصة":"Platform Admin"):
+               userRole==="hr_admin"?(isAr?"إدارة الشركة":"Company HR"):
+               userRole==="employee"?(isAr?"موظف":"Employee"):(isAr?"حساب شخصي":"Individual")}
             </div>
           </div>
         </div>
@@ -3305,7 +3420,9 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                 background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?cs.inp:"transparent",
                 color:tab===item.id?"#3b82f6":cs.muted,
                 fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:isAr?"right":"left", transition:"all .1s" }}>
-              <span style={{ fontSize:14, width:18, textAlign:"center" }}>{item.icon}</span>
+              <span style={{ width:18, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                <ItemIcon item={item} size={16} color={tab===item.id?"#3b82f6":cs.muted} />
+              </span>
               <span style={{ flex:1 }}>{isAr?item.ar:item.en}</span>
               {(item.badge||0)>0&&<span style={{ background:"#ef4444", color:"#fff", fontSize:9,
                 fontWeight:700, borderRadius:99, padding:"1px 5px", minWidth:16, textAlign:"center" }}>{item.badge}</span>}
@@ -3322,7 +3439,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
               fontSize:12.5, fontWeight:700, cursor:"pointer",
               display:"flex", alignItems:"center", justifyContent:"center", gap:8,
               boxShadow:"0 4px 12px rgba(26,86,219,.35)" }}>
-            ▶ {isAr?"ابدأ جلسة":"Start Session"}
+            <NavIcon name="play" size={13} color="#fff" /> {isAr?"ابدأ جلسة":"Start Session"}
           </button>
         </div>
 
@@ -3346,7 +3463,10 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                     background:hov===tool.id&&!tool.locked?cs.inp:"transparent",
                     color:tool.locked?cs.muted:cs.text,
                     fontSize:12, fontWeight:500, textAlign:isAr?"right":"left", transition:"all .1s" }}>
-                  <span style={{ fontSize:13, width:18, textAlign:"center", opacity:tool.locked?.45:1 }}>{tool.icon}</span>
+                  <span style={{ width:18, display:"inline-flex", alignItems:"center", justifyContent:"center",
+                    flexShrink:0, opacity:tool.locked?.45:1 }}>
+                    <ItemIcon item={tool} size={15} color={tool.locked?cs.muted:cs.text} />
+                  </span>
                   <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     {isAr&&tool.ar ? tool.ar : tool.en}
                   </span>
@@ -3371,13 +3491,17 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         <div style={{ display:"flex", gap:5, marginBottom:8 }}>
           <button onClick={()=>setLang(lang==="ar"?"en":"ar")}
             style={{ flex:1, padding:"5px", background:cs.inp,
-              border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
-            {lang==="ar"?"🇬🇧 EN":"🇪🇬 عربي"}
+              border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}
+            aria-label={lang==="ar"?"Switch to English":"التبديل إلى العربية"}>
+            <NavIcon name="globe" size={12} color={cs.muted} />{lang==="ar"?"EN":"عربي"}
           </button>
           <button onClick={()=>setDarkMode(!darkMode)}
             style={{ padding:"5px 9px", background:cs.inp,
-              border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer" }}>
-            {darkMode?"☀️":"🌙"}
+              border:`1px solid ${cs.border}`, borderRadius:6, color:cs.muted, fontSize:11, cursor:"pointer",
+              display:"flex", alignItems:"center" }}
+            aria-label={darkMode?(isAr?"الوضع الفاتح":"Light mode"):(isAr?"الوضع الداكن":"Dark mode")}>
+            <NavIcon name={darkMode?"sun":"moon"} size={13} color={cs.muted} />
           </button>
         </div>
         {/* User card — click → Settings */}
@@ -3396,7 +3520,10 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
             </div>
             <div style={{ fontSize:9.5, color:cs.muted,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {isAr?"⚙️ الإعدادات":"⚙️ Settings"}
+              <span style={{ display:"inline-flex", alignItems:"center", gap:4 }}>
+                <NavIcon name="settings" size={12} color={cs.muted} />
+                {isAr?"الإعدادات":"Settings"}
+              </span>
             </div>
           </div>
           <span style={{ fontSize:11, color:cs.muted, flexShrink:0 }}>›</span>
@@ -3415,21 +3542,21 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
   const onLockedTool = () => setShowBilling?.(true);
 
   const tabs = userRole==="hr_admin"||userRole==="platform_admin" ? [
-    { id:"home",      icon:"🏠", en:"Overview", ar:"نظرة" },
-    { id:"employees", icon:"👥",en:"Team",      ar:"فريق" },
-    { id:"live",      icon:"▶",  en:"Session",  ar:"جلسة", special:true },
-    { id:"alerts",    icon:"🔔",en:"Alerts",    ar:"تنبيهات", badge:atRisk },
-    { id:"sessions",  icon:"📋",en:"History",   ar:"السجل" },
+    { id:"home",      icon:"⊞", ico:"grid", en:"Overview", ar:"نظرة" },
+    { id:"employees", icon:"👥", ico:"users",en:"Team",      ar:"فريق" },
+    { id:"live",      icon:"▶", ico:"play",  en:"Session",  ar:"جلسة", special:true },
+    { id:"alerts",    icon:"🔔", ico:"bell",en:"Alerts",    ar:"تنبيهات", badge:atRisk },
+    { id:"sessions",  icon:"📋", ico:"list",en:"History",   ar:"السجل" },
   ] : userRole==="employee" ? [
-    { id:"home",     icon:"🏠", en:"Home",    ar:"الرئيسية" },
-    { id:"team",     icon:"👥",en:"Team",     ar:"الفريق" },
-    { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
-    { id:"sessions", icon:"📋",en:"History",  ar:"السجل" },
+    { id:"home",     icon:"⊞", ico:"grid", en:"Home",    ar:"الرئيسية" },
+    { id:"team",     icon:"👥", ico:"users",en:"Team",     ar:"الفريق" },
+    { id:"live",     icon:"▶", ico:"play",  en:"Session", ar:"جلسة", special:true },
+    { id:"sessions", icon:"📋", ico:"list",en:"History",  ar:"السجل" },
   ] : [
-    { id:"home",     icon:"🏠", en:"Home",    ar:"الرئيسية" },
-    { id:"sessions", icon:"📋",en:"History", ar:"السجل" },
-    { id:"live",     icon:"▶",  en:"Session", ar:"جلسة", special:true },
-    { id:"analytics",icon:"📊",en:"Analytics",ar:"تحليلات" },
+    { id:"home",     icon:"⊞", ico:"grid", en:"Home",    ar:"الرئيسية" },
+    { id:"sessions", icon:"📋", ico:"list",en:"History", ar:"السجل" },
+    { id:"live",     icon:"▶", ico:"play",  en:"Session", ar:"جلسة", special:true },
+    { id:"analytics",icon:"📊", ico:"barChart",en:"Analytics",ar:"تحليلات" },
   ];
 
   return (
@@ -3459,7 +3586,9 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                     padding:"10px 6px", background:cs.inp,
                     border:`1px solid ${cs.border}`, borderRadius:10,
                     cursor:"pointer", position:"relative", opacity:t.locked?.75:1 }}>
-                  <span style={{ fontSize:20 }}>{t.icon}</span>
+                  <span style={{ display:"inline-flex", height:22, alignItems:"center" }}>
+                    <ItemIcon item={t} size={20} color={cs.text} />
+                  </span>
                   <span style={{ fontSize:9, color:cs.muted, fontWeight:600, textAlign:"center",
                     lineHeight:1.2 }}>{isAr?t.ar:t.en}</span>
                   {t.locked && (
@@ -3477,7 +3606,9 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                 style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4,
                   padding:"10px 6px", background:cs.inp,
                   border:`1px solid ${cs.border}`, borderRadius:10, cursor:"pointer" }}>
-                <span style={{ fontSize:20 }}>⚙️</span>
+                <span style={{ display:"inline-flex", height:22, alignItems:"center" }}>
+                  <NavIcon name="settings" size={20} color={cs.text} />
+                </span>
                 <span style={{ fontSize:9, color:cs.muted, fontWeight:600 }}>{isAr?"إعدادات":"Settings"}</span>
               </button>
             </div>
@@ -3503,8 +3634,8 @@ function MobileNav({ userRole, tab, setTab, setPage, startCamera, isAr, cs, atRi
                 boxShadow:"0 4px 14px rgba(26,86,219,.5)" }}>▶</div>
             ) : (
               <>
-                <span style={{ fontSize:17, color:tab===t.id?"#3b82f6":cs.muted }}>
-                  {t.icon}
+                <span style={{ display:"inline-flex", height:20, alignItems:"center" }}>
+                  <ItemIcon item={t} size={19} color={tab===t.id?"#3b82f6":cs.muted} />
                 </span>
                 {(t.badge||0)>0&&(
                   <span style={{ position:"absolute", top:0,
@@ -3628,34 +3759,31 @@ export default function HomePage({
   // ── Tools (for sidebar + mobile nav) ─────────────────────────────
   const isPro_   = tierAtLeast(tier, "professional");
   const tools = [
-    { id:"t-notifications", icon:"🔔", en:"Notifications", ar:"الإشعارات",
-      badge: mobileUnreadNotifCount,
-      onClick:()=>setShowNotificationsHub?.(true) },
-    { id:"t-progress", icon:"🏆", en:"Progress",    ar:"التقدم",
+    { id:"t-progress", icon:"🏆", ico:"trophy", en:"Progress",    ar:"التقدم",
       onClick:()=>setShowGamification?.(true) },
-    ...(isAdmin ? [{ id:"t-growth", icon:"🚀", en:"Growth Hub", ar:"مركز النمو",
+    ...(isAdmin ? [{ id:"t-growth", icon:"🚀", ico:"rocket", en:"Growth Hub", ar:"مركز النمو",
       onClick:()=>setShowGrowthHub?.(true) }] : []),
-    { id:"t-coach",    icon:"🤖", en:"AI Coach",    ar:"AI Coach",
+    { id:"t-coach",    icon:"🤖", ico:"sparkle", en:"AI Coach",    ar:"AI Coach",
       onClick:()=>setShowCoach?.(true) },
-    { id:"t-insights", icon:"📊", en:"AI Insights", ar:"تحليلات ذكية",
+    { id:"t-insights", icon:"📊", ico:"brain", en:"AI Insights", ar:"تحليلات ذكية",
       onClick:()=>setShowAIInsights?.(true) },
-    { id:"t-calib",    icon:"🎯", en:"Calibrate",   ar:"معايرة",
+    { id:"t-calib",    icon:"🎯", ico:"target", en:"Calibrate",   ar:"معايرة",
       onClick:()=>setShowCalibWizard?.(true) },
-    { id:"t-break",    icon:"🧘", en:"Movement Break", ar:"استراحة حركة",
+    { id:"t-break",    icon:"🧘", ico:"leaf", en:"Movement Break", ar:"استراحة حركة",
       onClick:()=>goToBreak?.() },
-    { id:"t-reports",  icon:"📋", en:"AI Reports",  ar:"تقارير AI",
+    { id:"t-reports",  icon:"📋", ico:"fileText", en:"AI Reports",  ar:"تقارير AI",
       locked:!isPro_, lockLabel:"PRO",
       onClick:()=>isPro_&&setShowAIReports?.(true) },
-    { id:"t-security", icon:"🔒", en:"Security",    ar:"الأمان",
+    { id:"t-security", icon:"🔒", ico:"lock", en:"Security",    ar:"الأمان",
       onClick:()=>setShowSecurityCenter?.(true) },
-    { id:"t-marketplace", icon:"🩺", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
+    { id:"t-marketplace", icon:"🩺", ico:"stethoscope", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
       onClick:()=>setPage("marketplace") },
-    { id:"t-symptoms", icon:"🩹", en:"Symptom Log", ar:"سجل الأعراض",
+    { id:"t-symptoms", icon:"🩹", ico:"heartPulse", en:"Symptom Log", ar:"سجل الأعراض",
       onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
-      { id:"t-mrr",    icon:"💰", en:"Revenue",     ar:"الإيرادات",
+      { id:"t-mrr",    icon:"💰", ico:"wallet", en:"Revenue",     ar:"الإيرادات",
         onClick:()=>setShowMRR?.(true) },
-      { id:"t-audit",  icon:"📝", en:"Audit Log",   ar:"سجل التدقيق",
+      { id:"t-audit",  icon:"📝", ico:"scroll", en:"Audit Log",   ar:"سجل التدقيق",
         onClick:()=>setShowAuditSystem?.(true) },
     ] : []),
   ];
@@ -3696,7 +3824,7 @@ export default function HomePage({
       if(tab==="analytics") return null; // handled by the effect below
       if(tab==="alerts") return (
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {atRisk===0 ? <EmptyBlock icon="✅" cs={cs}
+          {atRisk===0 ? <EmptyBlock ico="checkCircle" tone="#10b981" cs={cs}
             title={isAr?"لا توجد تنبيهات":"No alerts"}
             desc={isAr?"كل الموظفين بوضعية جيدة":"All employees have healthy posture scores"}/> :
             (allUsers||[]).filter(u=>(u.avg_score||0)>0&&(u.avg_score||0)<50).map((u)=>(
@@ -3874,7 +4002,9 @@ export default function HomePage({
               style={{ padding:"6px 12px", background:"rgba(26,86,219,.15)",
                 border:"1px solid rgba(59,130,246,.3)", borderRadius:7,
                 color:"#60a5fa", fontSize:12, fontWeight:600, cursor:"pointer" }}>
-              ▶ {isAr?"جلسة":"Session"}
+              <span style={{ display:"inline-flex", alignItems:"center", gap:6, justifyContent:"center" }}>
+                <NavIcon name="play" size={11} color="currentColor"/>{isAr?"جلسة":"Session"}
+              </span>
             </button>
             {NavAvatarDropdown ? (
               <NavAvatarDropdown

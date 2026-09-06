@@ -27,6 +27,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { Icon } from "./LiveUI.jsx";
 
 const FREE_MONTHLY_SESSION_LIMIT = 5;
 
@@ -304,14 +305,19 @@ export function FirstSessionBadge({ isAr, cs }) {
 // Exported so consumers can render the label rather than the raw id. The AI
 // coach was interpolating `lower_back` verbatim into its prompt — including
 // into the Arabic one, which forbids English output.
+// `icon` was an emoji coloured circle per area (🟠🟡🔵🟣🟢🔴 + a ✅). Those
+// are OS stickers: their size, weight and even shape differ per platform, and
+// the ✅ among six circles broke the row's rhythm. `dot` is the same colour
+// coding drawn in CSS instead, so it renders identically everywhere. `icon`
+// is kept because other screens (the AI coach prompt, symptom log) read it.
 export const PAIN_AREAS = [
-  { id: "neck",      en: "Neck",          ar: "الرقبة",        icon: "🟠" },
-  { id: "shoulders", en: "Shoulders",     ar: "الكتفين",       icon: "🟡" },
-  { id: "upper_back",en: "Upper back",    ar: "أعلى الظهر",    icon: "🔵" },
-  { id: "lower_back",en: "Lower back",    ar: "أسفل الظهر",    icon: "🟣" },
-  { id: "wrists",    en: "Wrists",        ar: "المعصمين",      icon: "🟢" },
-  { id: "eyes",      en: "Eyes / screen", ar: "العين/الشاشة",  icon: "🔴" },
-  { id: "none",      en: "No pain",       ar: "من غير ألم",    icon: "✅" },
+  { id: "neck",      en: "Neck",          ar: "الرقبة",        icon: "🟠", dot: "#f97316" },
+  { id: "shoulders", en: "Shoulders",     ar: "الكتفين",       icon: "🟡", dot: "#eab308" },
+  { id: "upper_back",en: "Upper back",    ar: "أعلى الظهر",    icon: "🔵", dot: "#3b82f6" },
+  { id: "lower_back",en: "Lower back",    ar: "أسفل الظهر",    icon: "🟣", dot: "#a855f7" },
+  { id: "wrists",    en: "Wrists",        ar: "المعصمين",      icon: "🟢", dot: "#22c55e" },
+  { id: "eyes",      en: "Eyes / screen", ar: "العين/الشاشة",  icon: "🔴", dot: "#ef4444" },
+  { id: "none",      en: "No pain",       ar: "من غير ألم",    icon: "✅", dot: null },
 ];
 
 export function PainAreaSelfReport({ isAr, cs, initial = null, onSave }) {
@@ -339,7 +345,7 @@ export function PainAreaSelfReport({ isAr, cs, initial = null, onSave }) {
   return (
     <div style={{ background: cs.card, border: `1px solid ${cs.border}`, borderRadius: 12, padding: "16px 18px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 16 }}>🧍</span>
+        <Icon name="skeleton" size={15} color={cs.muted} />
         <span style={{ fontSize: 13, fontWeight: 700, color: cs.text }}>
           {isAr ? "فين بيتألم؟" : "Where does it hurt?"}
         </span>
@@ -359,7 +365,11 @@ export function PainAreaSelfReport({ isAr, cs, initial = null, onSave }) {
               color: active ? "#93c5fd" : cs.text,
               fontSize: 12, fontWeight: active ? 700 : 500, cursor: "pointer",
             }}>
-              <span>{a.icon}</span>{isAr ? a.ar : a.en}
+              {a.dot
+                ? <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%",
+                    background: a.dot, flexShrink: 0, boxShadow: `0 0 0 2px ${a.dot}22` }} />
+                : <Icon name="checkCircle" size={12} color={active ? "#93c5fd" : cs.muted} />}
+              {isAr ? a.ar : a.en}
             </button>
           );
         })}

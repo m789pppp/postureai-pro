@@ -918,3 +918,64 @@ button[aria-disabled="true"],
   button, [role="button"], summary { transition: none; }
   button:active:not(:disabled), [role="button"]:active { transform: none; }
 }
+
+/* Range sliders.
+ * Every slider in the product (voice-coach speed/pitch, sensitivity, alert
+ * thresholds) was a bare native <input type="range">, so on the dark theme it
+ * rendered as a solid white bar with a system-blue thumb sitting inside a
+ * near-black card — the loudest element on a Settings page whose job is to be
+ * quiet. Styled once here rather than in each of the five call sites.
+ * accent-color alone is not enough: it recolours the fill but leaves the
+ * track white in WebKit. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+}
+input[type="range"]::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5px;              /* centre the thumb on a 5px track */
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s ease;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #3b82f6;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+input[type="range"]:hover::-webkit-slider-thumb { transform: scale(1.12); }
+input[type="range"]:focus-visible::-webkit-slider-thumb,
+input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+input[type="range"]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Light theme: the same track needs more contrast against a white card. */
+@media (prefers-color-scheme: light) {
+  input[type="range"]::-webkit-slider-runnable-track,
+  input[type="range"]::-moz-range-track { background: rgba(15, 23, 42, 0.16); }
+}
