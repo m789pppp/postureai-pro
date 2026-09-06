@@ -117,7 +117,7 @@ export function SharedNav({ lang, setLang, activePage }) {
             }}>◈</div>
             <div style={{ lineHeight:1.2 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FD }}>Corvus</div>
-              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+              <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
             </div>
           </a>
 
@@ -256,6 +256,14 @@ export function SharedFooter({ lang }) {
           .sf-grid { grid-template-columns:1fr 1fr; gap:24px 16px; }
           .sf-wrap { padding:0 20px; }
         }
+        /* Under ~430px the two columns are ~150px each, and the first one
+           carries the logo, the product description and the contact line.
+           The brand block goes full width; the link columns stay paired. */
+        @media(max-width:430px){
+          .sf-grid { grid-template-columns:1fr 1fr; gap:22px 14px; }
+          .sf-grid > *:first-child { grid-column:1 / -1; }
+          .sf-wrap { padding:0 16px; }
+        }
       `}</style>
 
       <footer dir="ltr" style={{
@@ -279,7 +287,7 @@ export function SharedFooter({ lang }) {
                 }}>◈</div>
                 <div>
                   <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.02em", fontFamily:FD }}>Corvus</div>
-                  <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase" }}>AI Posture Coaching</div>
+                  <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
                 </div>
               </a>
               <p style={{ fontSize:13.5, color:"#8896ac", lineHeight:1.7, maxWidth:220, marginBottom:24 }}>

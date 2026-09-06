@@ -357,6 +357,15 @@ function GlobalStyle() {
         .lp-timeline-line{display:none!important}
         .lp-timeline-node{margin-top:0!important;margin-bottom:16px!important}
       }
+      /* Below ~480px two columns leaves ~174px per card, and these cards hold a
+         headline number, a label AND a source caption — "On-device" broke to
+         "On-" / "device" and the caption wrapped to three words a line. One
+         column is the only honest fit on a phone. */
+      @media(max-width:480px){
+        .lp-stats-grid{grid-template-columns:1fr!important;gap:12px!important}
+        .lp-sp-stats{grid-template-columns:1fr!important}
+        .lp-footer-grid{grid-template-columns:1fr!important}
+      }
       @media(max-width:640px){
         .lp-wrap{padding:0 16px}.lp-section{padding:52px 16px}
         .lp-stats-grid{grid-template-columns:repeat(2,1fr);gap:10px}
@@ -508,7 +517,7 @@ function Nav({ lang, setLang, onCTA }) {
             }}>◈</div>
             <div style={{ lineHeight:1.15 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-              <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".06em", textTransform:"uppercase", marginTop:1 }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
+              <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase", marginTop:1 }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
             </div>
           </button>
 
@@ -882,7 +891,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 }}>
                   <div style={{ fontSize:12, marginBottom:3 }}>{icon}</div>
                   <div style={{ fontSize:16, fontWeight:800, color:LPV7_TOKENS.text, fontFamily:FONT_MONO, lineHeight:1 }}>{val}</div>
-                  <div style={{ fontSize:9.5, color:LPV7_TOKENS.muted, marginTop:3 }}>{label}</div>
+                  <div style={{ fontSize:11, color:LPV7_TOKENS.muted, marginTop:3 }}>{label}</div>
                 </div>
               ))}
             </div>
@@ -1026,7 +1035,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   textAlign:"center" }}>
                   <div style={{ fontSize:28, fontWeight:800, color:scoreColor,
                     fontFamily:FONT_MONO, transition:"color .4s", lineHeight:1 }}>{demoScore}</div>
-                  <div style={{ fontSize:9.5, color:LPV7_TOKENS.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
+                  <div style={{ fontSize:11, color:LPV7_TOKENS.muted, marginTop:2 }}>{ar ? "نقطة" : "score"}</div>
                 </div>
 
                 {/* Alert badge — top right */}
@@ -1484,11 +1493,11 @@ function Features({ lang }) {
         <div style={{ marginTop:10, display:"flex", gap:8 }}>
           <div style={{ flex:1, background:"rgba(255,255,255,.04)", borderRadius:8, padding:"6px 10px", textAlign:"center" }}>
             <div style={{ fontSize:14, fontWeight:700, color:"#f0f6ff" }}>83</div>
-            <div style={{ fontSize:9.5, color:"#8896ac" }}>{ar?"درجة العادة":"Habit Score"}</div>
+            <div style={{ fontSize:11, color:"#8896ac" }}>{ar?"درجة العادة":"Habit Score"}</div>
           </div>
           <div style={{ flex:1, background:"rgba(255,255,255,.04)", borderRadius:8, padding:"6px 10px", textAlign:"center" }}>
             <div style={{ fontSize:14, fontWeight:700, color:"#f0f6ff" }}>5/7</div>
-            <div style={{ fontSize:9.5, color:"#8896ac" }}>{ar?"هذا الأسبوع":"This week"}</div>
+            <div style={{ fontSize:11, color:"#8896ac" }}>{ar?"هذا الأسبوع":"This week"}</div>
           </div>
         </div>
       </div>
@@ -1521,7 +1530,7 @@ function Features({ lang }) {
         ].map((msg,i)=>(
           <div key={i} style={{ background:"rgba(37,211,102,.08)", border:"1px solid rgba(37,211,102,.12)", borderRadius:"12px 12px 12px 4px", padding:"8px 11px" }}>
             <div style={{ fontSize:11.5, color:"#d1fae5", lineHeight:1.45 }}>{msg}</div>
-            <div style={{ fontSize:9.5, color:"#25d366", marginTop:3, opacity:.7 }}>{["9:04 AM","12:00 PM","Mon 9:00 AM"][i]} ✓✓</div>
+            <div style={{ fontSize:11, color:"#25d366", marginTop:3, opacity:.7 }}>{["9:04 AM","12:00 PM","Mon 9:00 AM"][i]} ✓✓</div>
           </div>
         ))}
       </div>
@@ -2801,7 +2810,7 @@ function Footer({ lang }) {
               }}>◈</div>
               <div style={{ lineHeight:1.2 }}>
                 <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Corvus</div>
-                <div style={{ fontSize:9, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
+                <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
               </div>
             </div>
 
@@ -2827,7 +2836,7 @@ function Footer({ lang }) {
                   actually implements (deletion, export, minimisation). */}
               {["AES-256","GDPR","On-device AI"].map(b=>(
                 <span key={b} style={{
-                  fontSize:9.5, color:"#8896ac", padding:"3px 8px",
+                  fontSize:11, color:"#8896ac", padding:"3px 8px",
                   border:"1px solid rgba(255,255,255,.07)", borderRadius:99,
                   fontFamily:FONT_MONO, fontWeight:600,
                 }}>{b}</span>

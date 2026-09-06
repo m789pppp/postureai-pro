@@ -395,6 +395,10 @@ export default function PricingPageStandalone() {
         .pr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; align-items:start; min-width:0; }
         .pr-grid > * { min-width:0; }
         .pr-compare-grid { display:grid; grid-template-columns:1.6fr 1fr 1fr 1fr 1fr; }
+        /* Two hardcoded columns with a 64px gutter: on a phone that is two
+           ~130px columns of FAQ text. */
+        .plp-faq-grid{min-width:0}.plp-faq-grid>*{min-width:0}
+        @media(max-width:760px){.plp-faq-grid{grid-template-columns:1fr!important;gap:0!important}}
         @media(max-width:960px){
           .pr-grid { grid-template-columns:1fr 1fr !important; max-width:720px; margin:0 auto; }
           .pr-compare-grid { grid-template-columns:1.4fr 1fr 1fr 1fr 1fr; }
@@ -613,7 +617,7 @@ export default function PricingPageStandalone() {
             {tr("Pricing FAQ", ar)}
           </h2>
         </Reveal>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 64px" }}>
+        <div className="plp-faq-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 64px" }}>
           {[
             ["Can I switch plans anytime?","Yes. Upgrades are instant and pro-rated. Downgrades take effect at end of billing period. No penalties."],
             ["What payment methods?","Online payment is coming soon. For now we activate subscriptions manually over WhatsApp — send us the plan you want and it is active within 30 minutes."],

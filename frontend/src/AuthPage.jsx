@@ -636,7 +636,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
           }}>◈</div>
           <div style={{lineHeight:1.1}}>
             <div style={{fontSize:17,fontWeight:800,color:t.text,letterSpacing:"-.025em"}}>Corvus</div>
-            <div style={{fontSize:9.5,color:t.muted,marginTop:2,letterSpacing:".05em",textTransform:"uppercase"}}>
+            <div style={{fontSize:10.5,color:t.muted,marginTop:2,letterSpacing:".05em",textTransform:"uppercase"}}>
               {isAr?"ذكاء الوضعية بالـ AI":"AI Posture Coaching"}
             </div>
           </div>

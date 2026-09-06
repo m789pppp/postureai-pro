@@ -98,6 +98,14 @@ export default function SolutionsPage() {
         .sol-persona-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
         @media(max-width:1024px){.sol-persona-grid{grid-template-columns:1fr 1fr}}
         @media(max-width:640px){.sol-persona-grid{grid-template-columns:1fr}.sol-wrap{padding:0 16px}.sol-results-grid{grid-template-columns:1fr!important}}
+        /* The industry detail block was a hardcoded inline 1fr-1fr with no
+           breakpoint, so on a phone it stayed two columns: ~130px each with a
+           64px gutter between them, wrapping the body copy to three words a
+           line beside a stack of squashed cards. It is the main content of this
+           page. */
+        .sol-detail-grid{min-width:0}
+        .sol-detail-grid>*{min-width:0}
+        @media(max-width:860px){.sol-detail-grid{grid-template-columns:1fr!important;gap:40px!important}}
         @media(max-width:860px){.sol-wrap{padding:0 20px}}
         .sol-results-grid{min-width:0}.sol-results-grid>*{min-width:0}
       `}</style>
@@ -164,6 +172,7 @@ export default function SolutionsPage() {
           initial={{ opacity:0, y:16 }}
           animate={{ opacity:1, y:0 }}
           transition={{ duration:.4 }}
+          className="sol-detail-grid"
           style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:64, alignItems:"start" }}>
 
           {/* Left */}
