@@ -10,6 +10,7 @@
  */
 import React, { useState, useEffect } from "react";
 import { getAvailableVoices, getVoicePrefs, setVoicePrefs, speakCoach, hasVoiceFor, LOCALE_OPTIONS } from "./lib/voiceCoach.js";
+import { Icon } from "./LiveUI.jsx";
 
 export default function VoiceCoachSettings({ cs, isAr, lang, addToast, compact = false }) {
   const langKey = isAr ? "ar" : "en";
@@ -124,8 +125,9 @@ export default function VoiceCoachSettings({ cs, isAr, lang, addToast, compact =
 
       <button onClick={preview} style={{ width: "100%", padding: "9px",
         background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.25)", borderRadius: 8,
-        color: "#10b981", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-        🔊 {L("test")}
+        color: "#10b981", fontSize: 12, fontWeight: 700, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <Icon name="mic" size={14} color="#10b981" />{L("test")}
       </button>
     </div>
   );

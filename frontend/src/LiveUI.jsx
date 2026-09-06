@@ -91,6 +91,40 @@ export function Icon({ name, size = 18, color = "currentColor", strokeWidth = 1.
     style, "aria-hidden": true, focusable: "false",
   };
   switch (name) {
+    // ── Navigation set ────────────────────────────────────────────
+    // The app's sidebar was built from emoji — 🏆 🤖 🧠 🔮 🩺 next to a
+    // geometric ⊞ — so a single nav column mixed flat glyphs with full-colour
+    // stickers that render differently on every OS. One stroke weight, one
+    // colour, one visual language.
+    case "grid": return <svg {...c}><rect x="3" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" /><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" /><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" /></svg>;
+    case "list": return <svg {...c}><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><circle cx="3.8" cy="6" r="1.1" fill={color} stroke="none" /><circle cx="3.8" cy="12" r="1.1" fill={color} stroke="none" /><circle cx="3.8" cy="18" r="1.1" fill={color} stroke="none" /></svg>;
+    case "trophy": return <svg {...c}><path d="M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M7 6H4.5a2.5 2.5 0 0 0 2.5 2.5" /><path d="M17 6h2.5a2.5 2.5 0 0 1-2.5 2.5" /><line x1="12" y1="14" x2="12" y2="17" /><path d="M8.5 20.5h7" /><path d="M10 17.5h4v3h-4z" /></svg>;
+    case "heartPulse": return <svg {...c}><path d="M20.4 6.6a4.6 4.6 0 0 0-6.5 0L12 8.5l-1.9-1.9a4.6 4.6 0 1 0-6.5 6.5l8.4 8.4 8.4-8.4a4.6 4.6 0 0 0 0-6.5z" /><polyline points="3.5 13 8 13 9.8 10.4 12 15.2 13.6 13 17 13" /></svg>;
+    case "sparkle": return <svg {...c}><path d="M12 2.8l1.9 5.2 5.3 1.9-5.3 1.9L12 17l-1.9-5.2L4.8 9.9l5.3-1.9z" /><path d="M18.6 15.2l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z" /></svg>;
+    case "fileText": return <svg {...c}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><polyline points="14 3 14 8 19 8" /><line x1="8.5" y1="12.5" x2="15.5" y2="12.5" /><line x1="8.5" y1="16" x2="13.5" y2="16" /></svg>;
+    case "compare": return <svg {...c}><rect x="3" y="9" width="6" height="11" rx="1" /><rect x="15" y="4" width="6" height="16" rx="1" /><line x1="12" y1="3" x2="12" y2="21" strokeDasharray="2 2.5" /></svg>;
+    case "brain": return <svg {...c}><path d="M9.5 3.5A2.8 2.8 0 0 0 6.8 6a2.6 2.6 0 0 0-1.9 4 2.8 2.8 0 0 0 .5 4.5A2.7 2.7 0 0 0 8 19.5a2.6 2.6 0 0 0 4 .6V4.6a2.6 2.6 0 0 0-2.5-1.1z" /><path d="M14.5 3.5A2.8 2.8 0 0 1 17.2 6a2.6 2.6 0 0 1 1.9 4 2.8 2.8 0 0 1-.5 4.5A2.7 2.7 0 0 1 16 19.5a2.6 2.6 0 0 1-4 .6" /></svg>;
+    case "crystal": return <svg {...c}><circle cx="12" cy="10.5" r="6.2" /><path d="M6.5 18.5h11" /><path d="M9 20.8h6" /><path d="M9.6 9.2a3.2 3.2 0 0 1 2.6-2.3" /></svg>;
+    case "stethoscope": return <svg {...c}><path d="M5 3v5a4 4 0 0 0 8 0V3" /><line x1="3.4" y1="3" x2="6.6" y2="3" /><line x1="11.4" y1="3" x2="14.6" y2="3" /><path d="M9 16v-4" /><path d="M9 16a5 5 0 0 0 9 0v-1.4" /><circle cx="18" cy="12.6" r="2.1" /></svg>;
+    case "users": return <svg {...c}><circle cx="9" cy="8" r="3.4" /><path d="M2.8 20a6.2 6.2 0 0 1 12.4 0" /><path d="M16.2 5.2a3.4 3.4 0 0 1 0 6.6" /><path d="M17.6 14.4A6.2 6.2 0 0 1 21.2 20" /></svg>;
+    case "factory": return <svg {...c}><path d="M3 20V10l5 3.2V10l5 3.2V10l5 3.2V20z" /><path d="M18 10V4.5h2.6V10" /><line x1="2" y1="20.5" x2="22" y2="20.5" /></svg>;
+    case "scroll": return <svg {...c}><path d="M5.5 4h11a2 2 0 0 1 2 2v12a2 2 0 0 0 2 2H8a2 2 0 0 1-2-2V6" /><path d="M5.5 4a2 2 0 0 0-2 2v2h3" /><line x1="9.5" y1="9" x2="15" y2="9" /><line x1="9.5" y1="13" x2="15" y2="13" /></svg>;
+    case "plug": return <svg {...c}><path d="M9 3v5" /><path d="M15 3v5" /><path d="M6.5 8h11v3a5.5 5.5 0 0 1-11 0z" /><line x1="12" y1="16.5" x2="12" y2="21" /></svg>;
+    case "rocket": return <svg {...c}><path d="M12 2.8c3.2 2.2 5 5.6 5 9.4l-2.4 3.1H9.4L7 12.2c0-3.8 1.8-7.2 5-9.4z" /><circle cx="12" cy="10" r="1.9" /><path d="M9.4 15.3 7 17.9l.6 3.3 2.6-1.5" /><path d="M14.6 15.3l2.4 2.6-.6 3.3-2.6-1.5" /></svg>;
+    case "leaf": return <svg {...c}><path d="M20 4c0 8.5-4.6 13-11.4 13H5.5C5.5 9.7 10.6 4.6 20 4z" /><path d="M4 20c1.8-4.2 4.6-7.2 8.6-9.4" /></svg>;
+    case "wallet": return <svg {...c}><rect x="3" y="6" width="18" height="14" rx="2.5" /><path d="M3 10h18" /><circle cx="16.5" cy="14.5" r="1.2" fill={color} stroke="none" /><path d="M6 6V4.6a1.6 1.6 0 0 1 2-1.5l9 2.4" /></svg>;
+    case "wrench": return <svg {...c}><path d="M20 5.6a5 5 0 0 1-6.6 6.3L6 19.3a2.1 2.1 0 0 1-3-3l7.4-7.4A5 5 0 0 1 16.7 2.3l-3 3 2 2 3-3c.2.4.3.8.3 1.3z" /></svg>;
+    case "tag": return <svg {...c}><path d="M3 11.4V4a1 1 0 0 1 1-1h7.4a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8l-7.4 7.4a2 2 0 0 1-2.8 0L3.6 13.8A2 2 0 0 1 3 12.4z" /><circle cx="7.6" cy="7.6" r="1.4" /></svg>;
+    case "building": return <svg {...c}><rect x="3" y="3" width="10" height="18" rx="1.5" /><path d="M13 8h7a1 1 0 0 1 1 1v12" /><line x1="2" y1="21" x2="22" y2="21" /><line x1="6.2" y1="7" x2="9.8" y2="7" /><line x1="6.2" y1="11" x2="9.8" y2="11" /><line x1="6.2" y1="15" x2="9.8" y2="15" /><line x1="16" y1="12" x2="18.5" y2="12" /><line x1="16" y1="16" x2="18.5" y2="16" /></svg>;
+    case "bulb": return <svg {...c}><path d="M9 17a6.5 6.5 0 1 1 6 0v1.6H9z" /><line x1="9.6" y1="21" x2="14.4" y2="21" /></svg>;
+    case "trendDown": return <svg {...c}><polyline points="3 7 9 13 13 9 21 18" /><polyline points="15 18 21 18 21 12" /></svg>;
+    case "mail": return <svg {...c}><rect x="3" y="5" width="18" height="14" rx="2.5" /><polyline points="3.8 7 12 13 20.2 7" /></svg>;
+    case "chat": return <svg {...c}><path d="M21 12.4c0 4-4 7.2-9 7.2a10.6 10.6 0 0 1-2.8-.4L4 21l1.4-3.7A6.8 6.8 0 0 1 3 12.4C3 8.4 7 5.2 12 5.2s9 3.2 9 7.2z" /></svg>;
+    case "key": return <svg {...c}><circle cx="7.5" cy="16.5" r="3.7" /><line x1="10.2" y1="13.8" x2="20" y2="4" /><line x1="17" y1="7" x2="19.4" y2="9.4" /><line x1="14.4" y1="9.6" x2="16.4" y2="11.6" /></svg>;
+    // Box on the left with the arrow leaving to the right — the direction that
+    // reads as "out". Mirrored, the same glyph reads as sign-IN.
+    case "logout": return <svg {...c}><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" /><polyline points="15 8 19.5 12 15 16" /><line x1="19.5" y1="12" x2="9.5" y2="12" /></svg>;
+    case "laptop": return <svg {...c}><rect x="4" y="5" width="16" height="11" rx="2" /><line x1="2" y1="19.5" x2="22" y2="19.5" /></svg>;
     case "back": return <svg {...c}><polyline points="15 18 9 12 15 6" /></svg>;
     case "forward": return <svg {...c}><polyline points="9 18 15 12 9 6" /></svg>;
     case "chevronDown": return <svg {...c}><polyline points="6 9 12 15 18 9" /></svg>;

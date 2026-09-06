@@ -934,16 +934,26 @@ export function Ring({ score, size = 78, strokeWidth = 6 }) {
   injectCSS();
   const r     = (size/2) - strokeWidth;
   const circ  = 2 * Math.PI * r;
-  const dash  = Math.max(0, Math.min(100, score||0)) / 100 * circ;
+  const pct   = Math.max(0, Math.min(100, score||0));
+  const dash  = pct / 100 * circ;
   const col   = sc(score||0);
+  // A score of 0 means "nothing measured yet", and every caller renders "—"
+  // in the middle for it. But strokeLinecap="round" draws its round cap even
+  // on a zero-length dash, so the arc still painted a small dot at 12 o'clock
+  // — in sc(0)'s red — on the dashboard of a user who has never had a
+  // session. A stray red marker on an empty gauge reads as an alert. No
+  // value, no arc.
+  const hasValue = pct > 0;
   return (
     <svg width={size} height={size} style={{ transform:"rotate(-90deg)", flexShrink:0 }}>
       <circle cx={size/2} cy={size/2} r={r} fill="none"
         stroke="rgba(148,163,184,.08)" strokeWidth={strokeWidth}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none"
-        stroke={col} strokeWidth={strokeWidth}
-        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-        style={{ transition:"stroke-dasharray .7s cubic-bezier(.16,1,.3,1)" }}/>
+      {hasValue && (
+        <circle cx={size/2} cy={size/2} r={r} fill="none"
+          stroke={col} strokeWidth={strokeWidth}
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          style={{ transition:"stroke-dasharray .7s cubic-bezier(.16,1,.3,1)" }}/>
+      )}
     </svg>
   );
 }
