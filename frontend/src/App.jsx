@@ -3769,6 +3769,10 @@ export default function App(){
           try { if(window.__unsubSessions){ window.__unsubSessions(); window.__unsubSessions=null; } } catch{}
           try { if(window.__unsubProfile){ window.__unsubProfile(); window.__unsubProfile=null; } } catch{}
           routedUidRef.current=null;
+          // A demo visitor has no Firebase user by design, so this "signed out"
+          // branch would tear their session down mid-analysis — camera running,
+          // page blank. Demo mode owns its own identity; leave it alone.
+          if(window.__demoMode){ setAuthChecked(true); return; }
           setUser(null);
           setProfile(null);
           setUserSessions([]);
@@ -3787,6 +3791,9 @@ export default function App(){
     return ()=>{ unsub(); clearTimeout(authTimeout); };
   },[]);
 
+  // Set during render (see startDemoLive), read by the SPA nav handler below.
+  const startDemoLiveRef = useRef(null);
+
   // ── SPA navigation from LandingPageV7 ─────────────────────────
   useEffect(() => {
     const handler = (e) => {
@@ -3803,12 +3810,52 @@ export default function App(){
         setPage('home');
       } else if (path === '/billing') {
         setPage('pricing');
+      } else if (path === '/try') {
+        // "Try it on your camera" from the landing hero. Held in a ref because
+        // startDemoLive is declared further down the render body than this
+        // effect — the ref keeps one definition rather than a second copy that
+        // would drift from it.
+        startDemoLiveRef.current?.();
       }
     };
     window.__spaNavigate = (path) => { window.__spaNavigateHandled = true; handler({ detail: { path } }); };
     window.addEventListener('spa:navigate', handler);
     return () => window.removeEventListener('spa:navigate', handler);
   }, []);
+
+  // ── "Try it now" — the real engine, with no account ───────────────
+  //
+  // The demo dashboard's Start Session button used to bounce the visitor to
+  // the sign-up page, because the live page is guarded on `user && profile`
+  // and a demo visitor has neither. So the demo could not demo the one thing
+  // the product is: the posture engine. Someone evaluating this had to create
+  // an account before seeing whether it works at all.
+  //
+  // Nothing about the analysis needs an account. MediaPipe runs entirely in
+  // the browser; the only thing Firestore is for is SAVING the session, and
+  // demo mode already writes to localStorage instead (see the
+  // `window.__demoMode` branch in the stop handler). The account requirement
+  // was incidental, not real.
+  //
+  // The demo user deliberately has NO `uid`. Every Firestore call on this path
+  // is already written as `user?.uid && …`, so they all skip on their own —
+  // the demo cannot write to anyone's account because it has no account to
+  // write to.
+  const startDemoLive = () => {
+    window.__demoMode = true;
+    setUser(prev => prev || { isDemo: true, displayName: "Demo", email: null });
+    setProfile(prev => prev || {
+      isDemo: true, name: "Demo", tier: "elite",
+      sessions_count: 0, avg_score: 0, streak_days: 0,
+    });
+    setPage("live");
+    setTimeout(() => startCamera(), 250);
+  };
+  // Assigned here, above every early return in this component. It used to be
+  // assigned in the render tail, below `if(page==="landing") return …`, so on
+  // the landing page — the only page the hero button exists on — it was never
+  // assigned and the button silently did nothing.
+  startDemoLiveRef.current = startDemoLive;
 
   // Cleanup on unmount — stop camera, cancel animation loop, release stream
   useEffect(() => {
@@ -4995,7 +5042,15 @@ export default function App(){
     const NON_POSTURAL_METRICS = new Set(["session_fatigue","confidence_val"]);
     const _realMetricEntries = la.metrics ? Object.entries(la.metrics).filter(([k])=>!NON_POSTURAL_METRICS.has(k)) : [];
 
+    // Whether the engine ever actually read this person. A session where the
+    // camera saw nobody — bad framing, a covered lens, someone who walked away
+    // — produces an empty history and `avg` of 0, and the summary then reported
+    // "0 / 100 · Needs work · your average posture score this session". That is
+    // the product inventing a verdict out of having seen nothing, on the single
+    // screen a user is most likely to screenshot and act on.
+    const measured = (hist?.length || 0) > 0 && (totalRef.current || 0) > 0;
     const result={
+      measured,
       avg_score:avg,
       duration_s:dur,
       good_pct:gPct,
@@ -5103,7 +5158,7 @@ export default function App(){
     } else if(window.__demoMode && dur < 5){
       if(dur > 0 || totalRef.current > 0)
         addToast(isAr?"الجلسة قصيرة جداً (أقل من 5 ثواني)":"Session too short (under 5s) — not saved","info");
-    } else if(user && dur >= 5){ // Save if session lasted at least 5 seconds
+    } else if(user && dur >= 5 && measured){ // Save if the session lasted 5s AND produced readings
       addToast(isAr?"جاري حفظ الجلسة...":"Saving session...","info");
       setIsSavingSession(true);
       // Snapshot the payload synchronously. The .catch below used to rebuild it
@@ -5204,6 +5259,12 @@ export default function App(){
           addToast("❌ Save failed: "+(e?.code||e?.message||"unknown"),"error");
         }
       });
+    } else if(user && dur >= 5 && !measured){
+      // Saving a session the camera never read would put a 0 into the user's
+      // history, their lifetime average and their trend — a permanent record
+      // of a failure to see them, indistinguishable from genuinely terrible
+      // posture. The summary already explains what happened; nothing is stored.
+      addToast(isAr?"مفيش قراءة في الجلسة دي — مش هتتحفظ":"No readings in that session — nothing saved","info");
     } else if(user && dur < 5){
       // dur===0 with no frames means scoring never began — the user backed out
       // of the preview or the countdown. Nothing was cut short, so there is
@@ -5778,6 +5839,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── Demo Mode — completely isolated, no auth, no Firestore ─────
   // window.__demoMode flags the live-session save logic to write to
   // localStorage (via DemoMode.js) instead of calling saveSession()/Firestore.
+
   if(page==="demo")return(
     <ErrorBoundary>
       <DemoWelcome isAr={isAr}
@@ -5789,16 +5851,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   if(page==="demo_dashboard")return(
     <ErrorBoundary>
       <DemoDashboard isAr={isAr}
-        onStartSession={()=>{
-          // The live page requires an authenticated user (see the guard further
-          // down: `page==="live" && (!user||!profile)` returns null). A demo
-          // visitor has neither, so sending them there rendered a blank page
-          // while startCamera() went on to open the camera against a <video>
-          // that was never mounted — white screen, camera light on, no controls.
-          // Route them to sign-up instead of a dead end.
-          if(!user||!profile){ setPage("auth"); return; }
-          window.__demoMode=true; setPage("live"); setTimeout(()=>startCamera(),200);
-        }}
+        onStartSession={startDemoLive}
         onExit={()=>clearDemoOnExit(setPage)}
         onUpgrade={()=>{ clearDemoOnExit(()=>{}); window.__demoMode=false; setPage("auth"); }}
       />
@@ -6757,6 +6810,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
       // row padded out to the container's full height.
       alignContent: isMobile ? undefined : "start",
       alignItems: isMobile ? undefined : "start",
+      // Capped and centred. On a 1440px screen the stats column was stretching
+      // to ~1100px to hold four tiles, which made the four numbers enormous and
+      // left the lower half of the viewport as a black void — the page read as
+      // one that had run out of content rather than one that was designed. A
+      // fixed measure keeps the density constant from 1200px up, which is where
+      // a demo laptop and a projector both sit.
+      maxWidth: isMobile ? undefined : 1180,
+      marginInline: isMobile ? undefined : "auto",
+      width:"100%",
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
@@ -6824,26 +6886,44 @@ async function downloadPDF(sessionOverride, isClinical=false){
               Session / Dashboard / Download PDF / Share Report buttons —
               was pushed past the visible screen with no way to reach it. */}
           <div style={{background:"rgba(8,14,28,.98)",border:`1px solid ${sessionResult.color}55`,borderRadius:20,padding:"36px 32px",maxWidth:400,width:"100%",maxHeight:"90dvh",overflowY:"auto",textAlign:"center",boxShadow:"0 24px 80px rgba(0,0,0,.6)"}}>
-            {/* Score ring */}
-            <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
-              <svg width="130" height="130" style={{transform:"rotate(-90deg)"}}>
-                <circle cx="65" cy="65" r="55" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="9"/>
-                <circle cx="65" cy="65" r="55" fill="none" stroke={sessionResult.color} strokeWidth="9"
-                  strokeDasharray={`${(sessionResult?.avg_score/100)*345.6} 345.6`} strokeLinecap="round"/>
-              </svg>
-              <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                <div style={{fontSize:36,fontWeight:800,color:sessionResult.color,lineHeight:1}}>{sessionResult?.avg_score}</div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,.4)",fontWeight:600}}>/ 100</div>
-              </div>
-            </div>
+            {sessionResult.measured === false ? (
+              /* No readings at all. Say that, and say how to fix it — a score
+                 of zero here would be a verdict on a person the camera never
+                 saw. */
+              <>
+                <div style={{fontSize:44,lineHeight:1,marginBottom:16}}>📷</div>
+                <div style={{fontSize:20,fontWeight:800,color:"#f0f6ff",marginBottom:8}}>
+                  {isAr?"مقدرناش نقيس الجلسة دي":"We couldn't read this session"}
+                </div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,.55)",lineHeight:1.75,marginBottom:22}}>
+                  {isAr?"الكاميرا ماشفتش الوضعية طول الجلسة. غالباً الإضاءة ضعيفة، أو راسك وكتفيك مش ظاهرين بالكامل في الكادر. مفيش درجة اتسجلت."
+                       :"The camera didn't get a usable read at any point. Usually that's low light, or your head and shoulders not being fully in frame. No score was recorded."}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Score ring */}
+                <div style={{position:"relative",width:130,height:130,margin:"0 auto 20px"}}>
+                  <svg width="130" height="130" style={{transform:"rotate(-90deg)"}}>
+                    <circle cx="65" cy="65" r="55" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="9"/>
+                    <circle cx="65" cy="65" r="55" fill="none" stroke={sessionResult.color} strokeWidth="9"
+                      strokeDasharray={`${(sessionResult?.avg_score/100)*345.6} 345.6`} strokeLinecap="round"/>
+                  </svg>
+                  <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                    <div style={{fontSize:36,fontWeight:800,color:sessionResult.color,lineHeight:1}}>{sessionResult?.avg_score}</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,.4)",fontWeight:600}}>/ 100</div>
+                  </div>
+                </div>
 
-            {/* Grade */}
-            <div style={{fontSize:22,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
-              {isAr?sessionResult.gradeAr:sessionResult.grade}
-            </div>
-            <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginBottom:24}}>
-              {isAr?"متوسط وضعيتك في هذه الجلسة":"Your average posture score this session"}
-            </div>
+                {/* Grade */}
+                <div style={{fontSize:22,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
+                  {isAr?sessionResult.gradeAr:sessionResult.grade}
+                </div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,.4)",marginBottom:24}}>
+                  {isAr?"متوسط وضعيتك في هذه الجلسة":"Your average posture score this session"}
+                </div>
+              </>
+            )}
 
             {/* Stats row */}
             <div style={{display:"flex",gap:12,marginBottom:24}}>
@@ -6926,7 +7006,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             )}
 
             {/* Improvement tip */}
-            {sessionResult.improvement_tip && (
+            {sessionResult.measured !== false && sessionResult.improvement_tip && (
               <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"10px 14px",marginBottom:12,textAlign:isAr?"right":"left"}}>
                 <div style={{fontSize:10,color:darkMode?"#818cf8":"#4338ca",fontWeight:700,marginBottom:3}}>
                   💡 {isAr?"نصيحة للتحسين":"Improvement tip"}
@@ -6974,7 +7054,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   style={{flex:1,padding:"10px",background:"rgba(255,255,255,.05)",color:"rgba(255,255,255,.7)",border:"1px solid rgba(255,255,255,.1)",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {isAr?"لوحة التحكم":"Dashboard"}
                 </button>
-<button className="liveui-focusable" onClick={async ()=>{
+{sessionResult.measured !== false && <button className="liveui-focusable" onClick={async ()=>{
                   // Same canonical gate as downloadPDF() — this button bypassed it
                   // entirely by calling generateSessionPDF() directly.
                   if(qualityFor(effectiveTier).pdfDetail === "none"){
@@ -7004,13 +7084,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 }}
                   style={{flex:1,padding:"10px",background:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.05)":effectiveTier==="elite"?"rgba(79,174,142,.15)":"rgba(99,102,241,.15)",color:qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.4)":effectiveTier==="elite"?"#6ee7b7":"#a5b4fc",border:`1px solid ${qualityFor(effectiveTier).pdfDetail==="none"?"rgba(255,255,255,.1)":effectiveTier==="elite"?"rgba(79,174,142,.3)":"rgba(99,102,241,.3)"}`,borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer"}}>
                   {qualityFor(effectiveTier).pdfDetail==="none" ? `🔒 ${isAr?"تنزيل PDF (Pro+)":"Download PDF (Pro+)"}` : `📄 ${effectiveTier==="elite"?(isAr?"تنزيل PDF Elite":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}`}
-                </button>
+                </button>}
                 {/* Share button — Elite only. Was gated on raw `tier`, which
                     doesn't reflect trial_tier elevation or the b2b_enterprise
                     -> elite equivalence, so a trialing/B2B-enterprise user
                     could lose this button entirely even though every other
                     Elite check on this same page correctly uses effectiveTier. */}
-                {tierAtLeast(effectiveTier,"elite") && (
+                {/* Nothing to export or share from a session with no readings. */}
+                {sessionResult.measured !== false && tierAtLeast(effectiveTier,"elite") && (
                   <button className="liveui-focusable" onClick={()=>shareReport({
                       avg_score: sessionResult?.avg_score, good_pct: sessionResult?.good_pct,
                       duration_s: sessionResult?.duration_s, alerts_count: sessionResult?.alerts_count,
@@ -7116,6 +7197,62 @@ async function downloadPDF(sessionOverride, isClinical=false){
           );
         })()}
 
+        {/* WHAT THE AI FOUND — the wide column's job during a session.
+            Driven live, updates as the analysis does, and reuses the same
+            findings layer as the session summary so the two can never
+            describe a measurement differently. */}
+        {camActive && (
+          <div style={{margin:"14px 16px 12px"}}>
+            {analysis?.metrics ? (
+              <Suspense fallback={null}>
+                <FindingsPanel
+                  metrics={analysis.metrics}
+                  cs={cs} isAr={isAr}
+                  calibrated={!!calibData?.tolerances}
+                  variant="full"
+                  onCalibrate={()=>setShowCalibWizard(true)}
+                />
+              </Suspense>
+            ) : (
+              /* Before the first verdict there is nothing to say about the
+                 user's posture — but the engine IS running, and a blank half
+                 of the screen says the opposite. This states what is actually
+                 happening, which is both true and the more interesting thing
+                 to look at: the model is loaded, it is looking for a person,
+                 and these are the thirteen things it will measure. */
+              <div style={{border:`1px solid ${cs.border}`,borderRadius:12,padding:"18px 18px 16px",background:"rgba(148,163,184,.035)"}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:5}}>
+                  <span style={{width:7,height:7,borderRadius:"50%",background:"#4FAE8E",
+                    boxShadow:"0 0 8px #4FAE8E",flexShrink:0}}/>
+                  <span style={{fontSize:13.5,fontWeight:700,color:cs.text}}>
+                    {isAr?"المحرك شغّال — بيدوّر عليك في الكادر":"Engine running — looking for you in frame"}
+                  </span>
+                </div>
+                <div style={{fontSize:12,color:cs.muted,lineHeight:1.7,marginBottom:14}}>
+                  {isAr?"اقعد بحيث إن راسك وكتفيك يبانوا بالكامل. أول قراءة بتظهر خلال ثواني."
+                       :"Sit so your head and both shoulders are fully visible. The first reading appears within seconds."}
+                </div>
+                <div style={{fontSize:10,fontWeight:700,color:cs.muted,letterSpacing:".06em",
+                  textTransform:"uppercase",marginBottom:8}}>
+                  {isAr?"اللي بيتقاس":"What is being measured"}
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {(isAr
+                    ? ["الرأس للأمام","ميل الرقبة","ميل الرأس","مستوى الكتفين","ميل الجذع","انحناء لقدّام",
+                       "لف الجذع","كتفين مدوّرين","ارتفاع الكتفين","لف الرأس","مسافة الشاشة","ارتفاع الشاشة","زاوية الكوع"]
+                    : ["Forward head","Neck lean","Head tilt","Shoulder level","Trunk lean","Forward slouch",
+                       "Trunk rotation","Rounded shoulders","Shoulder elevation","Head turn","Screen distance",
+                       "Monitor height","Elbow angle"]
+                  ).map(m=>(
+                    <span key={m} style={{padding:"4px 10px",borderRadius:99,fontSize:11,
+                      background:"rgba(148,163,184,.07)",border:`1px solid ${cs.border}`,color:cs.muted}}>{m}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Score history chart */}
         <div style={{margin:"0 16px 12px",background:cs.card,border:`1px solid ${cs.border}`,borderRadius:12,padding:"12px 14px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -7128,7 +7265,18 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
             )}
           </div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:2,height:68,position:"relative"}}>
+          {/* A grid of zero-height bars with "Oldest / Newest" under it reads
+              as a chart that failed to load. Say what it is waiting for. */}
+          {history.length === 0 && (
+            <div style={{fontSize:11.5,color:cs.muted,lineHeight:1.7,padding:"14px 0 4px",textAlign:"center"}}>
+              {camActive
+                ? (isAr ? "بيتبني وانت قاعد — أول نقطة بعد شوية ثواني"
+                        : "Filling in as you sit — the first point lands in a few seconds")
+                : (isAr ? "ابدأ جلسة وهتشوف درجتك بتتغير هنا لحظة بلحظة"
+                        : "Start a session and your score will track here, second by second")}
+            </div>
+          )}
+          <div style={{display:history.length?"flex":"none",alignItems:"flex-end",gap:2,height:68,position:"relative"}}>
             <div style={{position:"absolute",left:0,right:0,top:`${(1-80/100)*68}px`,
               borderTop:"1px dashed rgba(79,174,142,.2)",pointerEvents:"none"}}/>
             <div style={{position:"absolute",left:0,right:0,top:`${(1-60/100)*68}px`,
@@ -7356,6 +7504,31 @@ async function downloadPDF(sessionOverride, isClinical=false){
           showUpgrade={!camActive && !tierAtLeast(effectiveTier,"basic")}
           onUpgrade={()=>setShowBilling(true)}
         />
+
+        {/* Demo mode must announce itself. The analysis a visitor sees here is
+            entirely real — the same engine, on their own camera — but it is
+            saved to this browser only, and they have no account. Letting that
+            be ambiguous would be the product implying a relationship it does
+            not have. */}
+        {profile?.isDemo && (
+          <div style={{
+            display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap",
+            padding:"9px 14px", background:"rgba(26,86,219,.09)",
+            borderBottom:`1px solid ${cs.border}`, fontSize:11.5, lineHeight:1.6,
+          }}>
+            <span style={{color:cs.text}}>
+              <strong style={{color:"#4f9cf9"}}>{isAr?"وضع التجربة":"Trial mode"}</strong>
+              {" · "}
+              {isAr ? "التحليل حقيقي وشغّال على كاميرتك. الجلسة بتتحفظ في المتصفح ده بس."
+                    : "The analysis is real and running on your camera. Sessions are kept in this browser only."}
+            </span>
+            <button className="link-btn" onClick={()=>{ window.__demoMode=false; setUser(null); setProfile(null); setPage("auth"); }}
+              style={{background:"none",border:"1px solid rgba(79,156,249,.4)",borderRadius:99,
+                      padding:"4px 12px",fontSize:11,fontWeight:700,color:"#4f9cf9",cursor:"pointer",flexShrink:0}}>
+              {isAr?"احفظ تقدمك — اعمل حساب":"Keep your progress — create an account"}
+            </button>
+          </div>
+        )}
 
         {/* ── Quick Start Banner (for users who skipped onboarding) ─── */}
         {profile?.onboarding_done?.[0]==="skipped" && !score && (
