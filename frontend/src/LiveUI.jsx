@@ -362,10 +362,10 @@ export function StatTile({ label, value, cs, tone = "neutral" }) {
   return (
     <div style={{
       background: cs.card, border: `1px solid ${cs.border}`, borderRadius: LT.radius.md,
-      padding: "12px 10px", display: "flex", flexDirection: "column", gap: 3, minWidth: 0,
+      padding: "16px 14px", display: "flex", flexDirection: "column", gap: 4, minWidth: 0,
     }}>
-      <div style={{ fontSize: LT.font.lg, fontWeight: 800, color, letterSpacing: "-.02em", fontVariantNumeric: "tabular-nums" }}>{value}</div>
-      <div style={{ fontSize: LT.font.xs, color: cs.muted, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color, letterSpacing: "-.03em", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: LT.font.xs, color: cs.muted, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 }}>{label}</div>
     </div>
   );
 }

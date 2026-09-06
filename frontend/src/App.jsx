@@ -6926,34 +6926,16 @@ async function downloadPDF(sessionOverride, isClinical=false){
     {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
     <div dir={dir} style={{
       display:"grid",
-      // Camera panel is the narrow (320px) fixed track; the stats/history
-      // panel takes the remaining wide (1fr) space. Restored per explicit
-      // user preference after a later pass briefly swapped this so the
-      // camera took the wide track instead — kept here, reverted back.
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "320px 1fr" : "1fr 320px"),
-      // The sidebar column below is `position:sticky, maxHeight:100vh,
-      // overflowY:auto` on purpose — a standard sticky-sidebar-next-to-
-      // scrolling-main-content layout, meant to stay pinned to the
-      // viewport while the main column scrolls normally past it. Two
-      // separate grid defaults fight that on a short/idle session where
-      // the main column has barely any content: `align-content:stretch`
-      // stretches the single row to fill the container's minHeight:100vh
-      // before either column is even laid out, and `align-items:stretch`
-      // then stretches the shorter (main) column to match that inflated
-      // row. Together they turned "not much content yet" into a large
-      // empty area with a border running through nothing below "Score
-      // History". Both need to be `start` — one alone still leaves the
-      // row padded out to the container's full height.
+      // Camera panel gets more space (380px) so the video preview is actually
+      // readable — 320px was designed for a sidebar, not a live feed you
+      // actively watch while working. Stats panel takes the remainder.
+      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "380px 1fr" : "1fr 380px"),
       alignContent: isMobile ? undefined : "start",
       alignItems: isMobile ? undefined : "start",
-      // Capped and centred. On a 1440px screen the stats column was stretching
-      // to ~1100px to hold four tiles, which made the four numbers enormous and
-      // left the lower half of the viewport as a black void — the page read as
-      // one that had run out of content rather than one that was designed. A
-      // fixed measure keeps the density constant from 1200px up, which is where
-      // a demo laptop and a projector both sit.
-      maxWidth: isMobile ? undefined : 1180,
-      marginInline: isMobile ? undefined : "auto",
+      // Fill the full viewport — the old 1180px cap left visible side
+      // margins on any screen wider than ~1200px and made the live feed
+      // feel like a widget rather than a full-screen experience.
+      maxWidth: "100%",
       width:"100%",
       minHeight:"100vh",
       background:cs.bg, color:cs.text,
@@ -7279,7 +7261,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             design brief): compact stat tiles instead of a full-bleed 4-up
             grid competing for visual weight. */}
         <SectionCard title={isAr?"ملخص الجلسة":"Session Summary"} icon="barChart" cs={cs} style={{margin:"14px 16px 0"}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
             <StatTile cs={cs} label={isAr?"متوسط النقاط":"Avg Score"} value={avg||"--"} tone={avg?(avg>=70?"good":avg>=55?"warn":"bad"):"neutral"}/>
             <StatTile cs={cs} label={isAr?"وقت الجلسة":"Session Time"} value={fmtTime(sessionTime)} tone="neutral"/>
             <StatTile cs={cs} label={isAr?"وضعية جيدة":"Good Posture"} value={gPct+"%"} tone="good"/>
