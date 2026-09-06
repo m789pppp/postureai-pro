@@ -281,14 +281,15 @@ function FeedTab({ profile, isAr }) {
       // would need a new composite index) makes the persisted dismiss
       // actually stick across snapshots/reloads.
       const items = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(n => !n.dismissed);
-      if (items.length === 0) {
-        // Show demo data for new users
-        setNotifs([
-          { id:"d1", type:"ai_insight", icon:"🧠", title:"Welcome to Corvus!", body:"Your AI health coach is ready. Start a posture session to get personalized insights.", color:"#a78bfa", read:false, created_at:new Date().toISOString(), actions:[{label:"Start Session",key:"start"}] },
-        ]);
-      } else {
-        setNotifs(items);
-      }
+      // Was: if empty, fabricate a "Welcome to Corvus!" notification with a
+      // working "Start Session" action button — every user with zero real
+      // notifications saw an invented one, forever, since nothing ever
+      // creates a real notification to replace it with. Same rule already
+      // applied elsewhere in this file (see the comment on the old fake
+      // "Burnout Risk Alert" / streak / weekly-digest set this hub used to
+      // show): nothing is shown until there is something real to show. The
+      // panel already has a proper empty state for zero notifications.
+      setNotifs(items);
     }, err => { console.error("[NotificationsHub] listener error:", err); setNotifs([]); });
 
     return unsub;
@@ -1316,9 +1317,8 @@ export function useNotifications() {
  * Lightweight unread-count-only listener, for a bell badge in the main
  * nav/header — so notifications are discoverable without digging into
  * Settings first. Same query + `dismissed` filter as NotificationsHub
- * itself (including the synthetic "Welcome to Corvus" for brand-new
- * users with zero real notifications yet), so the badge number can
- * never disagree with what the hub actually shows.
+ * itself, so the badge number can never disagree with what the hub
+ * actually shows (0 when there are genuinely no notifications yet).
  */
 export function useUnreadNotificationsCount(uid) {
   const [count, setCount] = useState(0);
@@ -1331,8 +1331,7 @@ export function useUnreadNotificationsCount(uid) {
     );
     const unsub = onSnapshot(q, snap => {
       const items = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(n => !n.dismissed);
-      const unread = items.length === 0 ? 1 /* the synthetic welcome notif */ : items.filter(n => !n.read).length;
-      setCount(unread);
+      setCount(items.filter(n => !n.read).length);
     }, () => setCount(0));
     return unsub;
   }, [uid]);
