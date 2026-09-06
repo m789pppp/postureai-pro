@@ -4770,9 +4770,14 @@ export default function App(){
     const effectiveMode = mode || "laptop";
     try{
       // Stale isPaused from a previous session must not leak into this one —
-      // see commit message for the exact double-timer bug this caused.
+      // see commit message for the exact double-timer bug this caused. The
+      // camera-suspension flags are the same class of leak: left true from a
+      // previous paused session they would make the first Resume try to
+      // re-open a camera that is already open.
       setIsPaused(false);
       pausedAtRef.current = null;
+      camSuspendedRef.current = false; resumingCamRef.current = false;
+      setCamSuspended(false); setResumingCam(false);
       stoppingRef.current = false; // clears stopCamera()'s reentrancy guard for this new session
       // Per-session counters. These were NOT reset here, and stopCamera didn't
       // reset them either (the only reset lived in a switchMode() that had no
@@ -4981,6 +4986,10 @@ export default function App(){
       streamRef.current.getTracks().forEach(x=>{x.stop(); x.enabled=false;});
       streamRef.current = null;
     }
+    // Stopping while paused: the tracks are already gone (pauseSession
+    // released them), but these flags must not survive into the next session.
+    camSuspendedRef.current = false; resumingCamRef.current = false;
+    setCamSuspended(false); setResumingCam(false);
     // Detach srcObject from video element (releases camera indicator light)
     if(vidRef.current && vidRef.current.srcObject){
       vidRef.current.srcObject = null;
@@ -5352,31 +5361,126 @@ export default function App(){
     }
   }
 
-  // Freezes analysis + the session timer WITHOUT ending/saving the session.
-  // Camera stream stays attached (video keeps showing) — resuming just
-  // restarts the loop, no re-request, no permission prompt again.
+  // ── Releasing the camera while a session is merely paused ─────────
+  //
+  // Pause used to freeze the analysis loop, the timer and video playback but
+  // deliberately KEEP the MediaStream attached, on the reasoning that resume
+  // should be instant and must not re-prompt for permission. The cost of that
+  // choice is the thing a user actually judges a camera product on: the OS
+  // camera indicator stayed lit for the whole pause, and for the whole
+  // movement break — which can be several minutes of standing up and
+  // stretching in front of a camera the app has told you is "paused". "Paused"
+  // and "the camera light is on" cannot both be true in the user's head, and
+  // when they conflict the light wins.
+  //
+  // So pause now really releases the hardware. Permission is granted per
+  // origin and survives track release, so re-acquiring on Resume does not
+  // prompt again — it costs a few hundred milliseconds of re-open, which is
+  // what the "Resuming…" state below is for.
+  const camSuspendedRef = useRef(false);
+  const resumingCamRef  = useRef(false);
+  const [camSuspended, setCamSuspended] = useState(false);
+  const [resumingCam,  setResumingCam]  = useState(false);
+
+  function releaseCameraForPause(){
+    try{ streamRef.current?.getTracks?.().forEach(t=>{ t.stop(); t.enabled=false; }); }catch{}
+    streamRef.current = null;
+    // Detaching srcObject is what actually turns the indicator light off in
+    // some browsers even after the tracks are stopped.
+    try{ if(vidRef.current) vidRef.current.srcObject = null; }catch{}
+    camSuspendedRef.current = true;
+    setCamSuspended(true);
+  }
+
+  // Re-opens the camera with the same constraints openPreview() used and
+  // re-attaches it. Returns true on success; on failure it leaves the session
+  // paused and suspended so the user can try again rather than landing on a
+  // black feed that claims to be live.
+  async function reacquireCameraAfterPause(){
+    if(!camSuspendedRef.current) return true;
+    if(!navigator.mediaDevices?.getUserMedia){
+      setAlertMsg({ text: isAr
+        ? "الكاميرا محتاجة اتصال آمن (HTTPS)."
+        : "Camera access requires a secure connection (HTTPS).", type:"bad" });
+      return false;
+    }
+    try{
+      const s = await navigator.mediaDevices.getUserMedia({
+        video:{ width:{ideal:1280}, height:{ideal:720}, facingMode:{ideal:"user"} } });
+      // The live subtree can unmount while the browser is opening the device
+      // (the user navigates away mid-resume). Releasing here is the same
+      // guard openPreview() makes — without it the stream is orphaned and the
+      // light stays on with no UI left to turn it off.
+      if(!vidRef.current){ try{ s.getTracks().forEach(t=>t.stop()); }catch{} return false; }
+      streamRef.current = s;
+      vidRef.current.srcObject = s;
+      // A device that grants permission but never delivers a frame leaves
+      // videoWidth at 0, and runLoop() would then reschedule itself forever
+      // with no error and no visible sign — the same failure openPreview()
+      // already refuses to walk into.
+      let ok = true;
+      await new Promise((res,rej)=>{ vidRef.current.onloadedmetadata=res; setTimeout(rej,8000); })
+        .catch(()=>{ ok=false; });
+      if(!vidRef.current){ try{ s.getTracks().forEach(t=>t.stop()); }catch{} streamRef.current=null; return false; }
+      if(!ok || !vidRef.current.videoWidth || !vidRef.current.videoHeight){
+        try{ s.getTracks().forEach(t=>t.stop()); }catch{}
+        streamRef.current = null;
+        if(vidRef.current) vidRef.current.srcObject = null;
+        const m = isAr ? "الكاميرا اتفتحت بس مفيش صورة وصلت — جرب تاني"
+                       : "Camera reopened but no video signal arrived — please try again";
+        setAlertMsg({text:m,type:"bad"}); addToast(m,"error");
+        return false;
+      }
+      camSuspendedRef.current = false;
+      setCamSuspended(false);
+      return true;
+    }catch(e){
+      const denied = e?.name==="NotAllowedError" || e?.name==="PermissionDeniedError";
+      const busy   = e?.name==="NotReadableError" || e?.name==="TrackStartError";
+      const m = denied ? (isAr ? "اترفض الوصول للكاميرا — اسمح بيه عشان تكمل الجلسة"
+                               : "Camera access was denied — allow it to continue the session")
+              : busy   ? (isAr ? "الكاميرا مشغولة ببرنامج تاني — اقفله وجرب تاني"
+                               : "Another app is using the camera — close it and try again")
+                       : (isAr ? "تعذّر إعادة فتح الكاميرا — جرب تاني"
+                               : "Couldn't reopen the camera — please try again");
+      setAlertMsg({text:m,type:"bad"}); addToast(m,"error");
+      return false;
+    }
+  }
+
+  // Freezes analysis + the session timer WITHOUT ending/saving the session,
+  // and releases the camera hardware (see releaseCameraForPause above).
   function pauseSession(){
     if(!camActive || isPaused) return;
     if(rafRef.current){ cancelAnimationFrame(rafRef.current); rafRef.current=null; }
     if(timerRef.current){ clearInterval(timerRef.current); timerRef.current=null; }
-    // Freeze the actual video *playback* too, not just the analysis loop.
-    // vidRef keeps its live srcObject either way (camera hardware stays on,
-    // resume never re-requests permission) — but without this, the feed
-    // visibly kept moving under the "Session paused" overlay, which reads
-    // as "pause did nothing, the camera/analysis is still running" even
-    // though scoring had genuinely stopped underneath.
+    // Freeze the actual video *playback* too, not just the analysis loop —
+    // this still matters in the instant before the tracks are released.
     try{ vidRef.current?.pause?.(); }catch{}
     // A cue queued a moment before Pause kept talking over the "Session
     // paused" overlay — the one thing pause is meant to guarantee.
     stopSpeaking();
     pausedAtRef.current = Date.now();
     setIsPaused(true);
+    releaseCameraForPause();
   }
 
   // Wire goToBreak (declared far above, before these functions exist) to the
-  // real pauseSession, so navigating to the break page freezes the session and
-  // its timer instead of abandoning it with the camera running.
-  useEffect(()=>{ pauseForBreakRef.current = () => { if(camActive && !isPaused) pauseSession(); }; });
+  // real pauseSession, so navigating to the break page freezes the session,
+  // its timer AND the camera instead of leaving the indicator light on for the
+  // length of the break. If the session was already paused the camera is
+  // already released; if there is no session at all but a preview stream is
+  // still open, that gets released too — walking into a break must never leave
+  // the camera running behind it.
+  useEffect(()=>{ pauseForBreakRef.current = () => {
+    if(camActive && !isPaused){ pauseSession(); return; }
+    if(!camActive && streamRef.current){
+      try{ streamRef.current.getTracks().forEach(t=>{t.stop();t.enabled=false;}); }catch{}
+      streamRef.current=null;
+      try{ if(vidRef.current) vidRef.current.srcObject=null; }catch{}
+      setPreviewPhase(null); setCameraStatus("idle");
+    }
+  }; });
 
   // Every navigation away from Live that does NOT go through backFromLive().
   //
@@ -5430,7 +5534,7 @@ export default function App(){
     if(!isPaused) { try{ v.play?.().catch(()=>{}); }catch{} }
   },[page,isPaused]);
 
-  function resumeSession(){
+  async function resumeSession(){
     // Reentrancy guard: isPaused is React state, so a genuine double-click
     // can fire this twice with both invocations still reading the same
     // stale (pre-render) isPaused===true closure — each would then create
@@ -5441,6 +5545,32 @@ export default function App(){
     // batching lag) and is cleared synchronously below, so checking —
     // and clearing — it here is what actually closes the race.
     if(!camActive || !pausedAtRef.current) return;
+    // Reopening the camera is async and takes a few hundred ms, which opens a
+    // second re-entrancy window this guard did not previously have to cover:
+    // pausedAtRef is only cleared AFTER the await, so two clicks during the
+    // reopen would both get through. resumingCamRef closes that, and doubles
+    // as the flag the button reads to show "Resuming…".
+    if(resumingCamRef.current) return;
+    if(camSuspendedRef.current){
+      resumingCamRef.current = true;
+      setResumingCam(true);
+      const ok = await reacquireCameraAfterPause();
+      resumingCamRef.current = false;
+      setResumingCam(false);
+      // Failed reopen: stay paused and suspended. Resuming into a dead video
+      // element would show a black rectangle labelled "live" and score every
+      // frame as "no person detected".
+      if(!ok) return;
+      // The user may have navigated away or stopped the session during the
+      // reopen; re-check the same preconditions rather than trusting the
+      // closure we entered with.
+      if(!camActive || !pausedAtRef.current){
+        try{ streamRef.current?.getTracks?.().forEach(t=>t.stop()); }catch{}
+        streamRef.current = null;
+        camSuspendedRef.current = true;
+        return;
+      }
+    }
     // Shift the session's start timestamp forward by however long the
     // pause lasted, so sessionTime keeps counting from where it left off
     // instead of jumping ahead by the paused duration.
@@ -5862,6 +5992,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <ErrorBoundary>
       <BreakPage cs={cs} lang={lang} muted={muted}
         alertCauses={(alRef.current||[]).map(a=>a?.cause).filter(Boolean)}
+        /* Starting a break releases the camera (see pauseForBreakRef). Say so
+           on the break screen itself: the user is about to stand up and
+           stretch in front of the laptop, which is exactly when "is it still
+           recording me?" is the only question that matters. */
+        cameraOff={camSuspended || (camActive && isPaused)}
+        sessionPaused={camActive}
         onExit={()=>setPage(breakReturnPage||"live")}/>
     </ErrorBoundary>
   );
@@ -7731,14 +7867,28 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {camActive && isPaused && !backendDown && (
             <CameraOverlay align="center">
               <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Icon name="pause" size={22} color="#fff"/>
+                <Icon name={resumingCam?"camera":"pause"} size={22} color="#fff"/>
               </div>
               <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>
-                {isAr?"الجلسة متوقفة مؤقتاً":"Session paused"}
+                {resumingCam ? (isAr?"جاري إعادة فتح الكاميرا…":"Reopening camera…")
+                             : (isAr?"الجلسة متوقفة مؤقتاً":"Session paused")}
               </div>
-              <LiveBtn size="lg" variant="primary" icon="play" cs={{blue:"#1a56db"}} onClick={resumeSession}
+              {/* Pause now actually releases the camera, and saying so is the
+                  entire point — a user who can see the indicator light go out
+                  believes the pause; one who is only told "paused" while the
+                  light stays on does not. */}
+              {!resumingCam && (
+                <div style={{display:"flex",alignItems:"center",gap:7,fontSize:11.5,
+                  color:"rgba(226,232,240,.72)",fontWeight:600}}>
+                  <Icon name="cameraOff" size={13} color="rgba(226,232,240,.72)"/>
+                  {isAr?"الكاميرا متقفلة — الجلسة محفوظة ومستنياك"
+                       :"Camera off — your session is saved and waiting"}
+                </div>
+              )}
+              <LiveBtn size="lg" variant="primary" icon={resumingCam?undefined:"play"} cs={{blue:"#1a56db"}}
+                onClick={resumeSession} disabled={resumingCam}
                 style={{boxShadow:"0 4px 14px rgba(26,86,219,.33)"}}>
-                {isAr?"استكمال":"Resume"}
+                {resumingCam ? (isAr?"لحظة…":"One moment…") : (isAr?"استكمال":"Resume")}
               </LiveBtn>
             </CameraOverlay>
           )}
@@ -7845,7 +7995,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
               if(cameraStatus==="denied")     return pill("#C6604F",isAr?"مرفوضة — اضغط سماح":"Denied — Allow camera");
               // #17: no-device pill removed — the Start Analysis button below already
               // shows "❌ No camera found" clearly; showing it twice was confusing.
-              if(cameraStatus==="ready"&&camActive) return pill("#4FAE8E",`${M_?.label||""} · Live · ${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`);
+              // Pause releases the camera now, so this pill must stop saying
+              // "Live" with a green dot while the hardware is off — that is
+              // the single most load-bearing status indicator on the screen
+              // and it was contradicting the overlay right underneath it.
+              const clock = `${Math.floor(sessionTime/60)}:${String(sessionTime%60).padStart(2,"0")}`;
+              if(camActive && resumingCam) return pill("#D6A24C", isAr?`جاري إعادة الفتح · ${clock}`:`Reopening · ${clock}`);
+              if(camActive && isPaused)    return pill("#8B93A7", isAr?`متوقفة · الكاميرا مقفولة · ${clock}`:`Paused · camera off · ${clock}`);
+              if(cameraStatus==="ready"&&camActive) return pill("#4FAE8E",`${M_?.label||""} · Live · ${clock}`);
               // cameraStatus reaches "ready" as soon as getUserMedia resolves,
               // which happens during the framing/preview step — well before
               // camActive flips true on "Start session now". That whole
@@ -8195,17 +8352,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {isFs && camActive && !previewPhase && (
             <div style={{position:"absolute",left:0,right:0,bottom:20,zIndex:20,
               display:"flex",justifyContent:"center",gap:10,padding:"0 24px"}}>
-              <button className="liveui-focusable" onClick={isPaused?resumeSession:pauseSession} style={{
+              {/* Resume now reopens the camera, which is async — without the
+                  disabled state a second click during the reopen starts a
+                  second getUserMedia and a second analysis loop. */}
+              <button className="liveui-focusable" onClick={isPaused?resumeSession:pauseSession}
+                disabled={resumingCam} style={{
                 minWidth:140,
                 background: isPaused ? "linear-gradient(135deg,rgba(79,174,142,.25),rgba(5,150,105,.18))" : "rgba(2,8,16,.72)",
                 backdropFilter:"blur(8px)",
                 color: isPaused ? "#6ee7b7" : "#fff",
                 border:`1px solid ${isPaused?"rgba(79,174,142,.5)":"rgba(255,255,255,.18)"}`,borderRadius:12,
-                padding:"12px 18px",fontSize:13,fontWeight:700,cursor:"pointer",
+                padding:"12px 18px",fontSize:13,fontWeight:700,
+                cursor:resumingCam?"not-allowed":"pointer", opacity:resumingCam?.6:1,
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 transition:`filter ${LT.duration.fast}ms ease`,
               }}>
-                <Icon name={isPaused?"play":"pause"} size={14} color="currentColor"/>{isPaused ? (isAr?"استكمال":"Resume") : (isAr?"وقف مؤقت":"Pause")}
+                <Icon name={resumingCam?"camera":isPaused?"play":"pause"} size={14} color="currentColor"/>
+                {resumingCam ? (isAr?"لحظة…":"One moment…") : isPaused ? (isAr?"استكمال":"Resume") : (isAr?"وقف مؤقت":"Pause")}
               </button>
               <button className="liveui-focusable" onClick={stopCamera} disabled={isSavingSession} style={{
                 minWidth:140,
@@ -8268,16 +8431,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   : (<><Icon name="play" size={15} color="currentColor"/>{isAr?"ابدأ التحليل":"Start Analysis"}</>)}
               </button>
             : <div style={{display:"flex",gap:8}}>
-                <button className="liveui-focusable" onClick={isPaused?resumeSession:pauseSession} style={{
+                <button className="liveui-focusable" onClick={isPaused?resumeSession:pauseSession}
+                  disabled={resumingCam} style={{
                   flex:1,
                   background: isPaused ? "linear-gradient(135deg,rgba(79,174,142,.18),rgba(5,150,105,.12))" : "rgba(148,163,184,.08)",
                   color: isPaused ? "#6ee7b7" : cs.text,
                   border:`1px solid ${isPaused?"rgba(79,174,142,.4)":cs.border}`,borderRadius:12,
-                  padding:"12px 0",fontSize:13,fontWeight:700,cursor:"pointer",
+                  padding:"12px 0",fontSize:13,fontWeight:700,
+                  cursor:resumingCam?"not-allowed":"pointer", opacity:resumingCam?.6:1,
                   display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                   transition:`filter ${LT.duration.fast}ms ease`,
                 }}>
-                  <Icon name={isPaused?"play":"pause"} size={14} color="currentColor"/>{isPaused ? (isAr?"استكمال":"Resume") : (isAr?"وقف مؤقت":"Pause")}
+                  <Icon name={resumingCam?"camera":isPaused?"play":"pause"} size={14} color="currentColor"/>
+                  {resumingCam ? (isAr?"لحظة…":"One moment…") : isPaused ? (isAr?"استكمال":"Resume") : (isAr?"وقف مؤقت":"Pause")}
                 </button>
                 <button className="liveui-focusable" onClick={stopCamera} disabled={isSavingSession} style={{
                   flex:1,
@@ -8989,7 +9155,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <button className="liveui-focusable" onClick={()=>{setStreakAlert(false);goToBreak();}} style={{
                 flex:1,background:"rgba(214,162,76,.15)",border:"1px solid rgba(214,162,76,.35)",
                 borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",cursor:"pointer"}}>
-                {isAr?"استراحة الآن 🧘":"Break now 🧘"}
+                <span style={{display:"inline-flex",alignItems:"center",gap:7,justifyContent:"center"}}>
+                  <Icon name="leaf" size={14} color="currentColor"/>{isAr?"استراحة الآن":"Break now"}
+                </span>
               </button>
               <button className="liveui-focusable" onClick={()=>setStreakAlert(false)} style={{
                 background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,
@@ -9034,7 +9202,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
               <button className="liveui-focusable" onClick={()=>{dismissBreak();goToBreak();}}
                 style={{background:"rgba(214,162,76,.18)",border:"1px solid rgba(214,162,76,.4)",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",cursor:"pointer"}}>
-                {isAr?"ابدأ الاستراحة 🧘":"Start break 🧘"}
+                <span style={{display:"inline-flex",alignItems:"center",gap:7,justifyContent:"center"}}>
+                  <Icon name="leaf" size={14} color="currentColor"/>{isAr?"ابدأ الاستراحة":"Start break"}
+                </span>
               </button>
               <button className="liveui-focusable" onClick={()=>snoozeBreak(5)}
                 style={{background:"rgba(148,163,184,.06)",border:`1px solid ${cs.border}`,borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:500,color:cs.muted,cursor:"pointer"}}>
@@ -9052,7 +9222,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
             width:"100%",background:"rgba(14,165,233,.08)",border:"1px solid rgba(14,165,233,.25)",
             borderRadius:12,padding:"10px 0",fontSize:12,fontWeight:700,color:darkMode?"#38bdf8":"#0369a1",cursor:"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            🧘 {isAr?"خذ استراحة حركة":"Take a movement break"}
+            <span style={{display:"inline-flex",alignItems:"center",gap:8,justifyContent:"center"}}>
+              <Icon name="leaf" size={14} color="currentColor"/>{isAr?"خذ استراحة حركة":"Take a movement break"}
+            </span>
           </button>
         </div>
 
