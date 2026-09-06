@@ -376,6 +376,12 @@ function GlobalStyle() {
       @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.lp-btn::after{display:none}}
       @media(max-width:640px){.lp-popular-card{transform:none!important}}
       @media(max-width:900px){.lp-hero-mobile-stats{display:flex!important}}
+      /* The hero visual (and the "Try it on your camera" button inside it) is
+         hidden below 900px by .lp-hero-right above. This is that entry point,
+         shown only where the other one is not — so a phone visitor can still
+         reach the actual product instead of only the two sign-up buttons. */
+      .lp-try-mobile{display:none!important}
+      @media(max-width:900px){.lp-try-mobile{display:flex!important}}
     `}</style>
   );
 }
@@ -816,6 +822,12 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
                 </button>
               )}
+              <button type="button" className="lp-btn lp-try-mobile"
+                onClick={(e)=>{e.preventDefault();navTo("/try");}}
+                style={{...btn("ghost","lg"), alignItems:"center", justifyContent:"center", gap:8,
+                        borderColor:"rgba(79,156,249,.45)", color:"#8ab4ff"}}>
+                📷 {ar ? "جرّبه على كاميرتك — من غير حساب" : "Try it on your camera — no account"}
+              </button>
               {/* preventDefault + manual scroll: letting this anchor navigate
                   pushed "#pricing" into the URL, and App.jsx's hashToPage maps
                   "pricing" to the in-app PricingPage (it's in VALID_PAGES and,
@@ -914,14 +926,31 @@ function Hero({ lang, onCTA, mode, setMode }) {
                     <div style={{ fontSize:11, color:"#8896ac", textAlign:"center", maxWidth:180, lineHeight:1.5 }}>
                       {ar ? "عرض توضيحي — لا توجد كاميرا حقيقية" : "Simulated demo — no real camera"}
                     </div>
-                    <button onClick={() => setDemoStarted(true)} style={{
+                    {/* The real thing, first. A visitor can now point their
+                        own webcam at the actual engine without an account —
+                        the analysis is entirely in-browser, so nothing about it
+                        ever needed one. Watching a simulated silhouette is the
+                        fallback for someone who would rather not turn a camera
+                        on, not the headline. */}
+                    <button onClick={() => navTo("/try")} style={{
                       background:"linear-gradient(135deg,#1a56db,#0891b2)",
-                      border:"none", borderRadius:10, padding:"10px 22px",
+                      border:"none", borderRadius:10, padding:"11px 22px",
                       fontSize:13, fontWeight:700, color:"#fff", cursor:"pointer",
                       boxShadow:"0 4px 20px rgba(26,86,219,.4)",
                       display:"flex", alignItems:"center", gap:7,
                     }}>
-                      ▶ {ar ? "ابدأ العرض التجريبي" : "Start Demo"}
+                      📷 {ar ? "جرّبه على كاميرتك" : "Try it on your camera"}
+                    </button>
+                    <div style={{ fontSize:10.5, color:"#8896ac", textAlign:"center", lineHeight:1.5 }}>
+                      {ar ? "من غير حساب · الفيديو مش بيخرج من جهازك"
+                          : "No account needed · video never leaves your device"}
+                    </div>
+                    <button onClick={() => setDemoStarted(true)} className="link-btn" style={{
+                      background:"none", border:"none", padding:0,
+                      fontSize:11.5, fontWeight:600, color:"#8896ac", cursor:"pointer",
+                      textDecoration:"underline", textUnderlineOffset:3,
+                    }}>
+                      {ar ? "أو شوف عرض توضيحي بدون كاميرا" : "Or watch a simulated demo instead"}
                     </button>
                   </div>
                 )}
