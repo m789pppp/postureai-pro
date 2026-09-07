@@ -601,6 +601,10 @@ a { text-decoration: none; color: inherit; }
 @keyframes glowPulse { 0%,100% { box-shadow:var(--shadow-blue) } 50% { box-shadow:0 8px 40px rgba(26,86,219,.60) } }
 @keyframes barGrow   { from { transform:scaleY(0) } to { transform:scaleY(1) } }
 @keyframes countUp   { from { opacity:0; transform:translateY(8px) scale(.9) } to { opacity:1; transform:translateY(0) scale(1) } }
+/* Live page enter/exit — smooth so the transition between the dashboard
+   and the live camera view never feels like a jarring blank-swap.       */
+@keyframes livePageIn  { from { opacity:0; transform:translateY(10px) scale(.99) } to { opacity:1; transform:translateY(0) scale(1) } }
+@keyframes livePageOut { from { opacity:1; transform:translateY(0) scale(1) } to { opacity:0; transform:translateY(-6px) scale(.99) } }
 
 .animate-fadeIn  { animation: fadeIn  300ms var(--ease-spring) both; }
 .animate-slideUp { animation: slideUp 380ms var(--ease-spring) both; }
