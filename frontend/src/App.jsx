@@ -2633,6 +2633,13 @@ export default function App(){
   const[weeklyPattern,setWeeklyPattern]=useState(null); // #9 computed on session end
   const[showNotifCard,setShowNotifCard]=useState(false); // contextual notif permission
   const[sound,setSound]=useState(()=>{try{return localStorage.getItem("corvus_sound")!=="0";}catch{return true;}});
+  // Drives the exit-fade on the live page. When something calls navigateFromLive()
+  // this flips true for 220ms, plays the CSS animation, then actually changes page.
+  const[liveExiting,setLiveExiting]=useState(false);
+  const navigateFromLive=React.useCallback((dest="home")=>{
+    setLiveExiting(true);
+    setTimeout(()=>{ setLiveExiting(false); setPage(dest); },220);
+  },[]);
   useEffect(()=>{try{localStorage.setItem("corvus_sound",sound?"1":"0");}catch{}},[sound]);
 
   // OS notifications while the tab is in the background. There was no control
@@ -5347,18 +5354,14 @@ export default function App(){
     }
     const hadSession = camActive;
     stopCamera();
-    setPage("home");
     setCamActive(false);
-    // stopCamera() sets sessionResult, but the summary modal is only mounted in
-    // the live branch — and sessionResult is only cleared by that modal's own
-    // buttons. Leaving via Back therefore saved the session but never showed
-    // the summary, AND left the stale modal armed so it popped over the page
-    // the next time the user opened Live. Clear it here and confirm the save
-    // with a toast instead, so nothing is silently swallowed or deferred.
     if(hadSession){
       setSessionResult(null);
       addToast(isAr?"اتحفظت الجلسة":"Session saved","success");
     }
+    // Play the exit fade before actually changing the page so the
+    // transition feels intentional rather than an instant blank-swap.
+    navigateFromLive("home");
   }
 
   // ── Releasing the camera while a session is merely paused ─────────
@@ -6926,20 +6929,27 @@ async function downloadPDF(sessionOverride, isClinical=false){
     {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
     <div dir={dir} style={{
       display:"grid",
-      // Camera panel gets more space (380px) so the video preview is actually
-      // readable — 320px was designed for a sidebar, not a live feed you
-      // actively watch while working. Stats panel takes the remainder.
-      gridTemplateColumns: isMobile ? "1fr" : (isAr ? "380px 1fr" : "1fr 380px"),
+      // Always: content (1fr) first in DOM, camera sidebar (380px) second.
+      // In LTR this puts content on the LEFT and camera on the RIGHT.
+      // In RTL, CSS Grid places the first column at the RIGHT (RTL start),
+      // so content appears on the RIGHT (primary reading position for Arabic)
+      // and the camera on the LEFT — which is what Arabic users expect:
+      // scores and metrics where the eye lands first, camera secondary.
+      // The previous isAr swap ("380px 1fr") was inverted: it put the
+      // camera on the RTL-start (right) position, pushing scores to the
+      // left end that Arabic readers hit last.
+      gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
       alignContent: isMobile ? undefined : "start",
-      alignItems: isMobile ? undefined : "start",
-      // Fill the full viewport — the old 1180px cap left visible side
-      // margins on any screen wider than ~1200px and made the live feed
-      // feel like a widget rather than a full-screen experience.
-      maxWidth: "100%",
-      width:"100%",
-      minHeight:"100vh",
+      alignItems:   isMobile ? undefined : "start",
+      maxWidth:"100%", width:"100%", minHeight:"100vh",
       background:cs.bg, color:cs.text,
       fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
+      // Entry: fade + gentle rise so the live page feels intentional,
+      // not a jarring swap from the dashboard.
+      // Exit: liveExiting adds the reverse animation before page changes.
+      animation: liveExiting
+        ? "livePageOut 0.22s cubic-bezier(.4,0,.6,1) forwards"
+        : "livePageIn 0.28s cubic-bezier(.2,.8,.4,1) both",
     }}>
 
       {/* ── GlobalModals: render on ALL pages ──────────────────── */}
