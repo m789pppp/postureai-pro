@@ -6950,9 +6950,37 @@ async function downloadPDF(sessionOverride, isClinical=false){
       animation: liveExiting
         ? "livePageOut 0.22s cubic-bezier(.4,0,.6,1) forwards"
         : "livePageIn 0.28s cubic-bezier(.2,.8,.4,1) both",
+      display: "flex", flexDirection: "column",
     }}>
 
-      {/* ── GlobalModals: render on ALL pages ──────────────────── */}
+      {/* ── Full-width sticky header — spans both columns ────────
+          Previously lived inside the 380px sidebar which gave it only
+          380px to fit: Back + title + tier + 2 status pills + timer +
+          2 icon buttons → everything truncated or wrapped.
+          Pulled out here so it has the full viewport width.         */}
+      <div style={{ position:"sticky", top:0, zIndex:120, background:cs.bg, borderBottom:`1px solid ${cs.border}` }}>
+        <LiveHeader
+          isAr={isAr} cs={cs} darkMode={darkMode}
+          onBack={backFromLive}
+          onToggleDark={()=>setDarkMode(!darkMode)}
+          onToggleLang={()=>setLang(lang==="en"?"ar":"en")}
+          mpStatus={mpStatus}
+          aiCoachStatus={aiCoachStatus}
+          camActive={camActive}
+          timeLabel={fmtTime(sessionTime)}
+          tierLabel={[TN?.name,M_?.label].filter(Boolean).join(" · ")}
+          showUpgrade={!camActive && !tierAtLeast(effectiveTier,"basic")}
+          onUpgrade={()=>setShowBilling(true)}
+        />
+      </div>
+
+      {/* ── Two-column grid: content  |  camera ─────────────────── */}
+      <div style={{
+        display:"grid",
+        gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
+        alignContent:"start", alignItems:"start",
+        flex:1,
+      }}>
       
 
       {/* OLD DUPLICATE MODALS REMOVED — see GlobalModals block above */}
@@ -7614,24 +7642,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         position: isMobile ? "static" : "sticky",
         top: 0,
       }}>
-        {/* Unified Live Header — replaces the old sidebar header + separate
-            status-bar row + the desktop-only top bar that used to live in
-            the left panel. One compact, always-visible (sticky sidebar)
-            header instead of three fragments repeating the same facts
-            (back nav, tier/mode, AI status, timer) in different places. */}
-        <LiveHeader
-          isAr={isAr} cs={cs} darkMode={darkMode}
-          onBack={backFromLive}
-          onToggleDark={()=>setDarkMode(!darkMode)}
-          onToggleLang={()=>setLang(lang==="en"?"ar":"en")}
-          mpStatus={mpStatus}
-          aiCoachStatus={aiCoachStatus}
-          camActive={camActive}
-          timeLabel={fmtTime(sessionTime)}
-          tierLabel={[TN?.name,M_?.label].filter(Boolean).join(" · ")}
-          showUpgrade={!camActive && !tierAtLeast(effectiveTier,"basic")}
-          onUpgrade={()=>setShowBilling(true)}
-        />
+        {/* Unified Live Header moved to full-width sticky bar above the grid */}
 
         {/* Demo mode must announce itself. The analysis a visitor sees here is
             entirely real — the same engine, on their own camera — but it is
@@ -9224,7 +9235,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {isAr ? "☁ تم الحفظ · ⚡ مدعوم بالذكاء الاصطناعي" : "☁ Data saved · ⚡ AI powered"}
         </div>
       </div>
-    </div>
+    </div>{/* end inner grid */}
+  </div>{/* end outer flex-column live page */}
   </></ErrorBoundary>);
 }
 

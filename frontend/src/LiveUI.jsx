@@ -415,43 +415,100 @@ export function LiveHeader({
     : (isAr ? "المدرب..." : "Coach…");
   return (
     <div style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      gap: 10, padding: "12px 14px",
-      borderBottom: `1px solid ${cs.border}`,
+      display:"flex", alignItems:"center", gap:12,
+      padding:"0 20px", height:52,
     }}>
-      {/* Left: back + title + tier */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: "0 1 auto" }}>
-        {onBack && <IconBtn name="back" label={isAr ? "رجوع" : "Back"} onClick={onBack} cs={cs} />}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: LT.font.base, fontWeight: 800, color: cs.text, letterSpacing: "-.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {isAr ? "تحليل الوضعية المباشر" : "Live Posture Analysis"}
+
+      {/* ── Left zone: back + title + tier ─────────────────────── */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, flex:"0 0 auto" }}>
+        {onBack && <IconBtn name="back" label={isAr?"رجوع":"Back"} onClick={onBack} cs={cs}/>}
+        <div>
+          <div style={{ fontSize:14, fontWeight:800, color:cs.text, letterSpacing:"-.02em", lineHeight:1.15, whiteSpace:"nowrap" }}>
+            {isAr?"تحليل الوضعية المباشر":"Live Posture Analysis"}
           </div>
-          {tierLabel && <div style={{ fontSize: LT.font.xs, color: cs.muted, fontWeight: 600, marginTop: 1 }}>{tierLabel}</div>}
+          {tierLabel && (
+            <div style={{ fontSize:11, color:cs.muted, fontWeight:600, lineHeight:1, marginTop:2, whiteSpace:"nowrap" }}>
+              {tierLabel}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Centre: status pills — compact, no labels repeated */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-        <StatusPill icon={mpIcon} label={`${isAr ? "الذكاء" : "AI"}: ${mpLabel}`} tone={mpTone} cs={cs} pulse={mpStatus === "loading"} title={mpTitle} />
-        {aiCoachStatus && <StatusPill icon={coachIcon} label={coachLabel} tone={coachTone} cs={cs} pulse={!aiCoachStatus.ready && !aiCoachStatus.error} />}
-        {camActive && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 5,
-            padding: "4px 10px", borderRadius: 99,
-            background: "rgba(79,174,142,.12)", border: "1px solid rgba(79,174,142,.3)",
+      {/* ── Divider ─────────────────────────────────────────────── */}
+      <div style={{ width:1, height:24, background:cs.border, flexShrink:0 }}/>
+
+      {/* ── Centre zone: status indicators (compact icon + text) ── */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, flex:1 }}>
+
+        {/* AI engine status */}
+        <div style={{
+          display:"flex", alignItems:"center", gap:5,
+          padding:"4px 10px", borderRadius:99, flexShrink:0,
+          background: mpTone==="good" ? "rgba(79,174,142,.1)" : mpTone==="bad" ? "rgba(239,68,68,.1)" : "rgba(99,102,241,.1)",
+          border: `1px solid ${mpTone==="good" ? "rgba(79,174,142,.3)" : mpTone==="bad" ? "rgba(239,68,68,.3)" : "rgba(99,102,241,.3)"}`,
+        }} title={mpTitle}>
+          <span style={{
+            width:6, height:6, borderRadius:"50%", flexShrink:0,
+            background: mpTone==="good" ? "#4FAE8E" : mpTone==="bad" ? "#ef4444" : "#818cf8",
+            animation: mpStatus==="loading" ? "pulse 1.2s ease-in-out infinite" : undefined,
+          }}/>
+          <span style={{ fontSize:11.5, fontWeight:700, whiteSpace:"nowrap",
+            color: mpTone==="good" ? "#4FAE8E" : mpTone==="bad" ? "#ef4444" : "#818cf8",
           }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4FAE8E", animation: "pulse 1.5s ease-in-out infinite", flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#4FAE8E", fontVariantNumeric: "tabular-nums", letterSpacing: ".02em" }}>{timeLabel}</span>
+            {isAr?"الذكاء":"AI"} · {mpLabel}
+          </span>
+        </div>
+
+        {/* Coach status */}
+        {aiCoachStatus && (
+          <div style={{
+            display:"flex", alignItems:"center", gap:5,
+            padding:"4px 10px", borderRadius:99, flexShrink:0,
+            background: coachTone==="good" ? "rgba(79,174,142,.1)" : coachTone==="bad" ? "rgba(239,68,68,.1)" : "rgba(99,102,241,.1)",
+            border: `1px solid ${coachTone==="good" ? "rgba(79,174,142,.3)" : coachTone==="bad" ? "rgba(239,68,68,.3)" : "rgba(99,102,241,.3)"}`,
+          }}>
+            <span style={{
+              width:6, height:6, borderRadius:"50%", flexShrink:0,
+              background: coachTone==="good" ? "#4FAE8E" : coachTone==="bad" ? "#ef4444" : "#818cf8",
+              animation: (!aiCoachStatus.ready && !aiCoachStatus.error) ? "pulse 1.2s ease-in-out infinite" : undefined,
+            }}/>
+            <span style={{ fontSize:11.5, fontWeight:700, whiteSpace:"nowrap",
+              color: coachTone==="good" ? "#4FAE8E" : coachTone==="bad" ? "#ef4444" : "#818cf8",
+            }}>
+              {coachLabel}
+            </span>
           </div>
         )}
       </div>
 
-      {/* Right: utility icons */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-        {showUpgrade && <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs} style={{ height: 30, fontSize: 11 }}>{isAr ? "ترقية" : "Upgrade"}</Btn>}
-        <IconBtn name={darkMode ? "sun" : "moon"} label={isAr ? "تبديل السمة" : "Toggle theme"} onClick={onToggleDark} cs={cs} />
-        <IconBtn name="globe" label={isAr ? "اللغة" : "Language"} onClick={onToggleLang} cs={cs} />
-        {onOpenSettings && <IconBtn name="settings" label={isAr ? "الإعدادات" : "Settings"} onClick={onOpenSettings} cs={cs} />}
+      {/* ── Timer badge — primary live indicator ────────────────── */}
+      {camActive && (
+        <div style={{
+          display:"flex", alignItems:"center", gap:6,
+          padding:"6px 14px", borderRadius:99, flexShrink:0,
+          background:"rgba(79,174,142,.13)", border:"1.5px solid rgba(79,174,142,.35)",
+        }}>
+          <span style={{ width:7, height:7, borderRadius:"50%", background:"#4FAE8E", animation:"pulse 1.5s ease-in-out infinite", flexShrink:0 }}/>
+          <span style={{ fontSize:13, fontWeight:800, color:"#4FAE8E", fontVariantNumeric:"tabular-nums", letterSpacing:".04em" }}>
+            {timeLabel}
+          </span>
+        </div>
+      )}
+
+      {/* ── Divider ─────────────────────────────────────────────── */}
+      <div style={{ width:1, height:24, background:cs.border, flexShrink:0 }}/>
+
+      {/* ── Right zone: utility controls ────────────────────────── */}
+      <div style={{ display:"flex", alignItems:"center", gap:2, flexShrink:0 }}>
+        {showUpgrade && (
+          <Btn size="sm" variant="secondary" icon="star" onClick={onUpgrade} cs={cs}
+            style={{ height:30, fontSize:11, marginInlineEnd:4 }}>
+            {isAr?"ترقية":"Upgrade"}
+          </Btn>
+        )}
+        <IconBtn name={darkMode?"sun":"moon"} label={isAr?"تبديل السمة":"Toggle theme"} onClick={onToggleDark} cs={cs}/>
+        <IconBtn name="globe" label={isAr?"اللغة":"Language"} onClick={onToggleLang} cs={cs}/>
+        {onOpenSettings && <IconBtn name="settings" label={isAr?"الإعدادات":"Settings"} onClick={onOpenSettings} cs={cs}/>}
       </div>
     </div>
   );
