@@ -6875,29 +6875,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }}/></ErrorBoundary>}
     {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
     <div dir={dir} style={{
-      display:"grid",
-      // Always: content (1fr) first in DOM, camera sidebar (380px) second.
-      // In LTR this puts content on the LEFT and camera on the RIGHT.
-      // In RTL, CSS Grid places the first column at the RIGHT (RTL start),
-      // so content appears on the RIGHT (primary reading position for Arabic)
-      // and the camera on the LEFT — which is what Arabic users expect:
-      // scores and metrics where the eye lands first, camera secondary.
-      // The previous isAr swap ("380px 1fr") was inverted: it put the
-      // camera on the RTL-start (right) position, pushing scores to the
-      // left end that Arabic readers hit last.
-      gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
-      alignContent: isMobile ? undefined : "start",
-      alignItems:   isMobile ? undefined : "start",
-      maxWidth:"100%", width:"100%", minHeight:"100vh",
+      display:"flex", flexDirection:"column",
+      minHeight:"100vh", width:"100%",
       background:cs.bg, color:cs.text,
       fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
-      // Entry: fade + gentle rise so the live page feels intentional,
-      // not a jarring swap from the dashboard.
-      // Exit: liveExiting adds the reverse animation before page changes.
       animation: liveExiting
         ? "livePageOut 0.22s cubic-bezier(.4,0,.6,1) forwards"
         : "livePageIn 0.28s cubic-bezier(.2,.8,.4,1) both",
-      display: "flex", flexDirection: "column",
     }}>
 
       {/* ── Full-width sticky header — spans both columns ────────
