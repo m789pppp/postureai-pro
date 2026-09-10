@@ -631,9 +631,26 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     try {
       const history=messagesRef.current
         .filter(m=>m.content&&!m.streaming)
-        .slice(-8)
+        // Was slice(-8) (4 exchanges). Reduced to 6 (3 exchanges) because
+        // maxTokens per reply was just raised (Elite: 500->1100 actually
+        // reaching the model instead of being silently clamped) — a longer
+        // per-message cap with the same history length pushes total
+        // context size further toward overflow, not less. 3 exchanges +
+        // system prompt + a 1100-token budget stays comfortably inside
+        // typical provider context windows.
+        .slice(-6)
         .map(m=>({role:m.role,content:m.content}));
-      const allMsgs=[...history,{role:"user",content}];
+      // Defensive dedupe: messagesRef is only guaranteed fresh after the
+      // next render's effect runs (see the ref-sync useEffect above). In
+      // the normal case that effect hasn't fired yet when we read it here,
+      // so `history` doesn't yet include the user message just queued via
+      // setMessages, and appending it below is correct exactly once. But
+      // if that effect DOES happen to have already run by this point (e.g.
+      // a fast double-send), history's last entry would already BE this
+      // message, and appending it again would send it to the model twice.
+      const lastHistoryMsg = history[history.length-1];
+      const alreadyIncluded = lastHistoryMsg && lastHistoryMsg.role==="user" && lastHistoryMsg.content===content;
+      const allMsgs=alreadyIncluded ? history : [...history,{role:"user",content}];
 
       try {
         await localChatStream(allMsgs,systemPrompt,(quality.aiCoach?.maxTokens||500),(partial)=>{

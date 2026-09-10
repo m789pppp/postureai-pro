@@ -58,7 +58,7 @@ async function _backendLLM(messages, systemPrompt, maxTokens, temperature = 0.5)
       body: JSON.stringify({
         messages,
         system_prompt: systemPrompt,
-        max_tokens: Math.min(maxTokens, 600),
+        max_tokens: Math.min(maxTokens, 1500),
         temperature,
       }),
       signal: ctrl.signal,
@@ -972,7 +972,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, sign
   // See _backendLLM's comment above for why this replaced Pollinations
   // streaming as primary. ──────────────────────────────────────────
   try {
-    const text = await _backendLLM(messages, systemPrompt, Math.min(maxTokens || 500, 500), 0.4);
+    const text = await _backendLLM(messages, systemPrompt, Math.min(maxTokens || 500, 1500), 0.4);
     const clean = cleanAIResponse(text);
     if (!clean || clean.length < 10) throw new Error("backend_stream_empty");
 
@@ -1013,7 +1013,7 @@ async function _cloudChatStream(messages, systemPrompt, maxTokens, onChunk, sign
     body: JSON.stringify({
       model: "openai",
       messages: allMsgs,
-      max_tokens: Math.min(maxTokens || 500, 500),
+      max_tokens: Math.min(maxTokens || 500, 1500),
       temperature: 0.4,
       stream: true,
       private: true,
@@ -1090,7 +1090,7 @@ function cleanAIResponse(text) {
 
 // Fallback: non-streaming (if streaming fails)
 async function callLLM7Direct(messages, systemPrompt, maxTokens) {
-  const toks = Math.min(maxTokens || 600, 600);
+  const toks = Math.min(maxTokens || 600, 1500);
 
   // ── 1. Backend proxy (primary) — see _backendLLM's comment above for
   // why this replaced browser-direct Pollinations as the primary path. ──
