@@ -6875,7 +6875,9 @@ async function downloadPDF(sessionOverride, isClinical=false){
     }}/></ErrorBoundary>}
     {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
     <div dir={dir} style={{
-      display:"flex", flexDirection:"column",
+      display:"grid",
+      gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
+      gridTemplateRows:"auto 1fr",
       minHeight:"100vh", width:"100%",
       background:cs.bg, color:cs.text,
       fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui,sans-serif",
@@ -6884,12 +6886,11 @@ async function downloadPDF(sessionOverride, isClinical=false){
         : "livePageIn 0.28s cubic-bezier(.2,.8,.4,1) both",
     }}>
 
-      {/* ── Full-width sticky header — spans both columns ────────
-          Previously lived inside the 380px sidebar which gave it only
-          380px to fit: Back + title + tier + 2 status pills + timer +
-          2 icon buttons → everything truncated or wrapped.
-          Pulled out here so it has the full viewport width.         */}
-      <div style={{ position:"sticky", top:0, zIndex:120, background:cs.bg, borderBottom:`1px solid ${cs.border}` }}>
+      {/* ── Full-width sticky header — spans both columns ──────── */}
+      <div style={{
+        gridColumn:"1 / -1", position:"sticky", top:0, zIndex:120,
+        background:cs.bg, borderBottom:`1px solid ${cs.border}`,
+      }}>
         <LiveHeader
           isAr={isAr} cs={cs} darkMode={darkMode}
           onBack={backFromLive}
@@ -6904,14 +6905,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
           onUpgrade={()=>setShowBilling(true)}
         />
       </div>
-
-      {/* ── Two-column grid: content  |  camera ─────────────────── */}
-      <div style={{
-        display:"grid",
-        gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
-        alignContent:"start", alignItems:"start",
-        flex:1, width:"100%",
-      }}>
       
 
       {/* OLD DUPLICATE MODALS REMOVED — see GlobalModals block above */}
@@ -9055,8 +9048,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           {isAr ? "☁ تم الحفظ · ⚡ مدعوم بالذكاء الاصطناعي" : "☁ Data saved · ⚡ AI powered"}
         </div>
       </div>
-    </div>{/* end inner grid */}
-  </div>{/* end outer flex-column live page */}
+    </div>{/* end live page grid */}
   </></ErrorBoundary>);
 }
 
