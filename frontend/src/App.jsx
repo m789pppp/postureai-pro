@@ -6910,7 +6910,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         display:"grid",
         gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
         alignContent:"start", alignItems:"start",
-        flex:1,
+        flex:1, width:"100%",
       }}>
       
 
