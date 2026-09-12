@@ -579,8 +579,8 @@ function _feedBaseline(b, v) {
   }
   return b.value;
 }
-let _trunkBase = _makeBaseline(40, 60);
-let _torsoBase = _makeBaseline(40, 60);
+let _trunkBase = _makeBaseline(20, 40); // was (40,60) — reduced warmup
+let _torsoBase = _makeBaseline(20, 40);
 // Ear-to-shoulder gap, used by BOTH shoulder elevation and rounded shoulders.
 // See the note in analyzeShoulderElevation for why a population constant
 // cannot work for this one.
@@ -592,7 +592,7 @@ let _earShBaseL = _makeBaseline(40, 60);
 let _earShBaseR = _makeBaseline(40, 60);
 // Head apparent size relative to shoulder width — the sagittal forward-head
 // signal. See analyzeFHP.
-let _headShBase = _makeBaseline(40, 60);
+let _headShBase = _makeBaseline(15, 30); // was (40,60) — 7s warmup; reduced to ~3s
 
 // Head-yaw state. The estimator below reads the eye pair's DEPTH difference,
 // which is a per-frame trigonometric measurement rather than a smoothed
@@ -712,7 +712,7 @@ function computeProportions(lms, W, H, calibKnownDistCm = null) {
   const rawRatio    = Math.max(0.70, Math.min(1.30, shWidthFrac / REF_SH_FRAC));
 
   if (_shRatioEMA === null) _shRatioEMA = rawRatio;
-  else _shRatioEMA = _shRatioEMA + 0.05 * (rawRatio - _shRatioEMA);
+  else _shRatioEMA = _shRatioEMA + 0.08 * (rawRatio - _shRatioEMA); // was 0.05 — faster convergence
   const shRatio = _shRatioEMA;
 
   // ── IPD-based shoulder width estimation (no calibration needed) ─────────
@@ -869,12 +869,12 @@ function smoothConfidence(key, currentConfidence, alpha = 0.25) {
 export function resetProportions() {
   _shRatioEMA = null;
   _distMedBuf = [];
-  _trunkBase  = _makeBaseline(40, 60);
-  _torsoBase  = _makeBaseline(40, 60);
-  _earShBase  = _makeBaseline(40, 60);
-  _earShBaseL = _makeBaseline(40, 60);
-  _earShBaseR = _makeBaseline(40, 60);
-  _headShBase = _makeBaseline(40, 60);
+  _trunkBase  = _makeBaseline(20, 40);
+  _torsoBase  = _makeBaseline(20, 40);
+  _earShBase  = _makeBaseline(20, 35);
+  _earShBaseL = _makeBaseline(20, 35);
+  _earShBaseR = _makeBaseline(20, 35);
+  _headShBase = _makeBaseline(15, 30);
   _protractBase = _makeBaseline(12, 25);
   _depthWin = [];
   _depthOK = false;
