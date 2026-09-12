@@ -24,7 +24,7 @@ import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, getDocFromServer, setDoc, updateDoc, addDoc, deleteDoc,
   collection, query, where, orderBy, limit, getDocs,
-  onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch,
+  onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch, runTransaction,
 } from "firebase/firestore";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { bySessionTimeDesc } from "./lib/clinicalMetrics.js";
@@ -512,13 +512,6 @@ export async function updateUserTier(uid, tier, months) {
 
 // ── Sessions ──────────────────────────────────────────────────────
 export async function saveSession(uid, data) {
-  // Compute the true lifetime session number BEFORE creating the doc.
-  let newCount = 1, prof = null;
-  try {
-    prof = await getUserProfile(uid);
-    newCount = (prof?.sessions_count||0)+1;
-  } catch(e) { console.warn("saveSession profile read:", e.code||e.message); }
-
   // ── Document size guard ──────────────────────────────────────────
   // Firestore hard-limits documents to 1MB.  The two fields that can
   // blow past that are worst_snapshots (base64 images) and score_history
@@ -538,6 +531,77 @@ export async function saveSession(uid, data) {
   if(safeData.worst_snapshots){
     const roughBytes = JSON.stringify(safeData.worst_snapshots).length;
     if(roughBytes > 600_000) delete safeData.worst_snapshots;
+  }
+
+  // ── Compute session_number + all derived profile stats atomically ──
+  //
+  // Was: a plain getUserProfile() read here, then a separate setDoc()
+  // after the session document was written — with a real (if narrow)
+  // window between the read and the write where a second saveSession()
+  // call (double-click on Stop & Save, two tabs, a retry racing a fresh
+  // save) could read the SAME sessions_count and compute the SAME
+  // session_number for two different sessions. A transaction reads and
+  // writes atomically, and Firestore automatically retries it end-to-end
+  // if another write lands on the same document in between — so two
+  // concurrent calls are serialized into count N and N+1, never N and N.
+  //
+  // Transactions require a live connection (unlike addDoc with the
+  // persistentLocalCache set up in this file, which queues writes locally
+  // and replays them once back online) — so if this fails for connectivity
+  // reasons specifically, fall back to the old best-effort read-then-write,
+  // same as before this fix, rather than losing the session entirely over
+  // a stats update that can't reach the server right now.
+  let newCount = 1;
+  try {
+    const userRef = doc(db,"users",uid);
+    newCount = await runTransaction(db, async (tx) => {
+      const profSnap = await tx.get(userRef);
+      const prof = profSnap.exists() ? profSnap.data() : null;
+      const count = (prof?.sessions_count||0)+1;
+
+      const newAvg = Math.round(((prof?.avg_score||0)*(count-1)+(data.avg_score||0))/count);
+      const streak = prof?.last_session_at ? (() => {
+        const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
+        const dayOf = d => { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
+        const gapDays = Math.round((dayOf(Date.now()) - dayOf(last)) / 86400000);
+        if (gapDays <= 0) return prof.streak_days || 1;
+        if (gapDays === 1) return (prof.streak_days || 0) + 1;
+        return 1;
+      })() : 1;
+
+      const monthKey = new Date().toISOString().slice(0,7);
+      const sessionsThisMonth = prof?.sessions_this_month_key === monthKey
+        ? (prof?.sessions_this_month||0)+1 : 1;
+
+      const prevAt      = prof?.avg_score_anchor_at?.toDate?.() || new Date(0);
+      const daysSinceAnchor = (Date.now()-prevAt.getTime())/86400000;
+      const anchorStale = daysSinceAnchor >= 30 || !prof?.avg_score_anchor_at;
+      const avgScoreAnchor = anchorStale ? newAvg : (prof?.avg_score_anchor ?? newAvg);
+      const scoreTrend30d  = newAvg - avgScoreAnchor;
+
+      tx.set(userRef, {
+        sessions_count: count, avg_score: newAvg, streak_days: streak,
+        sessions_this_month: sessionsThisMonth, sessions_this_month_key: monthKey,
+        score_trend_30d: scoreTrend30d,
+        ...(anchorStale ? { avg_score_anchor: avgScoreAnchor, avg_score_anchor_at: _serverTimestamp() } : {}),
+        last_session_at: _serverTimestamp(), updated_at: _serverTimestamp(),
+      }, { merge: true });
+
+      return count;
+    });
+  } catch(e) {
+    console.warn("saveSession transaction failed, falling back to best-effort count:", e.code||e.message);
+    // Best-effort fallback — same non-atomic shape as before this fix, only
+    // reached when the transaction itself couldn't run (offline, etc.).
+    try {
+      const prof = await getUserProfile(uid);
+      newCount = (prof?.sessions_count||0)+1;
+      const newAvg = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
+      await setDoc(doc(db,"users",uid), {
+        sessions_count: newCount, avg_score: newAvg,
+        last_session_at: _serverTimestamp(), updated_at: _serverTimestamp(),
+      }, { merge: true });
+    } catch(e2) { console.warn("saveSession stats fallback:", e2.code||e2.message); }
   }
 
   const ref = await addDoc(collection(db,"sessions"), {
@@ -586,46 +650,6 @@ export async function saveSession(uid, data) {
       throw e;
     }
   }
-  try {
-    const newAvg   = Math.round(((prof?.avg_score||0)*(newCount-1)+(data.avg_score||0))/newCount);
-    const streak   = prof?.last_session_at ? (() => {
-      const last = prof.last_session_at.toDate ? prof.last_session_at.toDate() : new Date(prof.last_session_at);
-      // Local calendar days, because that is the unit the "🔥 Nd" badge claims.
-      const dayOf = d => { const x = new Date(d); x.setHours(0,0,0,0); return x.getTime(); };
-      const gapDays = Math.round((dayOf(Date.now()) - dayOf(last)) / 86400000);
-      if (gapDays <= 0) return prof.streak_days || 1;   // same day — already counted
-      if (gapDays === 1) return (prof.streak_days || 0) + 1;
-      return 1;                                         // a day was missed
-    })() : 1;
-
-    // Monthly session count — feeds ChurnPrediction.jsx's health score,
-    // which previously read this from a field that was never written to
-    // Firestore anywhere (only a same-named Redis rate-limit counter
-    // existed, for a completely different endpoint). Reset when the
-    // calendar month rolls over.
-    const monthKey = new Date().toISOString().slice(0,7); // "2026-07"
-    const sessionsThisMonth = prof?.sessions_this_month_key === monthKey
-      ? (prof?.sessions_this_month||0)+1 : 1;
-
-    // 30-day score trend — same situation, never persisted before. Anchors
-    // to the avg_score as of the start of the current ~30-day window and
-    // refreshes that anchor once the window rolls over, rather than
-    // needing a full historical snapshot series.
-    const prevAt      = prof?.avg_score_anchor_at?.toDate?.() || new Date(0);
-    const daysSinceAnchor = (Date.now()-prevAt.getTime())/86400000;
-    const anchorStale = daysSinceAnchor >= 30 || !prof?.avg_score_anchor_at;
-    const avgScoreAnchor = anchorStale ? newAvg : (prof?.avg_score_anchor ?? newAvg);
-    const scoreTrend30d  = newAvg - avgScoreAnchor;
-
-    // setDoc merge — works even if user doc doesn't exist yet
-    await setDoc(doc(db,"users",uid), {
-      sessions_count: newCount, avg_score: newAvg, streak_days: streak,
-      sessions_this_month: sessionsThisMonth, sessions_this_month_key: monthKey,
-      score_trend_30d: scoreTrend30d,
-      ...(anchorStale ? { avg_score_anchor: avgScoreAnchor, avg_score_anchor_at: _serverTimestamp() } : {}),
-      last_session_at: _serverTimestamp(), updated_at: _serverTimestamp(),
-    }, { merge: true });
-  } catch(e) { console.warn("saveSession stats:", e.code||e.message); }
   return ref.id;
 }
 
