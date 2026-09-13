@@ -125,7 +125,7 @@ function readNoisy(pose = {}, zSigmaMult = 3, { settle = 130, hold = 50, seed = 
 
 /**
  * Four analyzers need the hip landmarks: torso flexion, trunk rotation, spine
- * lean, and shoulder protraction. At the 50-80cm the app asks users to sit at,
+ * lean, and shoulder protraction. At the 50-100cm the app asks users to sit at,
  * the hips sit a full frame-height below the bottom edge and MediaPipe cannot
  * see them — measured in this fixture, they do not enter frame until ~130cm.
  *
@@ -348,6 +348,45 @@ console.log("ACCURACY — reported vs known truth");
   // thing to check against a real camera.
 }
 
+{
+  // Monitor height / gaze pitch — previously ZERO coverage of analyzeMonitorHeight
+  // existed anywhere in this suite. Two things worth pinning down now that it's
+  // being looked at, from the threshold-vs-literature audit (see the long
+  // comment on NEUTRAL_NOSE_DROP_FRAC in postureEngine.js):
+  //
+  //  1. Monotonicity — the proxy should at least move in the right direction
+  //     as true downward gaze increases, even though it's known to be
+  //     compressed relative to the true angle (see point 2).
+  //  2. The OSHA finding, quantified and pinned so it can't silently drift:
+  //     OSHA's monitor guidance (osha.gov/etools/computer-workstations/
+  //     components/monitors) calls for the screen center 15-20° BELOW eye
+  //     level, but the uncalibrated neutral here assumes 0°/eye-level is
+  //     ideal. neckFlexDeg (head forward about the ear-line pivot) is the
+  //     closest available ground-truth stand-in for downward gaze on the
+  //     synthetic rig.
+  const pts = [0, 10, 15, 20, 25, 30].map(deg => {
+    const r = read({ neckFlexDeg: deg });
+    return { deg, pitchDeg: r?.bodyModules?.monitor?.pitchDeg, score: r?.metrics?.monitor_height?.score ?? null };
+  });
+  if (VERBOSE) {
+    console.log("\n  Monitor/gaze pitch vs true neck flexion (uncalibrated neutral)");
+    pts.forEach(p => console.log(`    true ${String(p.deg).padStart(2)}°  ->  pitchProxy ${fmt(p.pitchDeg)}°  score ${p.score}`));
+  }
+  check("Monitor pitch proxy moves the right way as true downward gaze increases",
+        pts.every((p, i) => i === 0 || p.pitchDeg >= pts[i - 1].pitchDeg - 0.5),
+        pts.map(p => fmt(p.pitchDeg)).join(" -> "));
+  // Pinning the actual finding: OSHA's recommended 15-20deg range currently
+  // costs a real, non-trivial chunk of this one metric's score for an
+  // uncalibrated user who set their monitor up exactly per that guidance.
+  // This is not asserting it's fine — it's a regression guard so the exact
+  // size of the known gap is visible if it changes (grows silently worse, or
+  // gets fixed and this assertion should be tightened/removed).
+  const oshaRangeScores = pts.filter(p => p.deg >= 15 && p.deg <= 20).map(p => p.score);
+  check("OSHA-compliant downward gaze (15-20°) costs points on this metric today (known gap, not a target)",
+        oshaRangeScores.every(s => s < 95 && s > 70),
+        `scores ${oshaRangeScores.join(", ")}`);
+}
+
 console.log("\nRESPONSE — each defect must actually cost points");
 
 {
@@ -358,7 +397,7 @@ console.log("\nRESPONSE — each defect must actually cost points");
     ["Forward head 8cm",      { forwardHeadCm: 8 },     5],
     ["Trunk flexion 20°",     { trunkFlexDeg: 20 },     8],
     // Protraction now measures properly (see the accuracy group above), but it
-    // needs the hips, and at the default camera here — the 50-80cm the app
+    // needs the hips, and at the default camera here — the 50-100cm the app
     // asks users to sit at — the hips are below the bottom edge. So this
     // costs exactly zero points for a real laptop user, and the assertion
     // says so rather than being quietly moved to a camera where it passes.
@@ -398,7 +437,7 @@ console.log("\nALERTS — the right instruction, and only the right one");
   // The distance alert is filtered out for hip poses, and the reason is the
   // uncomfortable part: there is no camera distance that satisfies both
   // conditions. The hips need ~130cm to enter frame; the app tells users to
-  // sit at 50-80cm. Those ranges do not overlap, so a fixture posed far
+  // sit at 50-100cm. Those ranges do not overlap, so a fixture posed far
   // enough back to exercise these analyzers is, correctly, told it is too far
   // away. Dropping that one alert keeps these tests about the alert logic.
   // The fact that the ranges do not overlap is the product finding, and it is
@@ -576,7 +615,7 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
   //
   // Four analyzers need the hip landmarks. A laptop webcam at the distance
   // this app asks for cannot see them, and the two ranges do not overlap:
-  // hips enter frame at roughly 130cm, the app asks for 50-80cm. Whatever is
+  // hips enter frame at roughly 130cm, the app asks for 50-100cm. Whatever is
   // eventually done about that — a wider-angle assumption, a sagittal method
   // that does not need hips, or telling the user plainly — these assertions
   // are what changes when it is.
@@ -690,10 +729,17 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
     for (let i = 0; i < 170; i++) r = analyzeMP(renderSubject({}, {}, { distCm: d }), W, H, "front");
     return r;
   };
-  const ideal = at(65), close = at(40), veryClose = at(33), far = at(105);
+  // "far" has to sit genuinely outside the ideal band. It used to be 105cm rig
+  // (~99cm read), which charged a penalty when the ideal band topped out at
+  // 80cm — but that band was widened to [50,100] to match OSHA's own
+  // "preferred viewing distance ... 50 and 100 cm" guidance (see
+  // MODES.laptop.distRange), and 99cm now reads as squarely INSIDE it. Moved
+  // out to 140cm rig (~134cm read) so this still tests an actual too-far
+  // reading rather than accidentally re-testing the boundary it used to sit on.
+  const ideal = at(65), close = at(40), veryClose = at(33), far = at(140);
   if (VERBOSE) {
     console.log("\n  Seating distance (rig cm = lens to mid-shoulder; the engine reads the EYE plane, ~6cm nearer)");
-    for (const [n, r] of [["65", ideal], ["40", close], ["33", veryClose], ["105", far]])
+    for (const [n, r] of [["65", ideal], ["40", close], ["33", veryClose], ["140", far]])
       console.log(`    ${n.padStart(3)}cm rig → reads ${r.distCm}cm  score ${r.score}  penalty ${r.positionPenalty}`);
   }
   check("Sitting at the recommended distance costs nothing",
@@ -716,6 +762,17 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
   check("Even sitting on the lens is a slope, not a cliff",
         extreme.positionPenalty <= 26 && extreme.score > 40,
         `total ${extreme.positionPenalty}, score ${extreme.score} at a reading of ${extreme.distCm}cm`);
+
+  // OSHA's computer-workstation guidance puts the preferred viewing distance
+  // at 50-100cm end to end (osha.gov/etools/computer-workstations/components/
+  // monitors), not just tolerating 100cm as a stretch. A user sitting at the
+  // far, still-compliant end of that band must not be charged for it. This is
+  // the regression guard for the 80cm ceiling this app used to enforce
+  // instead, which failed exactly this case.
+  const oshaFar = at(100);
+  check("The far end of OSHA's preferred range (100cm) costs nothing",
+        oshaFar.positionPenalty === 0 && oshaFar.score >= 95,
+        `reads ${oshaFar.distCm}cm · penalty ${oshaFar.positionPenalty} · score ${oshaFar.score}`);
 }
 
 console.log("\nINVARIANCE — same posture, irrelevant variable changed");

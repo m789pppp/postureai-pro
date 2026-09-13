@@ -3470,8 +3470,15 @@ export default function App(){
   const T_norm=T_?{name:T_.name,color:T_.color,colorDim:T_.colorDim||`${T_.color}18`}:null;
   const [isMobile, setIsMobile] = React.useState(()=> typeof window !== "undefined" && window.innerWidth < 768);
   React.useEffect(()=>{ const fn=()=>setIsMobile(window.innerWidth<768); window.addEventListener("resize",fn); return ()=>window.removeEventListener("resize",fn); },[]);
+  // optDist used to be a hardcoded literal here, duplicating MODES.laptop.distRange
+  // in postureEngine.js — a second, independent copy of the exact same number
+  // with no mechanism keeping them in sync. That's precisely the "two systems
+  // disagree" bug class positionPenalty (postureEngine.js) already had to fix
+  // once for the quality-gate vs. distCm signal; a hardcoded duplicate here was
+  // the same risk one level up; the engine's own MODES is already imported
+  // above (see the App.jsx import line), so read the range from there instead.
   const MC={
-    laptop:{id:"laptop",label:isAr?"لابتوب":"Laptop",icon:"💻",color:"#6366f1",optDist:[50,80]},
+    laptop:{id:"laptop",label:isAr?"لابتوب":"Laptop",icon:"💻",color:"#6366f1",optDist:MODES.laptop.distRange},
   };
   const M_=mode?MC[mode]:null;
 
@@ -4258,7 +4265,7 @@ export default function App(){
                 const nl=nlMet?.reliable!==false?(nlMet?.value||0):0;
                 const yaw=yawMet?.reliable!==false?(yawMet?.value||0):0;
                 const dist=finalResult.distCm||0;
-                const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:[50,80];
+                const[lo,hi]=finalResult.lo&&finalResult.hi?[finalResult.lo,finalResult.hi]:MODES.laptop.distRange;
 
                 // Pick the most actionable alert cause.
                 //
@@ -8516,7 +8523,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             RELATIVE TO THE HIPS. On a laptop the hips are not in shot: on the
             synthetic rig the hip midpoint sits at y=1.46 of frame height at
             60cm and 1.22 at 80cm, and only enters the frame at about 130cm.
-            The app asks the user to sit at 50-80cm. So on the hardware this
+            The app asks the user to sit at 50-100cm. So on the hardware this
             product is built for, those four modules report reliable:false for
             the entire session, the engine correctly drops them from the
             weighted mean, and the result — a genuine measurement of the upper

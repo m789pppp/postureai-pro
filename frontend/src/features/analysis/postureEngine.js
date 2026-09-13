@@ -65,7 +65,39 @@ const REF_DIST_CM = 60;
  */
 const REF_SH_FRAC = (SHOULDER_WIDTH_CM * FOCAL_PX_1280) / (REF_DIST_CM * 1280); // ≈ 0.4375
 
-/** Neutral nose-drop fraction relative to eye width (head level gaze) */
+/**
+ * Neutral nose-drop fraction relative to eye width (head level, 0° gaze) —
+ * the UNCALIBRATED fallback used only until a user runs PostureCalibration
+ * and gets calib.nose_drop_neutral measured from their own face instead (see
+ * analyzeMonitorHeight below); most sessions never calibrate, so this default
+ * is what most users are actually scored against.
+ *
+ * "0° gaze is ideal" is itself the thing worth questioning: OSHA's computer-
+ * workstation eTools guidance calls for the monitor's top no higher than eye
+ * level and the center 15-20° BELOW it (osha.gov/etools/computer-workstations
+ * /components/monitors), specifically so the neck stays neutral while looking
+ * slightly down — not so the gaze stays level. A user who followed that
+ * advice to the letter is, by this constant, reported as pitching away from
+ * "ideal."
+ *
+ * Quantified on the synthetic rig (see the "monitor height vs OSHA gaze
+ * angle" block in postureEngine.accuracy.mjs): sweeping true neck pitch from
+ * 0° to OSHA's 15-20° recommended range takes the uncalibrated score on this
+ * ONE metric from ~98 down to ~84-88. At this metric's 6.38% weight that is
+ * roughly 0.6-0.9 composite points — real, but small, and specifically it
+ * never pushes severity out of "normal" in that range (the pitchProxy below
+ * is compressed relative to true rotation: a true 30° pitch reads back as
+ * only ~9.5° here), so it costs an uncalibrated, OSHA-compliant user a few
+ * points rather than triggering an alert or a severity flag.
+ *
+ * Deliberately NOT re-tuned to bake in a -15° offset: the proxy's own
+ * nonlinearity means the right correction isn't a simple constant shift
+ * without real-user validation data to fit it against, and getting that
+ * fit wrong in either direction is worse than leaving a small, well-
+ * understood bias that calibration already fully corrects for. Flagged here
+ * with numbers so a future change has evidence to work from, rather than
+ * left as an unexamined "0.62".
+ */
 const NEUTRAL_NOSE_DROP_FRAC = 0.62;
 
 /** Nose sits this many cm ahead of ear plane — used to correct FHP */
@@ -121,11 +153,39 @@ const THR = {
   // Front camera
   HEAD_TILT:   { ok: 5,  bad: 12  },  // was ok:3 — natural asymmetry is 2-4°, raised to 5
   SH_TILT:     { ok: 5,  bad: 12  },  // was ok:3 — natural shoulder asymmetry 2-5° in adults
+  // Checked against RULA's trunk-flexion bands (0-20°/20-60°/>60°, sagittal
+  // forward bend) as part of a literature audit and deliberately NOT
+  // reconciled with them: analyzeSpineLean() computes angleVert() in the 2D
+  // image plane only (see its own "SIGN CONVENTION" comment below), which
+  // makes it a LATERAL (side-to-side) lean detector, not sagittal flexion —
+  // a forward slouch toward the screen barely moves it, by design. RULA's
+  // trunk-flexion numbers describe a different axis entirely and would be
+  // the wrong citation to anchor this band to; analyzeTorsoFlexion() is this
+  // engine's forward-slouch equivalent, but reports a shrinkage PERCENTAGE
+  // (frame-projection based) rather than a flexion angle, so it doesn't
+  // convert to RULA's degrees either without a per-user geometric model this
+  // engine doesn't have. Left as its own self-consistent scale rather than
+  // forcing a citation that doesn't actually match what's being measured.
   SPINE_LEAN:  { ok: 6,  bad: 14  },  // was ok:4 — camera perspective adds 2-4° apparent lean
   HEAD_YAW:    { ok: 8,  bad: 20  },
-  FHP_CM:      { ok: 3,  bad: 7   },  // was ok:2 — 2cm is within normal head position variation
+  // was ok:2 — 2cm is within normal head position variation. Also cross-
+  // checked against RULA's SAGITTAL neck-flexion bands (score1 <10°, score2
+  // 10-20°, score3 >20° — the axis this metric actually measures, unlike
+  // THR.NECK/SPINE_LEAN above): running these cm values through this same
+  // file's own pitchDeg conversion (atan2(distCm, 15cm) — see analyzeFHP)
+  // gives ok=3cm -> ~11.3° and bad=7cm -> ~25.0°, landing within a few
+  // degrees of RULA's 10°/20° score boundaries rather than contradicting
+  // them. Left as-is: corroboration, not grounds to re-tune a value that
+  // already roughly agrees with an independent source.
+  FHP_CM:      { ok: 3,  bad: 7   },
   ROUNDED:     { ok: 10, bad: 22  },  // was ok:8 — raised to reduce false positives for natural posture
-  ELBOW:       { ok: 15, bad: 30  },  // deviation from 95° ideal
+  // Stale note used to say "deviation from 95° ideal" — analyzeElbow() (below)
+  // actually uses elbowIdeal=105° with OSHA/NIOSH's own 90-120° acceptable
+  // range as a flat, no-penalty dead zone (elbowDev = max(0, |avg-105|-15)),
+  // and these ok/bad numbers are what elbowDev ramps through ONCE it's outside
+  // that dead zone — not degrees of raw angle. Comment corrected to match; the
+  // scoring itself was already right, only the description of it was wrong.
+  ELBOW:       { ok: 15, bad: 30  },
   MONITOR_PITCH:{ ok: 5, bad: 18  },  // head pitch degrees
   TRUNK_ROT:   { ok: 12, bad: 30  },  // trunk twist degrees (calibrated band)
   TORSO_FLEX:  { ok: 12, bad: 30  },  // torso shortening % vs neutral (calibrated band)
@@ -1427,6 +1487,13 @@ function analyzeNeckLean(lms, W, H, prop, calib = null) {
   // leaned in and out over the day while their actual neck posture was
   // unchanged. The anchor values are the ones the scaling produced at the
   // reference distance.
+  // Same axis caveat as analyzeSpineLean's THR.SPINE_LEAN note: angleVert()
+  // here is a 2D image-plane angle between mid-shoulder and the ear/nose
+  // reference, so this reads lateral (side-to-side) neck tilt, not sagittal
+  // forward flexion — RULA's neck-flexion bands (score1 <10°, score2
+  // 10-20°, score3 >20°) describe that other axis and are not this metric's
+  // citation. The sagittal equivalent in this engine is analyzeFHP (below),
+  // which does derive a comparable neckAngleDeg from its cm offset.
   const okAdj  = 6.0;
   const badAdj = 17.0;
 
@@ -1620,7 +1687,7 @@ function analyzeTorsoFlexion(lms, W, H, prop, calib = null) {
   // metric object is read straight into the UI as `${torsoFlex.shrinkPct}%` —
   // so any frame that took one of those branches rendered "undefined%" to the
   // user. On a laptop that is every frame: this analyzer needs the hips, and
-  // at 50-80cm from a webcam the hips are roughly a full frame-height below
+  // at 50-100cm from a webcam the hips are roughly a full frame-height below
   // the bottom edge.
   const shrinkPct = Math.max(0, (neutral - ratio) / Math.max(neutral, 0.1)) * 100;
   const score    = scoreMetric(shrinkPct, 0, THR.TORSO_FLEX.ok, THR.TORSO_FLEX.bad);
@@ -2218,6 +2285,22 @@ function analyzeElbow(lms, W, H) {
 
   // OSHA/NIOSH: acceptable elbow range 90-120°, ideal 100-110°
   // Use midpoint 105° as ideal, tolerance ±15° before penalty
+  //
+  // Cross-checked against RULA (Rapid Upper Limb Assessment), which scores
+  // the "lower arm" separately and describes its score-1 (best) band as
+  // 60-100° of elbow flexion. That number looks like a conflict with the
+  // 90-120° above until the convention is accounted for: RULA measures
+  // flexion FROM full extension (ergo-plus.com's own worked example — "the
+  // elbow is flexed slightly less than 60 degrees for a score of +2" — only
+  // makes sense if 0° is a straight arm), while the angle computed here is
+  // the INCLUDED angle at the elbow (180° = straight arm, the natural output
+  // of a shoulder-elbow-wrist 3-point angle). Converting RULA's band by
+  // included-angle = 180 - flexion gives 80-120° — which overlaps the
+  // OSHA/NIOSH 90-120° band above almost exactly, rather than contradicting
+  // it. Treated as corroboration, not a source for a different number: the
+  // conversion is inferred from indirect wording (no official RULA source
+  // spells out its angle diagram in the material checked), so it isn't cited
+  // as its own authority for a threshold change.
   const elbowIdeal = 105;
   const elbowDev   = avg != null ? Math.max(0, Math.abs(avg - elbowIdeal) - 15) : 0;
   const score    = scoreMetric(elbowDev, 0, THR.ELBOW.ok, THR.ELBOW.bad);
@@ -2547,7 +2630,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // the frame the shoulders span), while distCm is a back-calculated estimate
   // that depends on distCalibFactor and the assumed shoulder width. When those
   // disagree — the frame says the user is filling the lens while distCm still
-  // reads inside the ideal 50-80cm band — distSc stayed at a perfect 100 and
+  // reads inside the ideal 50-100cm band — distSc stayed at a perfect 100 and
   // the "move back" warning had literally zero effect on the score. That is the
   // reported bug: the app says "too close" while the number doesn't move.
   //
@@ -2920,7 +3003,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // tell the user anything about it — and the score was presented as a
   // complete posture reading either way.
   //
-  // That matters more than it sounds. On a laptop, at the 50-80cm this app
+  // That matters more than it sounds. On a laptop, at the 50-100cm this app
   // itself asks for, the hips sit below the bottom edge of the frame:
   // measured on the synthetic rig, the hip midpoint lands at y=1.46 of frame
   // height at 60cm, 1.22 at 80cm, and only enters shot at about 130cm. Every
@@ -3139,7 +3222,23 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
 // ═══════════════════════════════════════════════════════════════════
 
 export const MODES = {
-  laptop: { label: "Laptop Camera", labelAr: "كاميرا اللابتوب", icon: "💻", distRange: [50, 80] },
+  // distRange upper bound was 80cm with no cited rationale. OSHA's computer
+  // workstation eTools guidance is explicit: "the preferred viewing distance
+  // is between 20 and 40 inches (50 and 100 cm) from the eye to the front
+  // surface of the computer screen" (osha.gov/etools/computer-workstations/
+  // components/monitors) — 100cm is not a tolerated extreme, it is the far
+  // end of the SAME preferred band as 50cm. CCOHS's ergonomics fact sheet
+  // corroborates from a different angle: resting point of vergence (the
+  // distance the eye relaxes to without a screen forcing focus) averages
+  // ~112cm, i.e. comfortably past 100cm.
+  //
+  // With the old 80cm ceiling, a user sitting at 85-100cm — fully inside
+  // OSHA's own preferred range — was scored as "too far": distanceScore()
+  // marked down, positionPenalty charged, and the on-video chip read red,
+  // all for sitting exactly where the standard says they should. Widened to
+  // match OSHA's cited band; see postureEngine.accuracy.mjs's "Positioning"
+  // block for the regression test this affects.
+  laptop: { label: "Laptop Camera", labelAr: "كاميرا اللابتوب", icon: "💻", distRange: [50, 100] },
   // Phone and Side modes removed app-wide.
 };
 
