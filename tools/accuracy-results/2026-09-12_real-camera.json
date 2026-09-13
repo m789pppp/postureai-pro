@@ -1,0 +1,22 @@
+{
+  "generated": "2026-09-12T11:32:46.112Z",
+  "run": {
+    "perPhase": {
+      "neutral": {"framesTotal":34,"framesHeld":26,"framesReliable":0,"values":[],"scores":[],"meanValue":null,"sdValue":null,"meanScore":null,"alertRate":0.8846153846153846,"flagged":true,"reliableRate":null,"id":"neutral","kind":"control","target":null},
+      "fhp": {"framesTotal":38,"framesHeld":27,"framesReliable":8,"values":[1.8,2.4,3.6,8.2,8.4,6.6,6.5,7.1],"scores":[85,80,68,28,28,34,35,29],"meanValue":5.575,"sdValue":2.6004120552602537,"meanScore":48.375,"alertRate":0.2222222222222222,"flagged":false,"reliableRate":0.2962962962962963,"id":"fhp","kind":"fault","target":"fhp_index","baselineMeanValue":1.2181818181818183,"baselineMeanScore":88.9090909090909,"d":2.3652060839020863},
+      "recline": {"framesTotal":36,"framesHeld":27,"framesReliable":0,"values":[],"scores":[],"meanValue":null,"sdValue":null,"meanScore":null,"alertRate":1,"flagged":true,"reliableRate":null,"id":"recline","kind":"control","target":null},
+      "tilt": {"framesTotal":36,"framesHeld":26,"framesReliable":26,"values":[2,1,25,31,32,36,38,42,42,42,40,42,42,45,46,44,45,46,46,46,45,45,44,47,48,46],"scores":[90,95,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5],"meanValue":38.76923076923077,"sdValue":12.264771313995846,"meanScore":11.73076923076923,"alertRate":0.9230769230769231,"flagged":true,"reliableRate":1,"id":"tilt","kind":"fault","target":"head_tilt","baselineMeanValue":3.5384615384615383,"baselineMeanScore":80.92307692307692,"d":3.9562280636597875},
+      "slouch": {"framesTotal":35,"framesHeld":26,"framesReliable":0,"values":[],"scores":[],"meanValue":null,"sdValue":null,"meanScore":null,"alertRate":0,"flagged":false,"reliableRate":0,"id":"slouch","kind":"fault","target":"torso_flexion","baselineMeanValue":null,"baselineMeanScore":null,"d":null},
+      "twist": {"framesTotal":36,"framesHeld":27,"framesReliable":0,"values":[],"scores":[],"meanValue":null,"sdValue":null,"meanScore":null,"alertRate":0,"flagged":false,"reliableRate":0,"id":"twist","kind":"fault","target":"trunk_rotation","baselineMeanValue":null,"baselineMeanScore":null,"d":null},
+      "neutral_repeat": {"framesTotal":34,"framesHeld":24,"framesReliable":0,"values":[],"scores":[],"meanValue":null,"sdValue":null,"meanScore":null,"alertRate":1,"flagged":true,"reliableRate":null,"id":"neutral_repeat","kind":"control","target":null}
+    },
+    "sensitivity":{"p":0.25,"lo":0.045586062644636216,"hi":0.6993639475573634,"n":4,"k":1},
+    "specificity":{"p":0,"lo":0,"hi":0.5615060804490177,"n":3,"k":0},
+    "balanced":0.125,"balancedLo":0,"balancedHi":0.4288209913404362,"nTrials":7
+  },
+  "cumulative": {
+    "sensitivity":{"p":0.25,"lo":0.045586062644636216,"hi":0.6993639475573634,"n":4,"k":1},
+    "specificity":{"p":0,"lo":0,"hi":0.5615060804490177,"n":3,"k":0},
+    "balanced":0.125,"balancedLo":0,"balancedHi":0.4288209913404362,"nTrials":7
+  }
+}
