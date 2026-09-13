@@ -514,5 +514,52 @@ console.log('\n--- 17. sustained hip-visibility loss is surfaced, not silently d
   check(normal?.hipsNotVisible !== true, 'a normal frame with hips visible never raises the notice');
 }
 
+// ── 18. one SEVERE metric never reads as Good/Excellent ────────────────────
+// Real screenshots (2026-09-13): an extreme, visibly severe head tilt scored
+// "Fair" (59) and even "Good" (81) in frames where the other ~12 metrics
+// happened to be clean — head_tilt carries only 6.69% of WEIGHTS_FRONT, so
+// even at its worst possible per-metric score it can only pull the composite
+// down by ~6.3 points. Mathematically correct for a weighted average, wrong
+// for a tool sold on catching real posture faults. The severity floor caps
+// overall at 69 (one point under gradeScore()'s Good boundary) whenever any
+// RELIABLE module classifies as "severe", regardless of its weight.
+console.log('\n--- 18. one severe metric never reads as Good/Excellent (once sustained) ---');
+{
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // Everything neutral except the eyes, offset enough to read as a severe
+  // head tilt in isolation — analyzeHeadTilt's own severe threshold is only
+  // 10 degrees of deviation.
+  const severeTiltLms = () => {
+    const a = makeLandmarks({});
+    a[PL.L_EYE] = { ...a[PL.L_EYE], y: a[PL.L_EYE].y + 0.06 };
+    return a;
+  };
+
+  // A single severe-looking frame — exactly what one noisy landmark read
+  // looks like — must not instantly cap the score. See the accuracy rig's
+  // precision test, which is what caught this the first time.
+  resetProportions();
+  const first = analyzeMP(severeTiltLms(), W, H, 'laptop');
+  check(first?.metrics?.head_tilt?.severity === 'severe',
+    `the fixture actually exercises a severe head tilt (got severity=${first?.metrics?.head_tilt?.severity})`);
+  check(first != null && first.score >= 70,
+    `a single severe-looking frame does not instantly cap the score (got ${first?.score})`);
+
+  // Held continuously past ALERT_DWELL_MS, it must cap the score.
+  let sustained;
+  const start = Date.now();
+  while (Date.now() - start < 1400) {
+    sustained = analyzeMP(severeTiltLms(), W, H, 'laptop');
+    await sleep(60);
+  }
+  check(sustained != null && sustained.score < 70,
+    `a head tilt that reads severe continuously for over a second caps the score below Good/Excellent (got ${sustained?.score})`);
+
+  resetProportions();
+  const clean = analyzeMP(makeLandmarks({}), W, H, 'laptop');
+  check(clean != null && clean.score >= 85,
+    `a genuinely neutral pose is unaffected by the severity floor (got ${clean?.score})`);
+}
+
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);

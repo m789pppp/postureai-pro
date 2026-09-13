@@ -8139,8 +8139,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
 
             {/* When the user is too close the engine keeps scoring (soft-block)
                 but depth-dependent metrics (FHP, rounded shoulders) are less
-                accurate. Say so rather than showing confident-looking numbers. */}
-            {analysis?.qualityReason === "too_close" && (
+                accurate. Say so rather than showing confident-looking numbers.
+                qualityReason==="too_close" alone is the wrong test here — it's
+                a geometric crop check (shoulders filling ~85% of frame width),
+                a much stricter bar than the distance the app actually measures
+                and shows on the chip above. positionPenalty already found this
+                exact gap and scores off distCm vs [lo,hi] as well as the crop
+                check (see its comment) so the NUMBER already reflects being
+                too close; this caveat was still only keyed off the stricter
+                signal, so a user could see a penalized score with no
+                explanation for why. Same distCm/M_.optDist test the chip and
+                the Distance bar already use, so the three agree. */}
+            {(analysis?.qualityReason === "too_close"
+              || (distCm != null && M_ && distCm < M_.optDist[0] - 5)) && (
               <div style={{
                 display:"flex", alignItems:"center", gap:5,
                 padding:"4px 8px", borderRadius:6, marginBottom:6,

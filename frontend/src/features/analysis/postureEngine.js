@@ -917,6 +917,7 @@ export function resetProportions() {
   analyzeMP._reclineState = null;
   analyzeMP._alertDwell = null;
   analyzeMP._hipsState = null;
+  analyzeMP._severeDwell = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2834,7 +2835,66 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     ? Math.round(26 * (1 - coverage))
     : 0;
 
-  const overall = Math.max(0, weightedScore - positionPenalty - occlusionPenalty);
+  const _rawOverall = Math.max(0, weightedScore - positionPenalty - occlusionPenalty);
+
+  // analyzeMP.__testNowMs lets a fast, synchronous test harness (no MediaPipe,
+  // no real camera) simulate elapsed wall-clock time across a tight loop of
+  // frames — e.g. for ALERT_DWELL_MS, the severity floor below, or the
+  // fatigue-drift window further down — without an actual multi-second sleep.
+  // Unset in every real caller (App.jsx, the backend), so production
+  // behaviour is exactly Date.now(), unchanged. Computed here, before its
+  // first use, rather than down by the drift buffer where it originally
+  // lived — the severity floor needs the same reference earlier.
+  const _nowMs = analyzeMP.__testNowMs ?? Date.now();
+
+  // Severity floor: a weighted average can hide one severe fault behind
+  // several good ones. Measured on a real session (2026-09-13): an extreme
+  // lateral head tilt — visibly severe on camera, "Level your head" firing
+  // the whole time — read as "Fair" (59) and even "Good" (81) in frames
+  // where the other ~12 metrics happened to be clean, because head_tilt
+  // alone carries 6.69% of WEIGHTS_FRONT: even at its worst possible
+  // per-metric score (scoreMetric floors at 5), it can only pull the
+  // composite down by about 6.3 points from a perfect baseline
+  // (0.0669 * (100-5)). That is mathematically correct for a weighted
+  // average and still the wrong answer for a tool sold on catching real
+  // posture faults — a single SEVERE fault must never be reported as
+  // Good or Excellent just because it happens to live in a low-weight
+  // metric this frame.
+  //
+  // Scoped to modules this file actually classifies with SEV.* bands, and
+  // only when RELIABLE — an unmeasurable module's cosmetic default score
+  // is never itself "severe" (see scoreMetric/classify), so a module that
+  // simply isn't visible this frame can't trip this.
+  //
+  // Debounced PER MODULE, reusing ALERT_DWELL_MS — the same class of bug
+  // this file already fixed once this session for buildAlerts(). The first
+  // version of this floor checked the raw single-frame severity, and the
+  // accuracy rig's own noise test caught it immediately: fhp's Z channel is
+  // exactly the noisy one, and a steady, genuinely-moderate 4cm forward head
+  // spiked to a momentary "severe" reading on individual noisy frames purely
+  // from landmark jitter, slamming the score to the 69 cap on that frame and
+  // releasing it the next — score SD went from a normal ~1-2 points to 4.6,
+  // and range from single digits to 19. A real severe fault, not a jitter
+  // spike, is what should trip this — so the SAME module has to read severe
+  // continuously for ALERT_DWELL_MS, exactly like an alert condition does.
+  const _severeCandidates = { neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, shoulderElev, torsoFlex, trunkRot };
+  if (!analyzeMP._severeDwell) analyzeMP._severeDwell = Object.create(null);
+  const _severeDwell = analyzeMP._severeDwell;
+  let _anySevereSustained = false;
+  for (const _k in _severeCandidates) {
+    const _m = _severeCandidates[_k];
+    if (_m?.reliable && _m?.severity === "severe") {
+      if (_severeDwell[_k] == null) _severeDwell[_k] = _nowMs;
+      if (_nowMs - _severeDwell[_k] >= ALERT_DWELL_MS) _anySevereSustained = true;
+    } else {
+      _severeDwell[_k] = null;
+    }
+  }
+  // 69 — one point under gradeScore()'s "Good" boundary (70). The minimal
+  // cap that satisfies "cannot read as Good/Excellent", not an arbitrarily
+  // harsher one; the weighted average still decides how far below that a
+  // frame with other real faults lands.
+  const overall = _anySevereSustained ? Math.min(_rawOverall, 69) : _rawOverall;
 
   // Mispositioning is charged twice — once by capping distSc (which makes the
   // distance metric reflect reality) and once by positionPenalty (the ergonomic
@@ -2930,12 +2990,10 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // past the slouch and the penalty evaporated — the number climbed ~15 points
   // with nothing changed. Keeping wall-clock time makes the window mean what
   // the comment says regardless of frame rate.
-  // analyzeMP.__testNowMs lets a fast, synchronous test harness (no MediaPipe,
-  // no real camera) simulate elapsed wall-clock time across a tight loop of
-  // frames — e.g. for ALERT_DWELL_MS or the fatigue-drift window — without an
-  // actual multi-second sleep. Unset in every real caller (App.jsx, the
-  // backend), so production behaviour is exactly Date.now(), unchanged.
-  const _nowMs = analyzeMP.__testNowMs ?? Date.now();
+  // _nowMs is computed earlier now (see its own comment above, next to the
+  // severity floor) — the drift buffer below was its original and only user
+  // until the severity floor needed the same wall-clock reference even
+  // earlier in the function.
   if (!analyzeMP._scoreBuf) analyzeMP._scoreBuf = [];
   analyzeMP._scoreBuf.push({ t: _nowMs, v: overall });
   const DRIFT_WINDOW_MS = 5 * 60 * 1000;
