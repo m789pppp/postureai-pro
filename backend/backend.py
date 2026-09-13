@@ -2508,7 +2508,21 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         _cm_per_px     = _sh_width_cm / max(_sh_w_early, 1)
         _fhp_cm        = round(_ear_x_offset * _cm_per_px, 1)
         _extra_weight  = round(_fhp_cm / 2.5 * 4.5, 1)  # kg added to neck
-        _fhp_sc        = score_m(_fhp_cm, 0, 2, 6)
+        # ok/bad synced with postureEngine.js's THR.FHP_CM — was 2/6 here,
+        # the pre-fix value ("2cm is within normal head position variation",
+        # per that file's comment on raising it to 3/7). Stale here; see
+        # tests/test_analyze_front_synthetic.py.
+        #
+        # NOT fixed in this pass: _fhp_cm itself is computed from the raw
+        # ear-to-shoulder X offset (abs(mid_ear[0]-mid_sh[0])), which is
+        # dominated by LATERAL head position, not sagittal forward-head
+        # depth — postureEngine.js's analyzeFHP() went through two full
+        # rewrites to fix this same defect on the frontend (documented
+        # there: 30° of pure lateral lean with zero true forward head
+        # produced 5.8cm of "FHP"). Correcting the underlying formula here
+        # needs the same iterative, ground-truth-tested rework, not a
+        # threshold tweak — tracked as follow-up, not attempted here.
+        _fhp_sc        = score_m(_fhp_cm, 0, 3, 7)
         out["metrics"]["fhp_index"] = {
             "value":        _fhp_cm,
             "score":        _fhp_sc,
@@ -2581,11 +2595,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         pass
     out["metrics"]["shoulder_width_ratio"] = {"value": round(sh_ratio, 2), "unit": "×", "label": "Shoulder width ratio"}
 
+    # ok/bad synced with postureEngine.js's THR.HEAD_TILT/SH_TILT — these were
+    # 3/10, the pre-fix values the JS engine's own comments document raising
+    # to 5/12 because natural head/shoulder asymmetry is 2-5° in adults and
+    # the tighter band was a source of false positives on neutral posture.
+    # Found stale here during a threshold-vs-literature audit (2026-09) —
+    # confirmed by grep against the JS engine's THR table, no other source
+    # justifies 3/10 specifically. See tests/test_analyze_front_synthetic.py.
     head_tilt  = angle_horiz(l_eye, r_eye)
-    tilt_sc    = score_m(head_tilt, 0, 3, 10)
+    tilt_sc    = score_m(head_tilt, 0, 5, 12)
 
     sh_tilt    = angle_horiz(l_sh, r_sh)
-    sh_sc      = score_m(sh_tilt, 0, 3, 10)
+    sh_sc      = score_m(sh_tilt, 0, 5, 12)
 
     # ── Shoulder elevation (shrug/tension) ────────────────────────
     # Elevated shoulders = trapezius tension / stress posture
@@ -2727,7 +2748,11 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     # S-curve penalty: large divergence between segments
     spine_scurve_pen = max(0, abs(spine_upper - spine_lower) - 8) * 0.5
     spine_lean   = min(45.0, spine_lean + spine_scurve_pen + _kyphosis_pen)
-    spine_sc     = score_m(spine_lean, 0, 4, 12)
+    # ok/bad synced with postureEngine.js's THR.SPINE_LEAN — was 4/12 here,
+    # the pre-fix value the JS engine's own comment documents raising to
+    # 6/14 ("camera perspective adds 2-4° apparent lean"). Stale here; see
+    # tests/test_analyze_front_synthetic.py.
+    spine_sc     = score_m(spine_lean, 0, 6, 14)
 
     # ── Signed lateral direction ────────────────────────────────────
     # angle_vert() (scoring_utils.py) only ever receives (x,y) pairs here —
@@ -2787,7 +2812,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         dist_cm = round((40.0 * focal) / max(_sh_w_fallback, 1), 1)
         dist_cm = max(20, min(150, dist_cm))
 
-    lo, hi = (50, 80) if mode == "laptop" else (60, 90)
+    # laptop range synced with postureEngine.js's MODES.laptop.distRange — was
+    # (50,80) here, the pre-fix ceiling that file's own comment documents
+    # widening to 100 because OSHA's computer-workstation eTools guidance
+    # states the "preferred viewing distance is between 20 and 40 inches (50
+    # and 100 cm)" as one band, not treating 100cm as a stretch. A user
+    # sitting at 85-100cm — fully inside OSHA's own recommended range — was
+    # being scored as too far. Stale here; see
+    # tests/test_analyze_front_synthetic.py. The non-laptop (60,90) branch is
+    # left as-is: there's no cited source for it and no frontend equivalent
+    # to sync against (Phone/Side modes were removed from the frontend
+    # app-wide, though this API may still take mode!="laptop" from direct
+    # integrations).
+    lo, hi = (50, 100) if mode == "laptop" else (60, 90)
     # BUG FIX: this used to be a fixed range based only on device type,
     # completely ignoring the user's own calibrated camera-distance
     # baseline — the whole point of "Camera Calibration" on the dashboard.
@@ -2983,7 +3020,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 lm = g(idx)
                 return (lm.x*w, lm.y*h, lm.z*w)
 
-            wrist_angle = None
+            included_angle = None
             _wrist_source = "none"
 
             if both_ok:
@@ -2991,22 +3028,20 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 l_sh3 = px3(PL.L_SHOULDER); r_sh3 = px3(PL.R_SHOULDER)
                 l_el3 = px3(PL.L_ELBOW);   r_el3 = px3(PL.R_ELBOW)
                 l_wr3 = px3(PL.L_WRIST);   r_wr3 = px3(PL.R_WRIST)
-                l_wrist_angle = angle_3pt_3d(l_sh3, l_el3, l_wr3)
-                r_wrist_angle = angle_3pt_3d(r_sh3, r_el3, r_wr3)
-                wrist_angle   = ((180-l_wrist_angle) + (180-r_wrist_angle)) / 2
+                l_included = angle_3pt_3d(l_sh3, l_el3, l_wr3)
+                r_included = angle_3pt_3d(r_sh3, r_el3, r_wr3)
+                included_angle = (l_included + r_included) / 2
                 _wrist_source = "both_elbows"
             elif _l_ok:
                 # Left only fallback
-                l_wrist_angle = angle_3pt_3d(px3(PL.L_SHOULDER), px3(PL.L_ELBOW), px3(PL.L_WRIST))
-                wrist_angle   = 180 - l_wrist_angle
+                included_angle = angle_3pt_3d(px3(PL.L_SHOULDER), px3(PL.L_ELBOW), px3(PL.L_WRIST))
                 _wrist_source = "left_elbow_only"
             elif _r_ok:
                 # Right only fallback
-                r_wrist_angle = angle_3pt_3d(px3(PL.R_SHOULDER), px3(PL.R_ELBOW), px3(PL.R_WRIST))
-                wrist_angle   = 180 - r_wrist_angle
+                included_angle = angle_3pt_3d(px3(PL.R_SHOULDER), px3(PL.R_ELBOW), px3(PL.R_WRIST))
                 _wrist_source = "right_elbow_only"
 
-            if wrist_angle is not None:
+            if included_angle is not None:
                 # This is the angle AT THE ELBOW (angle_3pt_3d's "angle at b"
                 # with b=elbow — shoulder→elbow→wrist), not wrist deviation.
                 # The codebase defines no hand landmarks (index/pinky/thumb
@@ -3020,18 +3055,56 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 # JSON key/variable names ("wrist_angle"/"wrist") unchanged
                 # since other code and any stored history already key off
                 # them — fixing only the user-facing text.
-                wrist_sc = score_m(wrist_angle, 0, 10, 25)
+                #
+                # INVERTED-IDEAL BUG, found during a threshold-vs-literature
+                # audit (2026-09) and confirmed via
+                # tests/test_analyze_front_synthetic.py: this used to score
+                # `180 - included_angle` (0 at a fully straight/extended
+                # arm) against an ideal of 0 — i.e. it rewarded a hanging,
+                # extended arm and penalised a correctly bent typing arm. A
+                # synthetic subject posed at a true ~92.5° included elbow
+                # angle (a CORRECT typing posture per OSHA/NIOSH) scored 5 —
+                # the score_m floor — under the old formula, while the
+                # alert text simultaneously told the user to "bring elbows
+                # closer to 90°", which they already were.
+                #
+                # Now matches postureEngine.js's analyzeElbow() exactly:
+                # OSHA/NIOSH's acceptable range is 90-120° included angle,
+                # ideal 100-110° — midpoint 105° with a flat ±15° dead zone
+                # before any penalty accrues (so 90-120° costs nothing, not
+                # just "less"), then ramps via score_m the same way the JS
+                # engine's THR.ELBOW does.
+                _ELBOW_IDEAL_DEG = 105
+                elbow_dev = max(0.0, abs(included_angle - _ELBOW_IDEAL_DEG) - 15)
+                wrist_sc = score_m(elbow_dev, 0, 15, 30)
                 out["metrics"]["wrist_angle"] = {
-                    "value": round(wrist_angle, 1), "score": wrist_sc,
+                    "value": round(included_angle, 1), "score": wrist_sc,
                     "unit": "°", "label": "Elbow angle",
                     "source": _wrist_source,
+                    # Explicit deviation-from-ideal (0 inside the 90-120°
+                    # dead zone), so downstream consumers (e.g. the RSI-risk
+                    # estimate below) don't have to re-derive "how far off"
+                    # from a raw included angle using the OLD 180-x
+                    # convention's implicit "value already is the deviation"
+                    # assumption, which no longer holds now that `value` is
+                    # the actual angle.
+                    "deviation": round(elbow_dev, 1),
                 }
-                if wrist_angle > 20:
-                    add_alert(out, f"⚠️ Elbow angle {round(wrist_angle,1)}° off neutral — bring elbows closer to 90°, keyboard/mouse closer to your body.",
-                              f"⚠️ زاوية الكوع {round(wrist_angle,1)}° عن الوضع الطبيعي — قرّب مرفقيك من 90° وقرّب لوحة المفاتيح/الماوس من جسمك.")
-                elif wrist_angle > 12:
-                    add_alert(out, f"Elbow angle {round(wrist_angle,1)}° off neutral — try to keep elbows near 90°.",
-                              f"زاوية الكوع {round(wrist_angle,1)}° عن الوضع الطبيعي — حاول إبقاء مرفقيك قريبة من 90°.")
+                # NOTE: no "arm at rest" exclusion yet (postureEngine.js's
+                # armWorking() gate excludes a hanging/relaxed arm from
+                # being scored at all, specifically to avoid this same false
+                # "fix your elbow" alert on a non-problem). Not added in
+                # this pass — flagged as follow-up, since on a typical
+                # laptop-webcam frame the elbow/wrist are usually below
+                # frame entirely (same reason hips are) and this narrows how
+                # often a resting arm would even be visible enough to reach
+                # this code, but it is not zero risk.
+                if elbow_dev > 15:
+                    add_alert(out, f"⚠️ Elbow angle {round(included_angle,1)}° — outside the 90-120° comfortable range, bring elbows closer to your body.",
+                              f"⚠️ زاوية الكوع {round(included_angle,1)}° — خارج نطاق الراحة 90-120°، قرّب مرفقيك من جسمك.")
+                elif elbow_dev > 5:
+                    add_alert(out, f"Elbow angle {round(included_angle,1)}° — try to keep elbows within 90-120°.",
+                              f"زاوية الكوع {round(included_angle,1)}° — حاول إبقاء مرفقيك بين 90-120°.")
         except Exception:
             pass
 
@@ -3976,7 +4049,15 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         _wrist_risk  = 0
         if wrist_sc is not None:
             _w_met = out["metrics"].get("wrist_angle", {})
-            _wrist_risk = max(0, _w_met.get("value",0) - 15) * 1.2
+            # Was `max(0, value-15)*1.2`, relying on the old convention where
+            # `value` (180-included_angle) already WAS a deviation-from-
+            # straight figure. Since the elbow-angle fix, `value` is the raw
+            # included angle (e.g. ~105° for a correct typing posture), so
+            # that formula would now read a large false RSI risk off of any
+            # visible, healthy elbow angle. Use the metric's own explicit
+            # `deviation` field (0 inside the 90-120° OSHA/NIOSH dead zone)
+            # instead of re-deriving it here.
+            _wrist_risk = _w_met.get("deviation", 0) * 1.2
         _rsi_rate    = (_neck_risk + _wrist_risk) * (_dur_so_far / 60)  # per hour
         _rsi_level   = "low" if _rsi_rate < 2 else "moderate" if _rsi_rate < 6 else "high"
         out["metrics"]["rsi_risk"] = {
@@ -4093,7 +4174,9 @@ def analyze_front_cascade(image, mode, out, dist_baseline_cm=None, dist_calib_fa
             dist_cm = round((6.3 * 630 * (w / 640)) / ipd, 1)
     dist_cm = max(20, min(150, dist_cm))
 
-    lo, hi = (50, 80) if mode == "laptop" else (60, 90)
+    # laptop range synced with postureEngine.js/OSHA — see the matching
+    # comment in analyze_front() above.
+    lo, hi = (50, 100) if mode == "laptop" else (60, 90)
     # BUG FIX (same gap as analyze_front): blend 70% toward the user's own
     # calibrated comfortable distance instead of a fixed generic range, so
     # the cascade fallback scores against the same personalized target as
