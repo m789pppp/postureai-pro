@@ -29,7 +29,7 @@ import { HRPanel } from "./HRPanel.jsx";
 const TherapistMarketplace = lazy(()=>import("./TherapistMarketplace.jsx").then(m=>({default:m.TherapistMarketplace})));
 const SymptomCorrelation = lazy(()=>import("./SymptomCorrelation.jsx").then(m=>({default:m.SymptomCorrelation})));
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
-import { CalibrationWizard, useCalibration, applyCalibration } from "./PostureCalibration.jsx";
+import { CalibrationWizard, useCalibration } from "./PostureCalibration.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
@@ -2551,6 +2551,10 @@ export default function App(){
   const setMode=(m)=>{ _setMode(m); try{localStorage.setItem("last_mode",m);}catch{} };
   const[lowLight,setLowLight]=useState(false);
   const[multiPersonWarning,setMultiPersonWarning]=useState(false); // see subjectRejectStreakRef in runLoop
+  // See noBodyStreakRef in runLoop — no landmarks detected at all for a
+  // sustained stretch (away from the desk, or slumped/turned far enough
+  // that MediaPipe can't find a pose at all, e.g. asleep face-down).
+  const[personAbsent,setPersonAbsent]=useState(false);
   const[sessionInsights,setSessionInsights]=useState([]);
   useEffect(()=>{ lmSmootherRef.current?.reset(); frameBufferRef.current?.clear(); distSmootherRef.current?.reset(); resetProportions(); },[mode]);
   const[tier,setTier]=useState(null);
@@ -3384,6 +3388,11 @@ export default function App(){
   // banner, only a sustained run of them.
   const subjectRejectStreakRef=useRef(0);
   const multiPersonShownRef=useRef(false); // avoids reading multiPersonWarning state inside runLoop's closure
+  // Wall-clock (not frame-count — fps varies with tier/throttling), so this
+  // means the same ~5s regardless of analysis rate. See the `else` branch
+  // below where det.landmarks is empty.
+  const noBodyStreakRef=useRef(null);
+  const personAbsentShownRef=useRef(false);
   const insightsRef=useRef(null);
   // alertCauseRef: { [causeKey]: { last: timestamp, count: number } }
   // count drives exponential backoff: 1st repeat → 5min, 2nd → 10min, 3rd+ → 20min
@@ -3963,6 +3972,13 @@ export default function App(){
         const det=mpRef.current.detectForVideo(vidRef.current,performance.now());
         if(det.landmarks?.length>0){
           window.__frameHadLandmarksOnce=true;
+          // A body is visible again — clear the absence streak/banner (see
+          // the `else` branch below for where these get set).
+          noBodyStreakRef.current=null;
+          if(personAbsentShownRef.current){
+            personAbsentShownRef.current=false;
+            setPersonAbsent(false);
+          }
           const quality = qualityFor(effectiveTier);
           if(!lmSmootherRef.current) lmSmootherRef.current=createLandmarkSmoother(quality.smoothingAlpha, quality.outlierMaxConsecutive);
           if(!frameBufferRef.current) frameBufferRef.current=createFrameBuffer(30); // 2s at 15fps
@@ -4052,14 +4068,36 @@ export default function App(){
           // If no qualityReason but overall is null, skip silently (not enough frames yet)
           if(result && result.overall == null){ rafRef.current=requestAnimationFrame(runLoop);return; }
           if(result){
-            // Apply personal calibration if available
-            let finalResult = result;
-            if(calibData?.tolerances) {
-              const adjMets = applyCalibration(result.metrics, calibData, "front"); // Side mode removed app-wide — always front now
-              const vals = Object.values(adjMets).map(m=>m.score||0);
-              const calibScore = Math.round(vals.reduce((a,b)=>a+b,0)/Math.max(vals.length,1));
-              finalResult = {...result, overall: Math.round(result.overall*.4 + calibScore*.6), metrics: adjMets};
-            }
+            // Calibration is already applied INSIDE the engine — analyzeMP()
+            // is called with calibData as its `calib` argument (see the call
+            // site above), and every analyzer that supports personalisation
+            // (neck, head tilt, shoulder level, spine lean, plus several
+            // others) reads calib.tolerances via resolveThr() and scores
+            // against the user's own calibrated baseline instead of the
+            // population default. `result.overall` is therefore already a
+            // properly weighted, confidence-scaled, penalty-aware CALIBRATED
+            // score by the time it reaches this line.
+            //
+            // This used to run applyCalibration() a SECOND time here, on the
+            // same calibData, then blend 40% of the already-correct overall
+            // with 60% of a flat, unweighted mean across every entry in
+            // `result.metrics` — including entries that are not posture
+            // metrics at all (`confidence_val`, always ~78-94; `session_fatigue`,
+            // itself derived from `overall`; `position_penalty`, the inverse of
+            // a penalty already subtracted). Every module in that mean was
+            // also counted at equal weight regardless of its real WEIGHTS_FRONT
+            // share or whether it was even reliable this frame — an unreliable
+            // module's cosmetic default score (e.g. 90) is meant to be excluded
+            // entirely, not averaged in at full weight.
+            //
+            // This is exactly the kind of thing that produces an unexplained
+            // jump: leaning in toward the camera changes which landmarks stay
+            // reliable frame to frame, which moves the flat mean independently
+            // of the real weighted score sitting right next to it — most
+            // visible for calibrated users, i.e. anyone who actually completed
+            // onboarding. Using the engine's own result directly removes the
+            // second, broken calculation instead of trying to patch it.
+            const finalResult = result;
             if(finalResult.overall>=65){goodRef.current++;setGoodF(goodRef.current);}
             // Score pipeline: buffer(60frames) → calibration → EMA smoother → UI
             const smoothed1=pushScore(finalResult.overall);
@@ -4244,16 +4282,39 @@ export default function App(){
                 else if(Math.abs(yaw)>12){causeKey="yaw";msg=`Head turned ${Math.round(Math.abs(yaw))}° — face the monitor`;msgAr=`الرأس مائل ${Math.round(Math.abs(yaw))}° — واجه الشاشة مباشرة`;}
                 else if(dist&&dist<lo){causeKey="dist";msg=`Too close (${dist}cm) — move to ${lo}–${hi}cm`;msgAr=`قريب جداً (${dist}سم) — ابتعد إلى ${lo}–${hi}سم`;acRef.current.dist++;}
 
-                // Exponential backoff per cause: 1st=5min, 2nd=10min, 3rd+=20min
-                // Prevents repeated same-cause spam while still alerting on genuine persistence
-                // Backoff scaled by the sensitivity setting (strict repeats
-                // sooner, relaxed later) instead of a fixed 5/10/20.
+                // Exponential backoff per cause — but NOT the same schedule for
+                // every severity. This used to be a flat 1st=base, 2nd=2×base,
+                // 3rd+=4×base regardless of how bad the posture actually was,
+                // which is backwards for the case that matters most: genuinely
+                // severe, sustained bad posture (score<40, the same cause,
+                // held for the whole session) backed off to 4× base — 20
+                // minutes of silence in "balanced" mode, 80 in "relaxed" —
+                // exactly as quiet as a single mild drift that happened to
+                // recur three times. That is the reported "alerts aren't
+                // strong enough": the app was correctly LOUD on the first
+                // notice and then went quiet regardless of whether the
+                // problem had actually improved.
+                //
+                // Severity is computed from finalResult.overall up front (was
+                // previously computed AFTER this block, for display only) so
+                // the backoff itself can use it: severe posture gets a flat,
+                // non-growing cooldown (it keeps nagging at the same cadence
+                // for as long as it stays severe), moderate grows gently,
+                // and only genuinely mild/borderline drift gets the original
+                // aggressive 1×/2×/4× backoff — that schedule exists to avoid
+                // nagging someone about a small, recurring, low-stakes issue,
+                // which is a real use case but not this one.
+                const sev = finalResult.overall<40?"severe":finalResult.overall<55?"moderate":"mild";
                 const causeEntry = alertCauseRef.current[causeKey] || { last: 0, count: 0 };
-                const causeCooldown = SENS.base * (causeEntry.count === 0 ? 1 : causeEntry.count === 1 ? 2 : 4);
+                const backoffMult = sev==="severe"
+                  ? 1
+                  : sev==="moderate"
+                    ? (causeEntry.count === 0 ? 1 : causeEntry.count === 1 ? 1.5 : 2)
+                    : (causeEntry.count === 0 ? 1 : causeEntry.count === 1 ? 2 : 4);
+                const causeCooldown = SENS.base * backoffMult;
                 if(now - causeEntry.last > causeCooldown){
                   alertCauseRef.current[causeKey] = { last: now, count: causeEntry.count + 1 };
                   const displayMsg = isAr ? msgAr : msg;
-                  const sev = finalResult.overall<40?"severe":finalResult.overall<55?"moderate":"mild";
                   setAlertCounts({...acRef.current});
                   alRef.current=[{time:new Date().toLocaleTimeString(),msg:displayMsg,msgEn:msg,msgAr,score:finalResult.overall,severity:sev,cause:causeKey},...alRef.current].slice(0,30);
                   // #10 Streak protection — fire once per session if streak at risk
@@ -4335,10 +4396,55 @@ export default function App(){
           }
         } else {
           // No person/landmarks detected in this frame at all.
+          //
+          // This used to be entirely silent: no state update of any kind, so
+          // analysis/scoreStatus/alertMsg all just kept whatever the LAST
+          // successful frame had left in them. From the user's side that
+          // means the score, grade and "Excellent" banner stayed on screen
+          // completely unchanged while they were away from the desk, or
+          // asleep and slumped low enough (or turned far enough) that
+          // MediaPipe simply can't find a pose — silently reporting a good
+          // reading for a person who isn't being measured at all. That is
+          // the exact gap: bad/no posture, reported as a normal good score.
           const nowNoLm = performance.now();
           if(!window.__lastNoLandmarksLog || nowNoLm - window.__lastNoLandmarksLog > 5000){
             window.__lastNoLandmarksLog = nowNoLm;
             console.warn("[DIAG] No landmarks detected this frame. det=", det, "video ready:", vid.readyState, vid.videoWidth, vid.videoHeight, "hadLandmarksEver:", !!window.__frameHadLandmarksOnce);
+          }
+          // Only during an actual active scoring session — not during the
+          // pre-session framing/countdown (nobody has sat down yet, that's
+          // normal) and not while intentionally paused/on a break (the
+          // camera is deliberately released then — see
+          // releaseCameraForPause() — which already has its own honest
+          // "camera off" messaging; this must not fight it). sessRef is a
+          // ref (set in beginScoring, cleared on stop) rather than state, so
+          // it reads correctly here regardless of when this closure was last
+          // rebuilt — unlike isPaused/camSuspended, which are state and
+          // would need to be in runLoop's dependency array to read fresh,
+          // and in practice can't be true here anyway: isPaused gates the
+          // effect that schedules runLoop at all (see the effect below), so
+          // this code never runs while genuinely paused.
+          if(sessRef.current){
+            if(!noBodyStreakRef.current) noBodyStreakRef.current=nowNoLm;
+            const awayMs = nowNoLm - noBodyStreakRef.current;
+            // ~5s grace before declaring it — a lean out of frame to grab
+            // something, or one bad MediaPipe frame, is not an absence.
+            if(awayMs > 5000 && !personAbsentShownRef.current){
+              personAbsentShownRef.current=true;
+              setPersonAbsent(true);
+              // Must not leave the last real reading sitting on screen
+              // looking current — that is precisely how "asleep, sitting
+              // badly" read as a normal score. Clear it honestly instead of
+              // freezing it.
+              startTransition(()=>{
+                setAnalysis(prev=>prev?{...prev, overall:null, detected:false, qualityReason:"no_person"}:prev);
+                setScoreStatus(null);
+              });
+              setAlertMsg({text:isAr?"محدش قدام الكاميرا — الجلسة اتوقفت مؤقتًا لحد ما ترجع":
+                                     "No one detected in frame — paused until you're back",type:"info"});
+              goodSinceRef.current=0;
+              badRef.current=null;
+            }
           }
         }
       }catch(e){
@@ -4460,7 +4566,15 @@ export default function App(){
                 const causeKeyBE = (result.alerts?.[0] || "posture")
                   .toLowerCase().replace(/[\d.]+\s*(cm|°|deg|%)?/g, "").replace(/\s+/g, " ").trim().slice(0, 24) || "posture";
                 const causeEntryBE = alertCauseRef.current[causeKeyBE] || { last: 0, count: 0 };
-                const causeCoolBE = SENS.base * (causeEntryBE.count === 0 ? 1 : causeEntryBE.count === 1 ? 2 : 4);
+                // Same fix as the local MediaPipe path above: severe/sustained
+                // posture must not back off to the same near-silent cadence as
+                // a recurring mild drift.
+                const backoffMultBE = _sev==="severe"
+                  ? 1
+                  : _sev==="moderate"
+                    ? (causeEntryBE.count === 0 ? 1 : causeEntryBE.count === 1 ? 1.5 : 2)
+                    : (causeEntryBE.count === 0 ? 1 : causeEntryBE.count === 1 ? 2 : 4);
+                const causeCoolBE = SENS.base * backoffMultBE;
                 if(now - causeEntryBE.last > causeCoolBE){
                 alertCauseRef.current[causeKeyBE] = { last: now, count: causeEntryBE.count + 1 };
                 const msgFb = isAr
@@ -4738,6 +4852,7 @@ export default function App(){
       pausedAtRef.current = null;
       camSuspendedRef.current = false; resumingCamRef.current = false;
       setCamSuspended(false); setResumingCam(false);
+      noBodyStreakRef.current = null; personAbsentShownRef.current = false; setPersonAbsent(false);
       stoppingRef.current = false; // clears stopCamera()'s reentrancy guard for this new session
       // Per-session counters. These were NOT reset here, and stopCamera didn't
       // reset them either (the only reset lived in a switchMode() that had no
@@ -4950,6 +5065,7 @@ export default function App(){
     // released them), but these flags must not survive into the next session.
     camSuspendedRef.current = false; resumingCamRef.current = false;
     setCamSuspended(false); setResumingCam(false);
+    noBodyStreakRef.current = null; personAbsentShownRef.current = false; setPersonAbsent(false);
     // Detach srcObject from video element (releases camera indicator light)
     if(vidRef.current && vidRef.current.srcObject){
       vidRef.current.srcObject = null;
@@ -7856,8 +7972,22 @@ async function downloadPDF(sessionOverride, isClinical=false){
                 const label = badQuality
                   ? (analysis.qualityReason==="too_close" ? (isAr?"قريب جداً":"Too close")
                     : analysis.qualityReason==="too_far" ? (isAr?"بعيد جداً":"Too far")
+                    : analysis.qualityReason==="reclined" ? (isAr?"مش قاعد بشكل طبيعي":"Not sitting normally")
+                    : analysis.qualityReason==="no_person" ? (isAr?"محدش موجود":"No one detected")
                     : (isAr?"الجسم مقطوع":"Body cropped"))
-                  : distCm!=null ? `${Math.round(distCm)}cm` : (isAr?"جاري القياس…":"Measuring…");
+                  : distCm!=null
+                    // "≈" when this reading is NOT from the user's own
+                    // calibration — it's a back-calculation off an assumed
+                    // average adult shoulder width (42cm) / eye spacing
+                    // (6.3cm IPD), which is only ever exactly right for
+                    // someone who happens to match those averages. Presenting
+                    // it as an exact centimetre figure either way is the
+                    // "distance calibration is off" complaint: it isn't
+                    // wrong so much as it's an honest estimate being shown
+                    // with false precision. Calibrating (CalibrationWizard)
+                    // measures the user's own proportions and removes the "≈".
+                    ? `${analysis?.metrics?.screen_distance?.calibrated ? "" : "≈"}${Math.round(distCm)}cm`
+                    : (isAr?"جاري القياس…":"Measuring…");
                 return (
                   <div style={{
                     background:"rgba(2,8,16,.85)",borderRadius:99,padding:"4px 10px",
@@ -8430,7 +8560,10 @@ async function downloadPDF(sessionOverride, isClinical=false){
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontSize:10,color:cs.muted,fontWeight:600}}>{isAr?"المسافة":"Distance"}</span>
               <span style={{fontSize:12,fontWeight:700,color:distColor(distCm, M_),fontVariantNumeric:"tabular-nums"}}>
-                {Math.round(distCm)}cm
+                {/* Same "≈" honesty note as the on-video chip above — an
+                    uncalibrated reading is a back-calculation off an assumed
+                    average adult, not a measurement of this user. */}
+                {analysis?.metrics?.screen_distance?.calibrated ? "" : "≈"}{Math.round(distCm)}cm
               </span>
             </div>
             <div style={{position:"relative",height:8,background:"rgba(148,163,184,.08)",borderRadius:99,overflow:"hidden"}}>
@@ -8476,6 +8609,19 @@ async function downloadPDF(sessionOverride, isClinical=false){
             display:"flex",alignItems:"center",gap:8,fontSize:12,color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>
             👥 {isAr?"تم رصد شخص آخر أو حركة مفاجئة — التتبع متوقف مؤقتًا. تأكد إنك انت بس في الكادر":
                      "Another person or sudden movement detected — tracking paused. Make sure only you are in frame"}
+          </div>
+        )}
+
+        {/* No one detected — see noBodyStreakRef in runLoop. Away from the
+            desk, or asleep/slumped far enough that MediaPipe finds no pose
+            at all. This used to leave the last good score frozen on screen
+            with nothing to say it was stale — bad (or no) posture reporting
+            as a normal reading. */}
+        {personAbsent && (
+          <div style={{padding:"8px 14px",background:"rgba(198,96,79,.12)",borderBottom:`1px solid ${cs.border}`,
+            display:"flex",alignItems:"center",gap:8,fontSize:12,color:darkMode?"#e08b7d":"#b3402c",fontWeight:600}}>
+            🪑 {isAr?"محدش قدام الكاميرا دلوقتي — القراءة اتوقفت لحد ما ترجع":
+                     "No one detected in front of the camera — reading paused until you're back"}
           </div>
         )}
 

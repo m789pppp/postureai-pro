@@ -893,6 +893,7 @@ export function resetProportions() {
   analyzeMP._scoreBuf = null;
   analyzeMP._relState = null;
   analyzeMP._confEMA = null;
+  analyzeMP._reclineState = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1243,7 +1244,78 @@ function checkFrameQuality(lms, W, H) {
     return { ok: false, reason: "too_far", severity: sev };
   }
 
+  // ── Reclined / lying-down check ───────────────────────────────────
+  // Every threshold in this file (SPINE_LEAN, SH_TILT, ROUNDED, etc.) is
+  // built around one assumption: the user is upright in a chair, facing a
+  // screen. That assumption fails completely when someone reclines a
+  // chair back, lies down with a laptop on their chest, or props a phone
+  // on a pillow — and it fails SILENTLY, because the pose is still 25+
+  // visible landmarks, so nothing above rejects the frame. The seated
+  // formulas just keep producing a number. That number is not slightly
+  // wrong, it is computed against a reference frame that no longer
+  // applies: spine_lean measures deviation from vertical, and lying down
+  // IS a ~90° deviation from vertical — normal for lying down, and
+  // nothing this engine is built to grade as posture. Reported (before
+  // this fix): a subject reclined flat on a couch, laptop propped on
+  // their stomach, read a stable 70-85 "Good" for as long as they stayed
+  // still — the exact "sitting badly and it reads as fine" gap this was
+  // written to close.
+  if (_checkReclined(lms, W, H)) {
+    return { ok: false, reason: "reclined", severity: 1 };
+  }
+
   return { ok: true, reason: "ok", severity: 0 };
+}
+
+/**
+ * Detects a body orientation this engine has no seated-posture model for
+ * (reclined / lying down), from raw landmark geometry — same tier as the
+ * too_close/too_far checks above, before any per-module analyzer runs.
+ *
+ * Two signals, in priority order:
+ *  1. Hip→shoulder line vs vertical (angleVert) — the direct, strongest
+ *     signal, but needs hips in frame (often cropped out at laptop
+ *     distance).
+ *  2. Shoulder-to-shoulder line vs horizontal (angleHoriz) — visible even
+ *     when hips are cropped. A seated user's worst realistic shoulder
+ *     tilt is well under THR.SH_TILT.bad (12°); crossing 38° means the
+ *     camera is seeing the shoulders at an angle only lying down, falling
+ *     sideways out of the chair, or a knocked-over camera produces.
+ *
+ * Debounced over ~1.8s of CONTINUOUS frames (wall-clock, not a frame
+ * count — see the fatigue-buffer comment elsewhere in this file for why
+ * frame count is the wrong unit) so a deliberate stretch, reaching to the
+ * floor, or turning to grab something off the desk — real, brief,
+ * upright-adjacent movements — are not mistaken for lying down. A body
+ * still this extreme after nearly two full seconds is not a stretch.
+ */
+function _checkReclined(lms, W, H) {
+  const g   = i => lms[i];
+  const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
+  let extreme = false;
+  if (vis(PL.L_SHOULDER) && vis(PL.R_SHOULDER)) {
+    const lSh = { x: g(PL.L_SHOULDER).x * W, y: g(PL.L_SHOULDER).y * H };
+    const rSh = { x: g(PL.R_SHOULDER).x * W, y: g(PL.R_SHOULDER).y * H };
+    if (vis(PL.L_HIP) && vis(PL.R_HIP)) {
+      const lHip = { x: g(PL.L_HIP).x * W, y: g(PL.L_HIP).y * H };
+      const rHip = { x: g(PL.R_HIP).x * W, y: g(PL.R_HIP).y * H };
+      const midHip = { x: (lHip.x + rHip.x) / 2, y: (lHip.y + rHip.y) / 2 };
+      const midSh  = { x: (lSh.x + rSh.x) / 2,   y: (lSh.y + rSh.y) / 2 };
+      extreme = angleVert(midHip, midSh) > 42;
+    } else {
+      extreme = angleHoriz(lSh, rSh) > 38;
+    }
+  }
+
+  if (!analyzeMP._reclineState) analyzeMP._reclineState = { since: null };
+  const rs = analyzeMP._reclineState;
+  const now = Date.now();
+  if (extreme) {
+    if (!rs.since) rs.since = now;
+    return (now - rs.since) > 1800;
+  }
+  rs.since = null;
+  return false;
 }
 
 // ═══════════════════════════════════════════════════════════════════

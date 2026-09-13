@@ -394,5 +394,45 @@ console.log('\n--- 14. no metric is measured but unweighted ---');
   check(Math.abs(sum - 1) < 0.005, `weights sum to 1.0 (got ${sum.toFixed(4)})`);
 }
 
+// ── 15. reclined / lying down is detected honestly, not silently scored ────
+// Every threshold in this engine assumes an upright, seated user. Lying down
+// or fully reclined doesn't fail any single check — the pose is still 25+
+// valid landmarks — so before this fix the seated formulas just produced a
+// number, and that number could easily land in "Good" territory purely by
+// accident of geometry (see checkBodyOrientation's comment in postureEngine.js
+// for the reported case). This is debounced over real elapsed time (not frame
+// count), so this section genuinely sleeps rather than looping fast.
+console.log('\n--- 15. reclined / lying down is detected honestly, not silently scored ---');
+{
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  // Push the hip midpoint far enough sideways of the shoulder midpoint that
+  // the hip->shoulder line sits well past the 42° reclined threshold, while
+  // keeping everything else (including shoulder tilt) neutral.
+  const reclinedLms = () => {
+    const a = makeLandmarks({});
+    a[PL.L_HIP] = { ...a[PL.L_HIP], x: a[PL.L_HIP].x + 0.16 };
+    a[PL.R_HIP] = { ...a[PL.R_HIP], x: a[PL.R_HIP].x + 0.16 };
+    return a;
+  };
+
+  resetProportions();
+  const first = analyzeMP(reclinedLms(), W, H, 'laptop');
+  check(first?.qualityReason !== 'reclined', 'a single reclined-looking frame is not flagged immediately (avoids false positives from a brief lean)');
+
+  await sleep(2000);
+  const sustained = analyzeMP(reclinedLms(), W, H, 'laptop');
+  console.log(`  sustained extreme hip-shoulder angle -> reason=${sustained?.qualityReason} score=${sustained?.score}`);
+  check(sustained?.qualityReason === 'reclined', 'sustained extreme hip-shoulder angle is flagged as reclined');
+  check(sustained?.score == null, 'a reclined frame does not produce a fake seated-posture score');
+
+  // A badly slumped but still genuinely SEATED user must never be caught by
+  // this — slouching is a real, common, legitimate thing to score normally.
+  resetProportions();
+  analyzeMP(makeLandmarks({ neckLeanDeg: 38, shoulderTiltDeg: 14 }), W, H, 'laptop');
+  await sleep(2000);
+  const seatedBad = analyzeMP(makeLandmarks({ neckLeanDeg: 38, shoulderTiltDeg: 14 }), W, H, 'laptop');
+  check(seatedBad?.qualityReason !== 'reclined', 'a badly slumped but still-seated pose is never misflagged as reclined');
+}
+
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);
