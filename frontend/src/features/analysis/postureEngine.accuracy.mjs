@@ -49,6 +49,26 @@ const check = (name, ok, detail) => {
 const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? "n/a" : (Math.round(n * 100) / 100).toFixed(2);
 
 /**
+ * buildAlerts() now requires a condition to hold for ALERT_DWELL_MS of real
+ * elapsed time before it surfaces (postureEngine.js) — a real accuracy fix:
+ * a real-camera run showed 88-100% false-positive "alerts" during correct,
+ * still-sitting phases, fired off single noisy frames. This harness runs
+ * settle/hold as a tight synchronous loop with no actual delay between
+ * frames, so it needs a fake, monotonically-advancing clock to simulate a
+ * realistic frame rate — analyzeMP.__testNowMs, read by analyzeMP in place
+ * of Date.now() only when set. Scoped to read()/readRaw()/readNoisy() only,
+ * and cleared afterward so it can't leak into the drift/fatigue tests
+ * further down, which exercise real elapsed-time behaviour directly.
+ */
+let _fakeNowMs = null;
+const _tick = (stepMs = 50) => { // ~20fps, matching this file's own analysis-rate comments
+  _fakeNowMs += stepMs;
+  analyzeMP.__testNowMs = _fakeNowMs;
+};
+const _startFakeClock = () => { _fakeNowMs = Date.now(); analyzeMP.__testNowMs = _fakeNowMs; };
+const _stopFakeClock = () => { _fakeNowMs = null; analyzeMP.__testNowMs = null; };
+
+/**
  * Settle at neutral, then adopt the test pose.
  *
  * Several metrics learn the user's own neutral from their first seconds
@@ -60,38 +80,46 @@ const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? "n/a" : (M
  */
 function read(pose = {}, { body = {}, camera = {}, settle = 120, hold = 40, noisePx = 0, seed = 1 } = {}) {
   resetProportions();
+  _startFakeClock();
   const rng = mulberry32(seed);
   const frame = (p) => {
     let lms = renderSubject(p, body, camera);
     if (noisePx > 0) lms = jitter(lms, noisePx, camera, rng);
+    _tick();
     return analyzeMP(lms, W, H, "front");
   };
   let r = null;
   for (let i = 0; i < settle; i++) r = frame({});
   for (let i = 0; i < hold; i++) r = frame(pose);
+  _stopFakeClock();
   return r;
 }
 
 /** Like read(), but lets a test corrupt the landmarks before the engine sees them. */
 function readRaw(pose = {}, corrupt = (l) => l, { settle = 130, hold = 50 } = {}) {
   resetProportions();
+  _startFakeClock();
   let r = null;
-  const frame = (p) => { r = analyzeMP(corrupt(renderSubject(p, {}, {})), W, H, "front"); };
+  const frame = (p) => { _tick(); r = analyzeMP(corrupt(renderSubject(p, {}, {})), W, H, "front"); };
   for (let i = 0; i < settle; i++) frame({});
   for (let i = 0; i < hold; i++) frame(pose);
+  _stopFakeClock();
   return r;
 }
 
 /** Like read(), but with a chosen depth-noise multiplier. */
 function readNoisy(pose = {}, zSigmaMult = 3, { settle = 130, hold = 50, seed = 5 } = {}) {
   resetProportions();
+  _startFakeClock();
   const rng = mulberry32(seed);
   let r = null;
   const frame = (p) => {
+    _tick();
     r = analyzeMP(jitter(renderSubject(p, {}, {}), 1.5, {}, rng, { zSigmaMult }), W, H, "front");
   };
   for (let i = 0; i < settle; i++) frame({});
   for (let i = 0; i < hold; i++) frame(pose);
+  _stopFakeClock();
   return r;
 }
 

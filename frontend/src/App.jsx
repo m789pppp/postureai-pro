@@ -3393,6 +3393,12 @@ export default function App(){
   // below where det.landmarks is empty.
   const noBodyStreakRef=useRef(null);
   const personAbsentShownRef=useRef(false);
+  // One-time, per-session honest notice — see hipsNotVisible in
+  // postureEngine.js. Slouch/twist detection both require hip landmarks and
+  // correctly refuse to guess without them (common when a desk hides the
+  // hips from a laptop webcam); this just tells the user why those two
+  // checks stayed silent instead of leaving it unexplained.
+  const hipsHintShownRef=useRef(false);
   const insightsRef=useRef(null);
   // alertCauseRef: { [causeKey]: { last: timestamp, count: number } }
   // count drives exponential backoff: 1st repeat → 5min, 2nd → 10min, 3rd+ → 20min
@@ -4115,6 +4121,17 @@ export default function App(){
             // add over a path that knows the cause, escalates per cause, and
             // now picks exactly one channel per event.
             checkCustomAlertRules(finalResult.metrics);
+            // See hipsNotVisible in postureEngine.js — slouch/twist checks
+            // correctly stay silent rather than guess when hips aren't in
+            // frame (common webcam framing with a desk in the way). Told
+            // once per session instead of leaving it unexplained.
+            if(finalResult.hipsNotVisible && !hipsHintShownRef.current){
+              hipsHintShownRef.current = true;
+              addToast(isAr
+                ? "مش قادر أشوف حوضك — كشف الانحناء واللف مش هيشتغل. جرب تبعد شوية عن الكاميرا أو تميلها لتحت شوية."
+                : "I can't see your hips, so slouch and twist detection won't work right now — try sitting a little further back or tilting the camera down.",
+                "info");
+            }
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
@@ -4853,6 +4870,7 @@ export default function App(){
       camSuspendedRef.current = false; resumingCamRef.current = false;
       setCamSuspended(false); setResumingCam(false);
       noBodyStreakRef.current = null; personAbsentShownRef.current = false; setPersonAbsent(false);
+      hipsHintShownRef.current = false;
       stoppingRef.current = false; // clears stopCamera()'s reentrancy guard for this new session
       // Per-session counters. These were NOT reset here, and stopCamera didn't
       // reset them either (the only reset lived in a switchMode() that had no
@@ -5066,6 +5084,7 @@ export default function App(){
     camSuspendedRef.current = false; resumingCamRef.current = false;
     setCamSuspended(false); setResumingCam(false);
     noBodyStreakRef.current = null; personAbsentShownRef.current = false; setPersonAbsent(false);
+    hipsHintShownRef.current = false;
     // Detach srcObject from video element (releases camera indicator light)
     if(vidRef.current && vidRef.current.srcObject){
       vidRef.current.srcObject = null;

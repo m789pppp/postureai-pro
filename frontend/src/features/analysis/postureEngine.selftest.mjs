@@ -434,5 +434,85 @@ console.log('\n--- 15. reclined / lying down is detected honestly, not silently 
   check(seatedBad?.qualityReason !== 'reclined', 'a badly slumped but still-seated pose is never misflagged as reclined');
 }
 
+// ── 16. alerts require a SUSTAINED condition, not one noisy frame ──────────
+// Real-camera accuracy run (2026-09-12, tools/accuracy-results/) showed
+// 88-100% alertRate during "neutral" and "recline" — control phases where a
+// tester was sitting correctly and the engine should have stayed silent.
+// buildAlerts() fired off a single frame's raw angle with zero temporal
+// smoothing, unlike every `reliable` flag in this file, which already goes
+// through debounceReliable(). A one-frame landmark jitter (settling into a
+// chair, a head bob, MediaPipe noise) crossing a threshold for one frame was
+// being spoken to the user as a real posture fault.
+console.log('\n--- 16. alerts require a sustained condition, not a single noisy frame ---');
+{
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const hasKey = (res, key) => (res?.alerts?.detailed || []).some(a => a.key === key);
+
+  // A single bad-neck frame sandwiched between neutral ones — exactly what a
+  // momentary blip looks like — must not surface as an alert.
+  resetProportions();
+  analyzeMP(makeLandmarks({}), W, H, 'laptop');
+  const blip = analyzeMP(makeLandmarks({ neckLeanDeg: 38 }), W, H, 'laptop');
+  check(!hasKey(blip, 'neck_sev'), 'a single noisy bad-neck frame does not surface a neck alert');
+  const backToNormal = analyzeMP(makeLandmarks({}), W, H, 'laptop');
+  check(!hasKey(backToNormal, 'neck_sev'), 'returning to neutral right after the blip still shows no neck alert');
+
+  // The SAME bad angle, held continuously past ALERT_DWELL_MS, must surface —
+  // debouncing must not mean "never alerts".
+  resetProportions();
+  analyzeMP(makeLandmarks({}), W, H, 'laptop');
+  let sustained;
+  const start = Date.now();
+  while (Date.now() - start < 1400) {
+    sustained = analyzeMP(makeLandmarks({ neckLeanDeg: 38 }), W, H, 'laptop');
+    await sleep(60);
+  }
+  check(hasKey(sustained, 'neck_sev'), 'a neck angle held for over a second is surfaced as a real alert');
+
+  // A condition that flickers on/off every frame — never holding continuously
+  // for the dwell window — must not accumulate into a false alert either.
+  resetProportions();
+  analyzeMP(makeLandmarks({}), W, H, 'laptop');
+  let flicker;
+  const fStart = Date.now();
+  let toggle = true;
+  while (Date.now() - fStart < 1400) {
+    flicker = analyzeMP(makeLandmarks(toggle ? { neckLeanDeg: 38 } : {}), W, H, 'laptop');
+    toggle = !toggle;
+    await sleep(60);
+  }
+  check(!hasKey(flicker, 'neck_sev'), 'a condition that flickers on and off never holds long enough to alert');
+}
+
+// ── 17. hips-hidden is surfaced honestly instead of silently dropped ───────
+// analyzeTorsoFlexion/analyzeTrunkRotation correctly refuse to guess when the
+// hips aren't visible (a laptop-webcam framing where the desk hides them) —
+// that's the right call, not a bug. But nothing told the user WHY slouch/
+// twist detection just never lit up; a real-camera run (2026-09-12) showed
+// exactly this for an entire session. hipsNotVisible should surface the
+// honest reason once it's clearly sustained, not on a single occluded frame.
+console.log('\n--- 17. sustained hip-visibility loss is surfaced, not silently dropped ---');
+{
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const noHips = () => {
+    const a = makeLandmarks({});
+    a[PL.L_HIP] = { ...a[PL.L_HIP], visibility: 0.2 };
+    a[PL.R_HIP] = { ...a[PL.R_HIP], visibility: 0.2 };
+    return a;
+  };
+
+  resetProportions();
+  const first = analyzeMP(noHips(), W, H, 'laptop');
+  check(first?.hipsNotVisible !== true, 'a single frame with hidden hips does not immediately surface the notice');
+
+  await sleep(6200);
+  const sustained = analyzeMP(noHips(), W, H, 'laptop');
+  check(sustained?.hipsNotVisible === true, 'hips hidden for a sustained stretch is surfaced honestly');
+
+  resetProportions();
+  const normal = analyzeMP(makeLandmarks({}), W, H, 'laptop');
+  check(normal?.hipsNotVisible !== true, 'a normal frame with hips visible never raises the notice');
+}
+
 console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);

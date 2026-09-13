@@ -95,6 +95,27 @@ const BEEP_COOLDOWN_MS = 30000;
  */
 const RELIABILITY_HYSTERESIS_FRAMES = 5;
 
+/**
+ * Minimum time (wall-clock, not frame count — see the rationale next to
+ * DRIFT_WINDOW_MS for why this file prefers wall-clock over frame counts)
+ * an alert CONDITION must hold continuously before it is allowed into
+ * alerts.detailed. Every `reliable` flag in this file already gets this
+ * treatment via debounceReliable(); buildAlerts() did not, even though its
+ * inputs (single-frame angles) are exactly as noisy.
+ *
+ * Found from a real-camera accuracy run (2026-09-12): the "neutral" and
+ * "recline" control phases — a tester sitting correctly — showed 88-100%
+ * alertRate. Those are supposed to be silent. The per-frame conditions in
+ * buildAlerts() (e.g. `neck.angle > neck.badAdj`) fire off one frame's raw
+ * angle with no temporal smoothing at all, so an ordinary micro-movement —
+ * settling into a chair, breathing, a brief head bob — that crosses a
+ * threshold for a single frame was being surfaced and voiced as a real
+ * posture fault. 1200ms at a typical 15-20fps analysis rate is 18-24 frames,
+ * long enough to filter a one- or two-frame jitter spike, short enough that
+ * a genuinely sustained bad posture is still caught well inside a second.
+ */
+const ALERT_DWELL_MS = 1200;
+
 // ─── Scoring thresholds (synced with backend.py score_m calls) ─────
 const THR = {
   // Front camera
@@ -894,6 +915,8 @@ export function resetProportions() {
   analyzeMP._relState = null;
   analyzeMP._confEMA = null;
   analyzeMP._reclineState = null;
+  analyzeMP._alertDwell = null;
+  analyzeMP._hipsState = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1289,6 +1312,31 @@ function checkFrameQuality(lms, W, H) {
  * upright-adjacent movements — are not mistaken for lying down. A body
  * still this extreme after nearly two full seconds is not a stretch.
  */
+/**
+ * Honest surfacing for a real, structural limit: analyzeTorsoFlexion and
+ * analyzeTrunkRotation both refuse to guess when the hips aren't visible
+ * (see the "hips_hidden" comment on each) rather than fall back to a ruler
+ * that's known to be wrong — the right call, not a bug. But the user was
+ * never told WHY slouch/twist just never light up. On a real-camera test
+ * (2026-09-12) both metrics read 0% reliable for the entire session because
+ * the hips were never in frame — a common laptop-webcam framing, not a
+ * depth/hardware fault as first suspected. If it's sustained rather than a
+ * momentary look-away, this surfaces once so the user can fix their framing
+ * (sit back, tilt the camera down) instead of silently losing two checks.
+ */
+function _checkHipsUnavailable(torsoFlex, trunkRot) {
+  const hidden = torsoFlex?.reason === "hips_hidden" || trunkRot?.reason === "hips_hidden";
+  if (!analyzeMP._hipsState) analyzeMP._hipsState = { since: null };
+  const hs = analyzeMP._hipsState;
+  const now = Date.now();
+  if (hidden) {
+    if (!hs.since) hs.since = now;
+    return (now - hs.since) > 6000;
+  }
+  hs.since = null;
+  return false;
+}
+
 function _checkReclined(lms, W, H) {
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
@@ -1537,7 +1585,12 @@ function analyzeTorsoFlexion(lms, W, H, prop, calib = null) {
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   const hipOK = vis(PL.L_HIP) && vis(PL.R_HIP);
   if (!prop.shOK || !hipOK) {
-    return { ratio: 0, shrinkPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false };
+    // Same "hips hidden by the desk" case analyzeTrunkRotation documents —
+    // tagged the same way so the two can be reported to the user as one
+    // honest limitation ("I can't see your hips") instead of two separate,
+    // unexplained "unreliable" metrics.
+    return { ratio: 0, shrinkPct: 0, score: 90, severity: "normal", confidence: 0, reliable: false,
+             reason: !prop.shOK ? undefined : "hips_hidden" };
   }
 
   const midHipY = ((g(PL.L_HIP).y + g(PL.R_HIP).y) / 2) * H;
@@ -2245,9 +2298,21 @@ function analyzeMonitorHeight(lms, W, H, distCm, calib = null) {
  * sorted by that. The headline becomes whatever is genuinely most wrong, and
  * it stays correct automatically when the weight table changes.
  */
-function buildAlerts(modules, distCm, lo, hi) {
+function buildAlerts(modules, distCm, lo, hi, nowMs = Date.now()) {
   const seen  = new Set();
   const items = [];
+
+  // Per-key dwell state — see ALERT_DWELL_MS. Keyed by the same `key` used
+  // for dedup/rate-limiting below, so "neck_sev" and "spine_mid" debounce
+  // independently: one condition flickering doesn't reset another's timer.
+  if (!analyzeMP._alertDwell) analyzeMP._alertDwell = Object.create(null);
+  const dwell = analyzeMP._alertDwell;
+  const held = (key, condition) => {
+    if (!condition) { dwell[key] = null; return false; }
+    if (dwell[key] == null) dwell[key] = nowMs;
+    return (nowMs - dwell[key]) >= ALERT_DWELL_MS;
+  };
+
   /**
    * @param key    dedupe key
    * @param cond   whether the alert fires
@@ -2255,7 +2320,7 @@ function buildAlerts(modules, distCm, lo, hi) {
    * @param impact weight x (100 - metric score); higher sorts first
    */
   const add = (key, condition, text, impact = 0) => {
-    if (!condition || !text || seen.has(key)) return null;
+    if (!held(key, condition) || !text || seen.has(key)) return null;
     seen.add(key);
     // `key` is carried through so a caller can rate-limit per CAUSE rather
     // than per message — two different neck messages are the same nag.
@@ -2865,7 +2930,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // past the slouch and the penalty evaporated — the number climbed ~15 points
   // with nothing changed. Keeping wall-clock time makes the window mean what
   // the comment says regardless of frame rate.
-  const _nowMs = Date.now();
+  // analyzeMP.__testNowMs lets a fast, synchronous test harness (no MediaPipe,
+  // no real camera) simulate elapsed wall-clock time across a tight loop of
+  // frames — e.g. for ALERT_DWELL_MS or the fatigue-drift window — without an
+  // actual multi-second sleep. Unset in every real caller (App.jsx, the
+  // backend), so production behaviour is exactly Date.now(), unchanged.
+  const _nowMs = analyzeMP.__testNowMs ?? Date.now();
   if (!analyzeMP._scoreBuf) analyzeMP._scoreBuf = [];
   analyzeMP._scoreBuf.push({ t: _nowMs, v: overall });
   const DRIFT_WINDOW_MS = 5 * 60 * 1000;
@@ -2899,7 +2969,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // so all three distance alerts scored imp("distance", undefined) = 0 and
   // sank to the bottom of the "most costly first" sort. "Very close (28cm)"
   // could never be the headline.
-  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance: { score: distSc }, shoulderElev, handProp, torsoFlex, trunkRot }, distCm, lo, hi);
+  const alerts = buildAlerts({ neck, headTilt, shoulder, spine, fhp, rounded, yaw, elbow, monitor, distance: { score: distSc }, shoulderElev, handProp, torsoFlex, trunkRot }, distCm, lo, hi, _nowMs);
 
   return {
     score:       overall,
@@ -2990,6 +3060,12 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     // True when the postural angles were scored against the user's own
     // calibrated neutral rather than population defaults.
     personalised: !!(calib?.tolerances) && (neck.personalised || shoulder.personalised || headTilt.personalised || spine.personalised || rounded.personalised),
+    // Sustained (>6s), honest "I can't see your hips" signal — see
+    // _checkHipsUnavailable. Slouch (torso_flexion) and twist (trunk_rotation)
+    // both require hip landmarks and refuse to guess without them; this lets
+    // the caller tell the user why those two checks are silent instead of
+    // leaving it unexplained.
+    hipsNotVisible: _checkHipsUnavailable(torsoFlex, trunkRot),
   };
 }
 
