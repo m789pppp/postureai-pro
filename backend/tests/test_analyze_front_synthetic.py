@@ -265,6 +265,57 @@ class TestElbowArmAtRest:
         assert wm.get("reason") != "arms_at_rest"
 
 
+class TestShoulderDistanceFallbackFocal:
+    """The shoulder-width-based distance fallback (used whenever FaceMesh
+    finds no face this frame -- this test harness's FaceMesh double always
+    reports none, see the module docstring) used to hardcode its own
+    generic focal-length estimate, completely ignoring any focal already
+    calibrated for this exact session from an earlier face-visible frame
+    (stored in backend._focal_cal, keyed by session_id, populated by
+    ipd_distance_face's own _calibrate_focal()) -- even though focal length
+    is a property of the camera/lens, not of which body part is being
+    measured, so a calibrated focal is exactly as valid here as it is
+    there. It also disagreed with ipd_distance_face's own generic-fallback
+    constant (600 here vs 630 there) even in the fully uncalibrated case,
+    so a calibrated user whose face briefly left FaceMesh's narrower
+    detection region (a head turn, a hand near the face, glare) while still
+    inside Pose's wider shoulder-tracking region had their distance reading
+    jump to a second, different, uncalibrated estimate on that exact frame.
+    """
+
+    def test_reuses_this_sessions_calibrated_focal_when_present(self):
+        sid = "unit-shoulder-fallback-calibrated"
+        be._focal_cal[sid] = 700.0   # as if calibrated from an earlier face-visible frame
+        try:
+            _current_case["lm_dicts"] = _POSES["neutral"]["landmarks"]
+            out = None
+            for _ in range(25):
+                out = be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="standard", session_id=sid)
+        finally:
+            del be._focal_cal[sid]
+        dist = out["metrics"]["screen_distance"]["value"]
+        # focal=700, this pose's ~560px shoulder width at W=1280: (40*700)/560 = 50.0cm.
+        assert abs(dist - 50.0) < 2.0, (
+            f"expected the session's own calibrated focal (700px) to be reused, "
+            f"got distance={dist} (looks like a generic/uncalibrated estimate instead)"
+        )
+
+    def test_falls_back_to_the_same_generic_constant_as_ipd_distance_face(self):
+        sid = "unit-shoulder-fallback-uncalibrated"
+        assert sid not in be._focal_cal   # sanity: genuinely uncalibrated
+        _current_case["lm_dicts"] = _POSES["neutral"]["landmarks"]
+        out = None
+        for _ in range(25):
+            out = be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="standard", session_id=sid)
+        dist = out["metrics"]["screen_distance"]["value"]
+        # Shared 630*(w/640) generic focal, this pose's ~560px shoulder
+        # width at W=1280: (40 * 630*2) / 560 = 90.0cm.
+        assert abs(dist - 90.0) < 2.0, (
+            f"expected the same generic fallback constant ipd_distance_face uses (630), "
+            f"got distance={dist} -- looks like the old, disagreeing 600 constant"
+        )
+
+
 class TestAlertDwell:
     """analyze_front() used to fire every alert off a single request with no
     temporal debouncing at all -- confirmed by reading every add_alert()/

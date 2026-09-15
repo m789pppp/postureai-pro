@@ -2896,7 +2896,31 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     if dist_cm is None:
         # Fresh shoulder width for distance fallback (not the normalized sh_width_px)
         _sh_w_fallback = dist2d(l_sh, r_sh)
-        focal   = 600 * (w / 640)
+        # FOCAL-CALIBRATION MISMATCH, found during the same threshold audit
+        # that fixed the elbow-angle inversion (2026-09): this used a
+        # hardcoded `600 * (w/640)` generic focal estimate, completely
+        # ignoring any focal length already calibrated for this exact
+        # session in _focal_cal — populated by ipd_distance_face()'s own
+        # _calibrate_focal() from face width on every frame the face WAS
+        # visible, and by the explicit Camera Calibration flow. Focal
+        # length is a property of the camera/lens, not of which body part
+        # is being measured, so a focal calibrated from an earlier
+        # face-visible frame is exactly as valid here as it is in
+        # ipd_distance_face — reusing it is strictly more accurate than a
+        # population-average guess, not a different estimator.
+        #
+        # Concretely, this meant a calibrated user whose face briefly left
+        # FaceMesh's detection (a head turn, a hand near the face, glare —
+        # all while still fully inside Pose's wider shoulder-tracking
+        # region) had their distance reading jump on that exact frame: not
+        # just to an uncalibrated estimate, but to a SECOND, DIFFERENT
+        # hardcoded constant (600 here vs 630 in ipd_distance_face's own
+        # generic fallback below) even in the already-degraded uncalibrated
+        # case. Falling back to the same 630 constant when no calibrated
+        # focal exists at least makes the two paths agree with each other
+        # absent calibration, instead of silently disagreeing by ~5%.
+        _focal_fallback = _focal_cal.get(_sid)
+        focal   = _focal_fallback if _focal_fallback else (630 * (w / 640))
         dist_cm = round((40.0 * focal) / max(_sh_w_fallback, 1), 1)
         dist_cm = max(20, min(150, dist_cm))
 
