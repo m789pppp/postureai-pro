@@ -316,6 +316,93 @@ class TestShoulderDistanceFallbackFocal:
         )
 
 
+class TestSeverityFloor:
+    """A confidence-weighted average can hide one severe fault behind
+    several good ones -- see apply_severity_floor()'s own docstring for the
+    full rationale (it mirrors a bug postureEngine.js's own severity floor
+    was added to fix on the frontend). Tested directly against
+    apply_severity_floor() rather than through the full analyze_front()
+    pipeline, for the same reason TestAlertDwell tests apply_alert_dwell()
+    directly: the synthetic-subject rig's lateralLeanDeg rolls trunk and
+    head together, so there's no dumped pose that puts exactly ONE metric
+    into "severe" while leaving the rest clean the way the motivating
+    real-world case (an isolated severe head tilt) does -- and even if
+    there were, the pre-existing Kalman/landmark-smoothing layer has the
+    same momentum confound documented in apply_alert_dwell's tests. A pure
+    function of (session_id, overall, candidates, now_ts) sidesteps both.
+    """
+
+    def test_a_single_sustained_severe_metric_caps_the_score(self):
+        sid = "unit-severity-single-severe"
+        t = 1_700_000_000.0
+        result = 95
+        for _ in range(4):
+            t += 0.5
+            result = be.apply_severity_floor(sid, 95, {"tilt": ("severe", True)}, now_ts=t)
+        assert result <= 69, f"a sustained severe metric should cap the score at 69, got {result}"
+
+    def test_not_capped_before_the_dwell_window_elapses(self):
+        sid = "unit-severity-too-soon"
+        result = be.apply_severity_floor(sid, 95, {"tilt": ("severe", True)}, now_ts=1_700_000_000.0)
+        assert result == 95, f"a single-frame severe reading should not cap the score yet, got {result}"
+
+    def test_no_severe_metrics_leaves_the_score_untouched(self):
+        sid = "unit-severity-all-clean"
+        candidates = {
+            "neck": ("normal", True), "tilt": ("mild", True),
+            "shoulder": (None, False), "spine": ("moderate", True),
+        }
+        t = 1_700_000_000.0
+        result = 88
+        for _ in range(4):
+            t += 0.5
+            result = be.apply_severity_floor(sid, 88, candidates, now_ts=t)
+        assert result == 88
+
+    def test_unreliable_severe_metric_never_caps(self):
+        """A metric can't be measurable-and-severe if it isn't measurable at
+        all -- an occluded/out-of-tier/no-face metric reporting "severe"
+        with reliable=False (which none of analyze_front's own candidates
+        should ever actually do, but the function must not trust blindly)
+        must not trip the floor no matter how long it persists."""
+        sid = "unit-severity-unreliable"
+        t = 1_700_000_000.0
+        result = 95
+        for _ in range(4):
+            t += 0.5
+            result = be.apply_severity_floor(sid, 95, {"fhp": ("severe", False)}, now_ts=t)
+        assert result == 95
+
+    def test_flicker_never_trips_the_floor(self):
+        sid = "unit-severity-flicker"
+        t = 1_700_000_000.0
+        result = 95
+        for i in range(6):
+            t += 0.9   # each call jumps most of the dwell window
+            candidates = {"tilt": ("severe", True)} if i % 2 == 0 else {"tilt": ("normal", True)}
+            result = be.apply_severity_floor(sid, 95, candidates, now_ts=t)
+        assert result == 95, f"a flickering severe reading should never accumulate enough continuous dwell time to cap the score: {result}"
+
+    def test_floor_never_raises_an_already_low_score(self):
+        """min(overall, 69) must never pull a genuinely worse score UP to
+        69 -- the floor only ever tightens a too-generous composite, it's
+        not a second, competing scoring path."""
+        sid = "unit-severity-already-low"
+        t = 1_700_000_000.0
+        result = 40
+        for _ in range(4):
+            t += 0.5
+            result = be.apply_severity_floor(sid, 40, {"tilt": ("severe", True)}, now_ts=t)
+        assert result == 40
+
+    def test_a_clean_neutral_pose_is_never_capped(self):
+        """Integration smoke test: a genuinely good posture must not have
+        its score capped at all -- guards against the floor firing on
+        anything other than an actual sustained severe reading."""
+        out = analyze("neutral", tier="professional")
+        assert out["score"] > 69, f"a clean neutral pose was capped: score={out['score']}"
+
+
 class TestAlertDwell:
     """analyze_front() used to fire every alert off a single request with no
     temporal debouncing at all -- confirmed by reading every add_alert()/
