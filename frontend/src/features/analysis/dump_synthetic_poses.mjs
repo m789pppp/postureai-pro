@@ -42,6 +42,14 @@ for (const d of [40, 60, 90, 100, 130]) {
 // arm offsets.
 out["elbow_typing_visible"] = { pose: {}, landmarks: renderSubject({}, {}, { distCm: 140 }) };
 
+// trunk_twist_45/trunk_flex_15 above are rendered at the normal laptop
+// distance (60cm), where hips sit below the frame — same constraint as
+// elbow_typing_visible. analyze_front's new trunk_rotation/torso_flexion
+// metrics (backend.py) both require the hips in frame, so pull the camera
+// back the same way elbow_typing_visible does to exercise those two paths.
+out["trunk_twist_45_hips_visible"] = { pose: { trunkRotDeg: 45 }, landmarks: renderSubject({ trunkRotDeg: 45 }, {}, { distCm: 140 }) };
+out["trunk_flex_15_hips_visible"]  = { pose: { trunkFlexDeg: 15 }, landmarks: renderSubject({ trunkFlexDeg: 15 }, {}, { distCm: 140 }) };
+
 fs.writeFileSync(
   new URL("./synthetic_poses.json", import.meta.url),
   JSON.stringify(out, null, 1)

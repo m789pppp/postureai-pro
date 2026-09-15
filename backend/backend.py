@@ -1833,6 +1833,68 @@ _alert_dwell_state    = {}
 _severity_dwell_state = {}
 ALERT_DWELL_SECONDS = 1.2  # matches postureEngine.js's ALERT_DWELL_MS
 
+# ── Session self-baselines for trunk rotation / torso flexion ───────
+# {session_id: {"skipped": int, "samples": [float,...], "value": float|None}}
+# Both metrics are ratios of body measurements with no usable population
+# constant — see _feed_baseline()'s own docstring. Kept per-session (unlike
+# postureEngine.js's module-level _trunkBase/_torsoBase, since this process
+# serves many concurrent sessions at once); never explicitly cleaned up,
+# matching the same no-cleanup pattern already used by _lm_history,
+# _focal_cal, _kalman_states, _alert_dwell_state and _severity_dwell_state
+# above — not a new characteristic introduced here.
+_trunk_rot_base_state  = {}
+_torso_flex_base_state = {}
+_BASELINE_WARMUP_SKIP = 20  # matches postureEngine.js's _makeBaseline(20, 40)
+_BASELINE_SAMPLE_N    = 40
+# Same per-session-baseline mechanism, for the forward-head-depth FHP
+# estimator's IPD/shoulder-width apparent-size ratio (see that block, after
+# dist_cm is finalised, further down analyze_front()). Shorter warmup/sample
+# counts than trunk_rot/torso_flex, matching postureEngine.js's own
+# _headShBase = _makeBaseline(15, 30) exactly — that file's comment notes
+# this was deliberately reduced from the original (40,60) to get a usable
+# reading sooner in the session.
+_head_sh_base_state = {}
+_HEAD_SH_WARMUP_SKIP = 15
+_HEAD_SH_SAMPLE_N    = 30
+
+
+def _feed_baseline(bucket, value, warmup_skip=_BASELINE_WARMUP_SKIP, sample_n=_BASELINE_SAMPLE_N):
+    """
+    Learns THIS session's own neutral value for a ratio metric from its
+    settled early frames, then freezes it forever. Mirrors
+    postureEngine.js's _feedBaseline()/_makeBaseline() exactly (same
+    warmup-skip/sample-count constants), used for the same reason: trunk
+    rotation and torso flexion are both ratios of body measurements (
+    shoulder-width/hip-width, and shoulder-to-hip span/shoulder-width) and
+    the population constants either would need vary enormously between
+    people — shoulder width alone spans roughly 36-48cm adult to adult — so
+    a fixed "neutral ratio" would read a false rotation or slouch on a
+    perfectly square, upright subject just because of their build. Scoring
+    the CHANGE from this user's own early-session median instead sidesteps
+    that, and is also the more useful question for these two postures,
+    since twisting and slouching develop over a session rather than being
+    fixed traits.
+
+    bucket: this session's own dict (from _trunk_rot_base_state[session_id]
+    or _torso_flex_base_state[session_id]), mutated in place.
+
+    Returns None while still warming up or still collecting samples (caller
+    should report the metric as unreliable/"still learning" during that
+    window), then the same frozen median on every call after.
+    """
+    if value is None or not math.isfinite(value):
+        return bucket.get("value")
+    if bucket.get("value") is not None:
+        return bucket["value"]
+    if bucket.get("skipped", 0) < warmup_skip:
+        bucket["skipped"] = bucket.get("skipped", 0) + 1
+        return None
+    bucket.setdefault("samples", []).append(value)
+    if len(bucket["samples"]) >= sample_n:
+        s = sorted(bucket["samples"])
+        bucket["value"] = s[len(s) // 2]   # median — robust to outlier frames
+    return bucket.get("value")
+
 
 def apply_alert_dwell(session_id, alerts, now_ts=None):
     """
@@ -1934,6 +1996,8 @@ _SEV = {
     # monitor-pitch personalisation (nose_drop_neutral) yet, so there is no
     # "calibrated" band to pick between here.
     "monitor":  {"mild": 12, "moderate": 18, "severe": 25},
+    "trunk_rot":  {"mild": 12, "moderate": 20, "severe": 30},
+    "torso_flex": {"mild": 12, "moderate": 20, "severe": 30},
 }
 
 
@@ -2704,10 +2768,24 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     except Exception:
         pass
 
-    # ── Forward Head Posture Index (FHP) ─────────────────────────
-    # Clinical measure: horizontal offset of ear ahead of shoulder
-    # Converts pixel offset to approximate cm using shoulder width reference
-    # Normal: <2cm forward. Each 2.5cm forward = +4-5kg neck load
+    # ── Forward Head Posture Index (FHP) — lateral-offset fallback ───
+    # Clinical measure: horizontal offset of ear ahead of shoulder.
+    # Converts pixel offset to approximate cm using shoulder width reference.
+    #
+    # THIS IS ONLY THE FALLBACK. postureEngine.js's own analyzeFHP() (this
+    # same ear-to-shoulder X+Z offset formula) is dominated by LATERAL head
+    # position, not sagittal forward-head depth — that file's own comment
+    # documents 30° of pure lateral lean with zero true forward head
+    # producing 5.8cm of "FHP", and went through two full rewrites to fix
+    # it, landing on a completely different estimator (apparent-head-size
+    # ratio, no Z channel at all — see the forward-head-depth block below,
+    # after dist_cm is finalised) that REPLACES this one whenever it's
+    # reliable. This block only computes the value/alerts that estimator
+    # falls back to while its own per-session baseline is still learning,
+    # or when the eyes aren't visible. Alerts are NOT fired from here —
+    # they're fired once, after the depth estimator has had a chance to
+    # override this value, so the alert text and the reported number never
+    # disagree about which estimate won.
     try:
         _ear_x_offset  = abs(mid_ear[0] - mid_sh[0])   # pixels
         _sh_width_cm   = 42.0   # reference shoulder width in cm
@@ -2719,28 +2797,16 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         # the pre-fix value ("2cm is within normal head position variation",
         # per that file's comment on raising it to 3/7). Stale here; see
         # tests/test_analyze_front_synthetic.py.
-        #
-        # NOT fixed in this pass: _fhp_cm itself is computed from the raw
-        # ear-to-shoulder X offset (abs(mid_ear[0]-mid_sh[0])), which is
-        # dominated by LATERAL head position, not sagittal forward-head
-        # depth — postureEngine.js's analyzeFHP() went through two full
-        # rewrites to fix this same defect on the frontend (documented
-        # there: 30° of pure lateral lean with zero true forward head
-        # produced 5.8cm of "FHP"). Correcting the underlying formula here
-        # needs the same iterative, ground-truth-tested rework, not a
-        # threshold tweak — tracked as follow-up, not attempted here.
         _fhp_sc        = score_m(_fhp_cm, 0, 3, 7)
         out["metrics"]["fhp_index"] = {
             "value":        _fhp_cm,
             "score":        _fhp_sc,
+            "severity":     classify_severity(_fhp_cm, _SEV["fhp"]),
             "unit":         "cm",
             "label":        "Forward head posture",
             "extra_load_kg": _extra_weight,
+            "source":       "lateral_offset",
         }
-        if _fhp_cm > 6:
-            out["alerts"].append(f"⚠️ Forward head posture {_fhp_cm}cm (+{_extra_weight}kg neck load) — critical: raise monitor immediately")
-        elif _fhp_cm > 3:
-            out["alerts"].append(f"Forward head posture {_fhp_cm}cm (+{_extra_weight}kg neck load) — tuck chin back")
     except Exception:
         pass
     # Natural nose-to-shoulder offset correction (~5° at typical distances)
@@ -2979,6 +3045,90 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     out["metrics"]["spine_lower"] = {"value": round(spine_lower, 1), "unit": "°", "label": "Lower spine (lumbar)"}
     out["metrics"]["kyphosis_pen"]= {"value": round(_kyphosis_pen, 1), "unit": "°", "label": "Kyphosis penalty"}
 
+    # ── Trunk rotation (twisted torso) ───────────────────────────────
+    # Mirrors postureEngine.js's analyzeTrunkRotation(). Previously nothing
+    # in this engine reacted to a twisted torso at all — sitting turned
+    # toward an off-centre monitor is one of the most common desk setups
+    # there is, loads the spine/neck asymmetrically, and head_yaw does not
+    # catch it (the head is usually still facing the screen squarely even
+    # when the trunk underneath it is twisted).
+    #
+    # Method: shoulder width foreshortens as cos(theta) under rotation, but
+    # it also shrinks with distance from the camera, so raw width says
+    # nothing on its own. Dividing by hip width cancels distance out —
+    # shoulders and hips are both on the torso and move together in depth —
+    # leaving a signal driven by rotation alone. Anatomically this is also
+    # the right definition: trunk rotation IS the shoulder line turning
+    # relative to the pelvis.
+    try:
+        _tr_hip_ok = g(PL.L_HIP).visibility > 0.55 and g(PL.R_HIP).visibility > 0.55
+        _tr_eye_ok = g(PL.L_EYE).visibility > 0.55 and g(PL.R_EYE).visibility > 0.55
+        if _tr_hip_ok and _tr_eye_ok:
+            _tr_sh_px  = abs(r_sh[0]  - l_sh[0])
+            _tr_hip_px = abs(r_hip[0] - l_hip[0])
+            if _tr_sh_px >= 20 and _tr_hip_px >= 20:
+                _tr_ratio  = _tr_sh_px / _tr_hip_px
+                _tr_bucket = _trunk_rot_base_state.setdefault(_sid, {})
+                _tr_neutral = _feed_baseline(_tr_bucket, _tr_ratio)
+                if _tr_neutral is not None:
+                    # ratio = neutral * cos(theta) -> theta = acos(ratio/neutral).
+                    # Only SHRINKAGE means rotation — a ratio above neutral is
+                    # noise, not a twist.
+                    _tr_cos   = max(0.0, min(1.0, _tr_ratio / max(_tr_neutral, 0.1)))
+                    _tr_angle = round(math.degrees(math.acos(_tr_cos)))
+                    _tr_sc    = score_m(_tr_angle, 0, 12, 30)
+                    out["metrics"]["trunk_rotation"] = {
+                        "value": _tr_angle, "score": _tr_sc,
+                        "severity": classify_severity(_tr_angle, _SEV["trunk_rot"]),
+                        "unit": "°", "label": "Trunk rotation (twist)",
+                        "reliable": True,
+                    }
+                    if _tr_angle > 30:
+                        add_alert(out, f"⚠️ Trunk twisted {_tr_angle}° — face your monitor squarely, don't twist at the waist",
+                                  f"⚠️ جذعك ملتوٍ {_tr_angle}° — واجه شاشتك مباشرة، لا تلتوِ من الخصر")
+                    elif _tr_angle > 12:
+                        add_alert(out, f"Trunk twisted {_tr_angle}° — try to face your screen more directly",
+                                  f"جذعك ملتوٍ {_tr_angle}° — حاول مواجهة شاشتك بشكل مباشر أكثر")
+    except Exception:
+        pass
+
+    # ── Torso flexion (forward slouch) ────────────────────────────────
+    # Mirrors postureEngine.js's analyzeTorsoFlexion(). spine_lean above is
+    # explicitly a LATERAL (sideways) detector — its own comment notes a
+    # forward slouch "barely moves it", since that motion is almost
+    # entirely along the camera's depth axis, not across the image plane.
+    # As the trunk flexes forward, the shoulder-to-hip span foreshortens in
+    # the image; normalising by shoulder width makes that scale-invariant,
+    # the same trick the rounded-shoulders ear-shoulder gap above uses.
+    try:
+        _tf_hip_ok = g(PL.L_HIP).visibility > 0.55 and g(PL.R_HIP).visibility > 0.55
+        if _tf_hip_ok:
+            _tf_torso_px = mid_hip[1] - mid_sh[1]   # image-space, hips below shoulders
+            _tf_sh_px    = abs(r_sh[0] - l_sh[0])
+            if _tf_torso_px > 0 and _tf_sh_px >= 20:
+                _tf_ratio   = _tf_torso_px / _tf_sh_px
+                _tf_bucket  = _torso_flex_base_state.setdefault(_sid, {})
+                _tf_neutral = _feed_baseline(_tf_bucket, _tf_ratio)
+                if _tf_neutral is not None:
+                    # Only SHORTENING counts — a longer-than-neutral span means
+                    # sitting taller than baseline, which is not a fault.
+                    _tf_shrink_pct = max(0.0, (_tf_neutral - _tf_ratio) / max(_tf_neutral, 0.1)) * 100
+                    _tf_sc = score_m(_tf_shrink_pct, 0, 12, 30)
+                    out["metrics"]["torso_flexion"] = {
+                        "value": round(_tf_shrink_pct), "score": _tf_sc,
+                        "severity": classify_severity(_tf_shrink_pct, _SEV["torso_flex"]),
+                        "unit": "% shortening", "label": "Torso flexion (forward slouch)",
+                        "ratio": round(_tf_ratio, 2), "reliable": True,
+                    }
+                    if _tf_shrink_pct > 30:
+                        add_alert(out, f"⚠️ Significant forward slouch ({round(_tf_shrink_pct)}%) — sit upright, engage core",
+                                  f"⚠️ انحناء أمامي كبير ({round(_tf_shrink_pct)}%) — اجلس منتصباً وشد عضلات البطن")
+                    elif _tf_shrink_pct > 12:
+                        add_alert(out, f"Forward slouch detected ({round(_tf_shrink_pct)}%) — straighten your back",
+                                  f"تم اكتشاف انحناء أمامي ({round(_tf_shrink_pct)}%) — قوّم ظهرك")
+    except Exception:
+        pass
+
     # ── FaceMesh ───────────────────────────────────────────────────
     dist_cm = None
     blink_data = None
@@ -3042,6 +3192,85 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         focal   = _focal_fallback if _focal_fallback else (630 * (w / 640))
         dist_cm = round((40.0 * focal) / max(_sh_w_fallback, 1), 1)
         dist_cm = max(20, min(150, dist_cm))
+
+    # ── Forward-head displacement from apparent head size ─────────────
+    # The SAGITTAL FHP estimator — replaces the lateral-offset fallback
+    # above (out["metrics"]["fhp_index"], source:"lateral_offset") once
+    # reliable. Mirrors postureEngine.js's analyzeForwardHeadDepth(). The
+    # ear-to-shoulder offset above is almost entirely a lateral measurement
+    # from a front-facing camera — moving the head forward is motion along
+    # the camera axis and barely changes x or y. This estimator needs no Z
+    # at all: the head and shoulders sit at different depths, so their
+    # apparent SIZES scale differently as the head moves — at 60cm, moving
+    # the head 8cm forward enlarges its apparent size by ~15% while the
+    # shoulders (a different, unmoving part of the body) stay unchanged.
+    # That ratio uses only x-coordinates, which MediaPipe estimates far more
+    # accurately than depth.
+    #
+    #   r      = ipd_px / shoulder_px      (grows as the head comes forward)
+    #   r0     = this session's own learned neutral r
+    #   depth0 = depth_now * (r / r0)      (apparent size scales as 1/depth)
+    #   fwd    = depth0 - depth_now = depth_now * (r/r0 - 1)
+    #
+    # Like trunk_rotation/torso_flexion above, r0 has to be learned from
+    # this user rather than assumed — a population IPD/shoulder-width ratio
+    # varies by the same kind of build-dependent margin those two metrics'
+    # own docstrings already explain for their own ratios. Placed here
+    # (after dist_cm is finalised, not up with the lateral-offset fallback)
+    # because the depth-now term needs a resolved distance.
+    try:
+        _fhd_eyes_ok = g(PL.L_EYE).visibility > 0.55 and g(PL.R_EYE).visibility > 0.55
+        _fhd_ipd_px  = abs(r_eye[0] - l_eye[0])
+        _fhd_sh_px   = abs(r_sh[0]  - l_sh[0])
+        if _fhd_eyes_ok and _fhd_ipd_px >= 4 and _fhd_sh_px >= 20:
+            # De-rotate the shoulder ruler first — a trunk twist foreshortens
+            # apparent shoulder width by cos(theta), which would otherwise
+            # inflate ipd/shoulder exactly as a head coming forward does
+            # (the same shared-ruler error trunk_rotation above was built to
+            # avoid, arriving from the opposite direction). trunk_rotation
+            # is measured against the hips, so it is itself unaffected by
+            # this and can be used as the correction.
+            _fhd_trunk_rot_deg = out["metrics"].get("trunk_rotation", {}).get("value", 0) or 0
+            _fhd_cos_rot    = max(math.cos(math.radians(min(50, abs(_fhd_trunk_rot_deg)))), 0.64)
+            _fhd_sh_px_true = _fhd_sh_px / _fhd_cos_rot
+
+            _fhd_ratio  = _fhd_ipd_px / _fhd_sh_px_true
+            _fhd_bucket = _head_sh_base_state.setdefault(_sid, {})
+            _fhd_r0 = _feed_baseline(_fhd_bucket, _fhd_ratio,
+                                      warmup_skip=_HEAD_SH_WARMUP_SKIP, sample_n=_HEAD_SH_SAMPLE_N)
+            if _fhd_r0 is not None:
+                _fhd_d = dist_cm if (dist_cm and dist_cm > 20) else 60.0
+                # Only growth counts — a head further away than neutral is
+                # leaning back, which is not forward-head and isn't scored.
+                _fhd_fwd_cm = max(0.0, _fhd_d * (max(_fhd_ratio, 1e-6) / _fhd_r0 - 1))
+                _fhd_fwd_cm = round(min(_fhd_fwd_cm, 25.0), 1)
+
+                _fhd_pitch_rad = math.atan2(max(0.0, _fhd_fwd_cm), 15.0)  # 15cm ~ C1-to-head-centre
+                _fhd_extra_kg  = round(max(0.0, (4.5 / max(math.cos(_fhd_pitch_rad), 0.35)) - 4.5), 1)
+                out["metrics"]["fhp_index"] = {
+                    "value":        _fhd_fwd_cm,
+                    "score":        score_m(_fhd_fwd_cm, 0, 3, 7),
+                    "severity":     classify_severity(_fhd_fwd_cm, _SEV["fhp"]),
+                    "unit":         "cm",
+                    "label":        "Forward head posture",
+                    "extra_load_kg": _fhd_extra_kg,
+                    "source":       "depth",
+                }
+    except Exception:
+        pass
+
+    # Fire the FHP alert once, after the depth estimator above has had a
+    # chance to override the lateral-offset fallback — so the alert text
+    # always matches whichever estimate the reported number is using.
+    _fhp_final = out["metrics"].get("fhp_index")
+    if _fhp_final:
+        _fv, _fx = _fhp_final["value"], _fhp_final["extra_load_kg"]
+        if _fv > 6:
+            add_alert(out, f"⚠️ Forward head posture {_fv}cm (+{_fx}kg neck load) — critical: raise monitor immediately",
+                      f"⚠️ وضعية الرأس للأمام {_fv} سم (+{_fx} كجم حمل على الرقبة) — حرج: ارفع الشاشة فوراً")
+        elif _fv > 3:
+            add_alert(out, f"Forward head posture {_fv}cm (+{_fx}kg neck load) — tuck chin back",
+                      f"وضعية الرأس للأمام {_fv} سم (+{_fx} كجم حمل على الرقبة) — اسحب ذقنك للخلف")
 
     # laptop range synced with postureEngine.js's MODES.laptop.distRange — was
     # (50,80) here, the pre-fix ceiling that file's own comment documents
@@ -3427,16 +3656,41 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     conf_eye   = 1.0 if (eye_sc is not None) else 0.0
     conf_wrist = 1.0 if (wrist_sc is not None) else 0.0
 
-    # "rounded" (rounded-shoulders) added below — it used to be computed and
-    # alerted on but NEVER folded into the overall score here, unlike the
-    # frontend's live-camera engine (WEIGHTS_FRONT.rounded), so the exact
-    # same rounded-shoulders posture could tank the live score while leaving
-    # the PDF/report score untouched. All other weights scaled by ×0.92 to
-    # make room (same rebalancing approach used for the frontend's
-    # WEIGHTS_FRONT when a new weighted metric was added there) — new sum
-    # is still ~1.00.
-    BASE_W = {"neck": 0.258, "tilt": 0.092, "sh": 0.074, "spine": 0.166, "dist": 0.202,
-              "eye": 0.046, "wrist": 0.083, "rounded": 0.08}
+    # "rounded" (rounded-shoulders) was added once already — it used to be
+    # computed and alerted on but never folded into the overall score here,
+    # unlike the frontend's live-camera engine (WEIGHTS_FRONT.rounded), so
+    # the exact same rounded-shoulders posture could tank the live score
+    # while leaving the PDF/report score untouched. Same gap found, during
+    # this same audit, for THREE more metrics: fhp (forward head posture —
+    # computed as _fhp_sc above, alerted on, but never referenced anywhere
+    # in BASE_W/eff_w/scores below) and the newly-added trunk_rotation /
+    # torso_flexion (see their own computation above — postureEngine.js's
+    # WEIGHTS_FRONT already scores all three; this file didn't compute the
+    # latter two at all until this pass). FHP in particular is the single
+    # LARGEST weight in the frontend's own table (0.18 of 1.00) — "forward
+    # head posture ... [is a] dominant desk complaint" per that file's own
+    # comment, and this API's Hansraj-2014-cited neck-load model just above
+    # already treats forward lean as the dominant biomechanical cost. A
+    # user with a genuinely severe, sustained forward head posture used to
+    # see it in their alerts and their neck-load estimate but NOT in the
+    # one number (score) most of this product's own UI and reports lead
+    # with.
+    #
+    # Weights below are deliberately more conservative than a straight port
+    # of WEIGHTS_FRONT's magnitudes: this engine's own `neck` already blends
+    # in solvePnP pitch (a genuinely SAGITTAL, forward/back signal) rather
+    # than being the near-purely-lateral 2D image-plane angle the frontend's
+    # comment describes for its own `neck` — the rationale that justified
+    # moving a large chunk of frontend weight OFF neck and onto fhp doesn't
+    # transfer here at the same magnitude, since backend neck isn't
+    # duplicating fhp/trunk_rotation's signal to the same degree. All
+    # existing weights scaled by ×0.83 to make room for the 0.17 total
+    # added across the three (same rebalancing approach used for the
+    # `rounded` addition above and for the frontend's own WEIGHTS_FRONT
+    # when a weighted metric is added there) — new sum is still ~1.00.
+    BASE_W = {"neck": 0.214, "tilt": 0.076, "sh": 0.061, "spine": 0.138, "dist": 0.168,
+              "eye": 0.038, "wrist": 0.069, "rounded": 0.066,
+              "fhp": 0.10, "torso_flex": 0.05, "trunk_rot": 0.02}
     # dist boosted — screen distance is #1 preventable risk factor
     # Refs: AOA 2023 (20-20-20 rule), WHO screen guidelines
     #
@@ -3448,15 +3702,25 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     # shoulder_elevation and hand-prop occlusion are alert-only (not
     # score-weighted) on the frontend by deliberate design, not oversight.
 
+    _fhp_metric        = out["metrics"].get("fhp_index")
+    _trunk_rot_metric  = out["metrics"].get("trunk_rotation")
+    _torso_flex_metric = out["metrics"].get("torso_flexion")
+    conf_fhp        = 1.0 if _fhp_metric        is not None else 0.0
+    conf_trunk_rot  = 1.0 if _trunk_rot_metric  is not None else 0.0
+    conf_torso_flex = 1.0 if _torso_flex_metric is not None else 0.0
+
     eff_w = {
-        "neck":    BASE_W["neck"]    * conf_neck,
-        "tilt":    BASE_W["tilt"]    * conf_tilt,
-        "sh":      BASE_W["sh"]      * conf_sh,
-        "spine":   BASE_W["spine"]   * conf_spine,
-        "dist":    BASE_W["dist"],                    # camera-independent — no penalty
-        "eye":     BASE_W["eye"]     * conf_eye,      # 0.046 when FaceMesh active, else 0
-        "wrist":   BASE_W["wrist"]   * conf_wrist,    # 0.083 for paid tiers, else 0
-        "rounded": BASE_W["rounded"] * conf_rounded,  # 0 when ears occluded AND Z unreliable
+        "neck":       BASE_W["neck"]       * conf_neck,
+        "tilt":       BASE_W["tilt"]       * conf_tilt,
+        "sh":         BASE_W["sh"]         * conf_sh,
+        "spine":      BASE_W["spine"]      * conf_spine,
+        "dist":       BASE_W["dist"],                        # camera-independent — no penalty
+        "eye":        BASE_W["eye"]        * conf_eye,        # 0.038 when FaceMesh active, else 0
+        "wrist":      BASE_W["wrist"]      * conf_wrist,      # 0.069 for paid tiers, else 0
+        "rounded":    BASE_W["rounded"]    * conf_rounded,    # 0 when ears occluded AND Z unreliable
+        "fhp":        BASE_W["fhp"]        * conf_fhp,        # 0 if the fhp_index computation failed
+        "torso_flex": BASE_W["torso_flex"] * conf_torso_flex, # 0 while hips hidden or baseline still learning
+        "trunk_rot":  BASE_W["trunk_rot"]  * conf_trunk_rot,  # 0 while hips/eyes hidden or baseline still learning
     }
 
     # Lost weight from low-vis metrics → redistributed to dist (stable)
@@ -3465,14 +3729,17 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
 
     # Build score_val from all present metrics
     scores = {
-        "neck":    neck_sc,
-        "tilt":    tilt_sc,
-        "sh":      sh_sc,
-        "spine":   spine_sc,
-        "dist":    dist_sc,
-        "eye":     eye_sc   if eye_sc   is not None else 0,
-        "wrist":   wrist_sc if wrist_sc is not None else 0,
-        "rounded": _rounded_sc,
+        "neck":       neck_sc,
+        "tilt":       tilt_sc,
+        "sh":         sh_sc,
+        "spine":      spine_sc,
+        "dist":       dist_sc,
+        "eye":        eye_sc   if eye_sc   is not None else 0,
+        "wrist":      wrist_sc if wrist_sc is not None else 0,
+        "rounded":    _rounded_sc,
+        "fhp":        _fhp_metric["score"]        if _fhp_metric        is not None else 0,
+        "torso_flex": _torso_flex_metric["score"] if _torso_flex_metric is not None else 0,
+        "trunk_rot":  _trunk_rot_metric["score"]  if _trunk_rot_metric  is not None else 0,
     }
     score_val = sum(scores[k] * eff_w[k] for k in scores)
     remaining = 1.0 - sum(eff_w.values())
@@ -3498,6 +3765,9 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         "eye":   round(conf_eye,   2),
         "wrist": round(conf_wrist, 2),
         "rounded": round(conf_rounded, 2),
+        "fhp": round(conf_fhp, 2),
+        "torso_flex": round(conf_torso_flex, 2),
+        "trunk_rot": round(conf_trunk_rot, 2),
         "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
         "label": "Per-metric visibility confidence",
     }
@@ -3551,6 +3821,17 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                      _wm is not None and _wm.get("reliable", True) and wrist_sc is not None),
         "monitor":  (classify_severity(abs(_mh.get("pitch_deg", 0)) if _mh else None, _SEV["monitor"]),
                      _mh is not None),
+        # trunk_rot/torso_flex: newly computed above this pass (were
+        # previously excluded here with a comment noting they didn't exist
+        # yet in this file at all). Each metric dict already carries its
+        # own "severity" field from classify_severity() at computation
+        # time, same as "rounded" — reused directly here instead of
+        # reclassifying from raw value, so there is exactly one place per
+        # metric that decides its severity band.
+        "trunk_rot":  (_trunk_rot_metric.get("severity")  if _trunk_rot_metric  else None,
+                       _trunk_rot_metric is not None),
+        "torso_flex": (_torso_flex_metric.get("severity") if _torso_flex_metric else None,
+                       _torso_flex_metric is not None),
     }
     overall = apply_severity_floor(_sid, overall, _severe_candidates)
 
