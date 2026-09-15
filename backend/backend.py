@@ -3111,6 +3111,34 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
             included_angle = None
             _wrist_source = "none"
 
+            # ── "Arm at rest" exclusion ──────────────────────────────
+            # Mirrors postureEngine.js's analyzeElbow() armWorking() gate.
+            # The 90-120° guidance below is about keyboard height, and it
+            # only means anything while the hands are at a keyboard. Arms
+            # hanging relaxed at the sides sit at ~170-180° included angle,
+            # which this used to score as a severe fault and alert on —
+            # telling someone doing nothing wrong to adjust their desk. A
+            # working arm has the wrist forward of, and not far below, the
+            # elbow; a hanging arm has the wrist almost directly beneath
+            # it. Same drop/reach-in-half-shoulder-width-units test as the
+            # frontend, so a resting arm is reported unreliable (dropped
+            # from the weighted score, same as any other unreliable
+            # metric) instead of penalised for a non-problem.
+            def _arm_working(el_idx, wr_idx):
+                el3 = px3(el_idx); wr3 = px3(wr_idx)
+                l_sh3 = px3(PL.L_SHOULDER); r_sh3 = px3(PL.R_SHOULDER)
+                s_half = abs(l_sh3[0] - r_sh3[0]) / 2
+                if not (s_half > 10):
+                    return False
+                drop  = (wr3[1] - el3[1]) / max(s_half, 1)   # wrist below elbow
+                reach = abs(wr3[0] - el3[0]) / max(s_half, 1)
+                # Hanging: wrist far below the elbow and almost directly under it.
+                return not (drop > 0.75 and reach < 0.45)
+
+            _l_working = _l_ok and _arm_working(PL.L_ELBOW, PL.L_WRIST)
+            _r_working = _r_ok and _arm_working(PL.R_ELBOW, PL.R_WRIST)
+            _arms_at_rest = not (_l_working or _r_working) and (_l_ok or _r_ok)
+
             if both_ok:
                 # Both sides — average for best accuracy
                 l_sh3 = px3(PL.L_SHOULDER); r_sh3 = px3(PL.R_SHOULDER)
@@ -3129,7 +3157,19 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                 included_angle = angle_3pt_3d(px3(PL.R_SHOULDER), px3(PL.R_ELBOW), px3(PL.R_WRIST))
                 _wrist_source = "right_elbow_only"
 
-            if included_angle is not None:
+            if included_angle is not None and _arms_at_rest:
+                # Arms hanging at rest — report the angle for visibility but
+                # don't score or alert on it (see _arm_working's docstring
+                # above). wrist_sc stays None, so conf_wrist below stays 0
+                # and this metric drops out of the weighted overall score
+                # exactly like any other unreliable/not-applicable metric.
+                out["metrics"]["wrist_angle"] = {
+                    "value": round(included_angle, 1), "score": 90,
+                    "unit": "°", "label": "Elbow angle",
+                    "source": _wrist_source, "reliable": False,
+                    "reason": "arms_at_rest", "deviation": 0.0,
+                }
+            elif included_angle is not None:
                 # This is the angle AT THE ELBOW (angle_3pt_3d's "angle at b"
                 # with b=elbow — shoulder→elbow→wrist), not wrist deviation.
                 # The codebase defines no hand landmarks (index/pinky/thumb
@@ -3178,15 +3218,6 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                     # the actual angle.
                     "deviation": round(elbow_dev, 1),
                 }
-                # NOTE: no "arm at rest" exclusion yet (postureEngine.js's
-                # armWorking() gate excludes a hanging/relaxed arm from
-                # being scored at all, specifically to avoid this same false
-                # "fix your elbow" alert on a non-problem). Not added in
-                # this pass — flagged as follow-up, since on a typical
-                # laptop-webcam frame the elbow/wrist are usually below
-                # frame entirely (same reason hips are) and this narrows how
-                # often a resting arm would even be visible enough to reach
-                # this code, but it is not zero risk.
                 if elbow_dev > 15:
                     add_alert(out, f"⚠️ Elbow angle {round(included_angle,1)}° — outside the 90-120° comfortable range, bring elbows closer to your body.",
                               f"⚠️ زاوية الكوع {round(included_angle,1)}° — خارج نطاق الراحة 90-120°، قرّب مرفقيك من جسمك.")
