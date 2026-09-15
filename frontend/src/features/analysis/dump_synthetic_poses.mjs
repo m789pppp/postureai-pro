@@ -50,6 +50,13 @@ out["elbow_typing_visible"] = { pose: {}, landmarks: renderSubject({}, {}, { dis
 out["trunk_twist_45_hips_visible"] = { pose: { trunkRotDeg: 45 }, landmarks: renderSubject({ trunkRotDeg: 45 }, {}, { distCm: 140 }) };
 out["trunk_flex_15_hips_visible"]  = { pose: { trunkFlexDeg: 15 }, landmarks: renderSubject({ trunkFlexDeg: 15 }, {}, { distCm: 140 }) };
 
+// backend.py's rewritten rounded-shoulders (protraction) metric needs the
+// hips in frame too (its hip-to-ear-axis method, mirroring
+// postureEngine.js's current analyzeRoundedShoulders() — see that block's
+// own comment in backend.py) -- same constraint, same fix as the two cases
+// above.
+out["rounded_shoulders_6_hips_visible"] = { pose: { roundShoulderCm: 6 }, landmarks: renderSubject({ roundShoulderCm: 6 }, {}, { distCm: 140 }) };
+
 fs.writeFileSync(
   new URL("./synthetic_poses.json", import.meta.url),
   JSON.stringify(out, null, 1)
