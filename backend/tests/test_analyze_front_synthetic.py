@@ -206,6 +206,125 @@ class TestDistanceRange:
               f"score={dist_metric.get('score')}")
 
 
+class TestAlertDwell:
+    """analyze_front() used to fire every alert off a single request with no
+    temporal debouncing at all -- confirmed by reading every add_alert()/
+    out["alerts"].append() call site in the function, all raw threshold
+    checks. Fixed to match postureEngine.js's ALERT_DWELL_MS debounce: a
+    condition has to hold for >=1.2s (tracked per session_id, alongside the
+    landmark-smoothing state) before it's surfaced.
+
+    Real analyze() calls in this file run their whole settle loop inside a
+    handful of milliseconds of real wall-clock time, which is exactly what
+    lets TestThresholdDrift below assert nothing escapes prematurely. To
+    prove the OTHER half -- that a genuinely sustained condition does still
+    surface -- these tests monkeypatch backend.time.time() to advance a
+    controlled amount per call, the same idea as postureEngine.js's
+    analyzeMP.__testNowMs override, rather than a real multi-second sleep.
+    """
+
+    def test_a_bad_pose_fires_no_alert_within_the_dwell_window(self):
+        # The default `analyze()` settle loop runs in well under 1.2s of
+        # real wall-clock time, so this is already exercised implicitly by
+        # every other test in this file -- asserted explicitly here for a
+        # pose that would obviously alert once sustained.
+        out = analyze("lateral_lean_25")
+        assert out["alerts"] == [], f"alerts fired before the dwell window elapsed: {out['alerts']}"
+
+    def test_a_sustained_bad_pose_does_eventually_alert(self):
+        fake_now = [1_700_000_000.0]
+        def fake_time():
+            fake_now[0] += 0.05
+            return fake_now[0]
+        with __import__("unittest.mock", fromlist=["patch"]).patch.object(be.time, "time", side_effect=fake_time):
+            out = analyze("lateral_lean_25", settle=40)  # ~2s of fake elapsed time
+        assert len(out["alerts"]) > 0, "a lean sustained well past the dwell window produced no alerts"
+        assert len(out["alerts"]) <= 5
+
+    def test_flicker_never_accumulates_dwell_time(self):
+        """A condition that's true, then false, then true again must not
+        have its dwell clock keep running through the false gap -- each
+        return to true starts the clock over, same as
+        postureEngine.js's held().
+
+        This used to drive the flicker through the full analyze_front()
+        pipeline (alternating synthetic landmark sets), but that route is
+        confounded by the pre-existing Kalman/landmark-smoothing layer:
+        smoothed landmarks have real momentum, so alternating the *raw*
+        input every call doesn't actually make the lean *condition* go
+        cleanly absent for a full frame the way this property needs to be
+        tested. apply_alert_dwell() is a pure function of (session_id,
+        alert strings, now_ts) with no knowledge of landmarks or smoothing,
+        so we drive it directly with hand-built alert lists instead -- a
+        clean, deterministic test of exactly the mechanism under test."""
+        sid = "unit-flicker-test"
+        present = ["⚠️ Leaning left 25.0° — sit centered, weight even on both hips"]
+        absent = []
+        t = 1_700_000_000.0
+        held = []
+        for i in range(6):
+            t += 0.9   # each call jumps most of the dwell window
+            held = be.apply_alert_dwell(sid, present if i % 2 == 0 else absent, now_ts=t)
+        assert held == [], f"a flickering condition should never accumulate enough continuous dwell time to alert: {held}"
+
+    def test_sustained_alert_is_held_only_after_the_dwell_window(self):
+        """The direct counterpart to test_a_sustained_bad_pose_does_eventually_alert
+        above, but against apply_alert_dwell() itself: the same alert kind,
+        present on every call, must NOT be held before ALERT_DWELL_SECONDS
+        has elapsed and MUST be held once it has."""
+        sid = "unit-sustained-test"
+        alert = ["⚠️ Leaning left 25.0° — sit centered, weight even on both hips"]
+        t = 1_700_000_000.0
+        # Still within the dwell window -- must not be held yet.
+        held = be.apply_alert_dwell(sid, alert, now_ts=t)
+        assert held == []
+        held = be.apply_alert_dwell(sid, alert, now_ts=t + 0.5)
+        assert held == []
+        # Past the dwell window (window started at t) -- must now be held.
+        held = be.apply_alert_dwell(sid, alert, now_ts=t + be.ALERT_DWELL_SECONDS + 0.1)
+        assert held == alert
+
+    def test_drifting_numbers_do_not_reset_the_dwell_clock(self):
+        """The whole reason for normalizing alert text before keying dwell
+        state: the same underlying condition reports a slightly different
+        number almost every frame (25.0deg, then 24.6deg, ...). That must
+        still be recognised as one continuous condition, not a new alert
+        each time (which would never clear the dwell window)."""
+        sid = "unit-drift-test"
+        t = 1_700_000_000.0
+        readings = ["25.0", "24.6", "23.9", "26.1"]
+        held = []
+        for i, r in enumerate(readings):
+            held = be.apply_alert_dwell(
+                sid, [f"⚠️ Leaning left {r}° — sit centered, weight even on both hips"],
+                now_ts=t + i * (be.ALERT_DWELL_SECONDS / (len(readings) - 1)) + 0.05,
+            )
+        assert held != [], "numeric drift in the alert text should not reset the dwell clock"
+
+    def test_condition_clearing_prunes_its_dwell_bucket_entry(self):
+        """Once a condition's alert stops appearing, its entry in the
+        per-session dwell bucket should be dropped (not just excluded from
+        the held list) -- otherwise a session that cycles through many
+        transient conditions over a long run would leak memory forever."""
+        sid = "unit-prune-test"
+        alert = ["⚠️ Leaning left 25.0° — sit centered, weight even on both hips"]
+        be.apply_alert_dwell(sid, alert, now_ts=1_700_000_000.0)
+        assert len(be._alert_dwell_state.get(sid, {})) == 1
+        be.apply_alert_dwell(sid, [], now_ts=1_700_000_001.0)
+        assert be._alert_dwell_state.get(sid, {}) == {}
+
+    def test_bucket_growth_is_capped(self):
+        """A pathological session that racks up many distinct alert kinds
+        (or a session_id reused across a very long process lifetime)
+        should have its dwell bucket trimmed rather than grow forever."""
+        sid = "unit-growth-test"
+        t = 1_700_000_000.0
+        for i in range(100):
+            be.apply_alert_dwell(sid, [f"⚠️ Distinct condition number {i} detected"], now_ts=t)
+            t += 0.01
+        assert len(be._alert_dwell_state.get(sid, {})) <= 64
+
+
 class TestThresholdDrift:
     """Prints the actual score_m(...) values analyze_front currently uses
     for head_tilt/sh_tilt/spine_lean/fhp_cm against synthetic poses at

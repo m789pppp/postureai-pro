@@ -1821,6 +1821,94 @@ _lm_history     = {}   # {session_id: [lm_array,...]} last 3 frames for jitter r
 _celery_task    = None  # lazy Celery singleton
 _score_pool     = []   # rolling pool of recent scores for percentile (max 10000)
 
+# ── Alert dwell / severity-floor state ────────────────────────────
+# {session_id: {normalized_alert_key: first_seen_unix_ts}} — see the
+# "Alert cleanup" block near the end of analyze_front() for the dwell
+# filter, and its own comment for why a normalized key (not raw alert
+# text) is used. Mirrors postureEngine.js's analyzeMP._alertDwell.
+_alert_dwell_state    = {}
+# {session_id: {metric_key: first_seen_unix_ts}} — same debounce pattern,
+# but for the severity-floor cap (see near the "overall" score assembly).
+# Mirrors postureEngine.js's analyzeMP._severeDwell.
+_severity_dwell_state = {}
+ALERT_DWELL_SECONDS = 1.2  # matches postureEngine.js's ALERT_DWELL_MS
+
+
+def apply_alert_dwell(session_id, alerts, now_ts=None):
+    """
+    Debounce alerts so a condition must persist for ALERT_DWELL_SECONDS
+    before it's surfaced, mirroring postureEngine.js's analyzeMP._alertDwell
+    (ALERT_DWELL_MS = 1200). Without this, a single noisy frame (a blink, a
+    half-second head turn, MediaPipe jitter) fires a full alert exactly like
+    a genuinely sustained bad posture would — every alert built earlier in
+    analyze_front() is a raw single-request threshold check with no memory
+    of previous frames.
+
+    Alert text embeds live numeric readings ("Leaning left 25.0°") that
+    drift frame-to-frame even while the underlying condition persists, so
+    continuity can't be keyed off the raw string — two frames of the "same"
+    lean a second apart would carry different numbers and look like two
+    different alerts. We normalize away embedded numbers to get a stable
+    key per *kind* of alert, and track, per session, the first time each
+    key was seen. An alert is only "held" (allowed through) once it has
+    been continuously present for at least ALERT_DWELL_SECONDS; until then
+    it's suppressed.
+
+    "Continuously" is enforced by clearing any key not present in the
+    current frame's alert list — a single frame where the condition clears
+    resets that key's dwell timer entirely, so a flickering on/off/on/off
+    condition never accumulates enough continuous dwell time to alert; only
+    a condition that stays present the whole time resolves.
+
+    session_id=None is treated as its own bucket (all "no session" callers
+    share one dwell clock) rather than raising — analyze_front always
+    resolves session_id to a real string before calling this, but
+    apply_alert_dwell is also called directly (e.g. from tests) with
+    hand-built alert lists and a controlled now_ts, bypassing analyze_front
+    and its Kalman/landmark-smoothing layer entirely.
+
+    now_ts: inject a fixed timestamp for deterministic tests instead of
+    monkeypatching time.time(); defaults to time.time() in production.
+    """
+    import re
+    now = now_ts if now_ts is not None else time.time()
+    bucket = _alert_dwell_state.setdefault(session_id, {})
+
+    def _dwell_key(alert_text):
+        return re.sub(r"[\d.]+", "#", alert_text[:60])
+
+    seen_keys = set()
+    held = []
+    for alert in alerts:
+        key = _dwell_key(alert)
+        seen_keys.add(key)
+        first_seen = bucket.get(key)
+        if first_seen is None:
+            bucket[key] = now
+            first_seen = now
+        if now - first_seen >= ALERT_DWELL_SECONDS:
+            held.append(alert)
+
+    # Flicker-clearing: any previously-tracked key not present this frame
+    # had its condition clear, so its dwell timer resets from scratch next
+    # time it appears.
+    for k in list(bucket.keys()):
+        if k not in seen_keys:
+            del bucket[k]
+
+    # Unbounded-growth guard: a session that somehow accumulates many
+    # distinct alert kinds (or a session_id reused across a very long
+    # process lifetime) shouldn't grow this dict forever. 64 is far above
+    # the 5-alert cap analyze_front ever surfaces, so this only trims
+    # pathological cases, never normal use.
+    if len(bucket) > 64:
+        oldest_keys = sorted(bucket, key=lambda k: bucket[k])[: len(bucket) - 64]
+        for k in oldest_keys:
+            del bucket[k]
+
+    return held
+
+
 def compute_gaze(face_lms, w, h):
     """
     Estimate gaze direction from iris position within eye socket.
@@ -4082,9 +4170,17 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         if key not in seen:
             seen.add(key)
             deduped.append(alert)
+
+    # ── Dwell / debounce ────────────────────────────────────────────
+    # Every alert above was a raw single-request threshold check — no
+    # temporal debouncing anywhere in this function, confirmed during the
+    # threshold-vs-literature audit that also fixed the elbow/distance-range
+    # issues. See apply_alert_dwell()'s own docstring for the mechanism.
+    held = apply_alert_dwell(_sid, deduped)
+
     # Severe (⚠️) first, then informational
-    deduped.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
-    out["alerts"] = deduped[:5]   # max 5 alerts — avoid overwhelming user
+    held.sort(key=lambda a: (0 if a.startswith("⚠️") else 1))
+    out["alerts"] = held[:5]   # max 5 alerts — avoid overwhelming user
     # ── Arabic alerts ─────────────────────────────────────────────
     # Prefer a hand-written translation registered via add_alert()/
     # insert_alert() (keyed by exact English text, so it's immune to the
