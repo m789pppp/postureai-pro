@@ -1909,6 +1909,125 @@ def apply_alert_dwell(session_id, alerts, now_ts=None):
     return held
 
 
+# ── Severity classification thresholds ─────────────────────────────
+# Mirrors postureEngine.js's SEV table — literature-derived mild/moderate/
+# severe bands per metric, independent of (and generally stricter than)
+# each metric's own score_m() ok/bad scoring tolerance. Used only by the
+# severity floor below (apply_severity_floor()): a single SEVERE fault must
+# never let the composite score read as Good/Excellent just because it
+# happens to live in a low-weight metric this frame. "rounded" duplicates
+# the thresholds rounded_shoulders already classifies inline (see
+# _rounded_severity above) — kept here too as the single documented source
+# other severe_candidates entries are checked against, even though that one
+# metric doesn't call classify_severity() itself.
+_SEV = {
+    "neck":     {"mild": 7,  "moderate": 12, "severe": 20},
+    "tilt":     {"mild": 3,  "moderate": 7,  "severe": 10},
+    "shoulder": {"mild": 3,  "moderate": 7,  "severe": 12},
+    "spine":    {"mild": 5,  "moderate": 10, "severe": 18},
+    "fhp":      {"mild": 3,  "moderate": 5,  "severe": 8},
+    "rounded":  {"mild": 5,  "moderate": 10, "severe": 18},
+    "yaw":      {"mild": 8,  "moderate": 18, "severe": 30},
+    "elbow":    {"mild": 10, "moderate": 20, "severe": 30},
+    # Uncalibrated default band (postureEngine.js's analyzeMonitorHeight()
+    # uses this same {12,18,25} for an uncalibrated user) — backend has no
+    # monitor-pitch personalisation (nose_drop_neutral) yet, so there is no
+    # "calibrated" band to pick between here.
+    "monitor":  {"mild": 12, "moderate": 18, "severe": 25},
+}
+
+
+def classify_severity(value, thresholds):
+    """mild/moderate/severe/normal classification of a deviation-from-ideal
+    value against named thresholds. Mirrors postureEngine.js's classify().
+    Returns None (not "normal") for a value that isn't available, so
+    apply_severity_floor's `severity == "severe"` check fails closed on
+    missing data instead of silently treating "unknown" as "fine"."""
+    if value is None:
+        return None
+    if value >= thresholds["severe"]:
+        return "severe"
+    if value >= thresholds["moderate"]:
+        return "moderate"
+    if value >= thresholds["mild"]:
+        return "mild"
+    return "normal"
+
+
+def apply_severity_floor(session_id, overall, severe_candidates, now_ts=None):
+    """
+    A confidence-weighted average can hide one severe fault behind several
+    good ones. Mirrors the exact bug postureEngine.js's own severity floor
+    was added to fix (that file's own comment, dated 2026-09-13): an
+    extreme lateral head tilt — visibly severe on camera, its alert firing
+    the whole time — can still read as "Good" or better when the other
+    ~12 metrics happen to be clean this frame, because a confidence-
+    weighted average can only ever be pulled down by any one metric's own
+    weight's worth of points, even at that metric's worst possible score.
+    That is mathematically correct as an average and still the wrong
+    answer for a tool sold on catching real posture faults — a single
+    severe fault must never be reported as Good just because it happens to
+    live in a low-weight metric this frame.
+
+    severe_candidates: {metric_key: (severity_str_or_None, reliable_bool)}.
+    A candidate whose severity is None or whose reliable flag is False can
+    never trip the floor, no matter how the value classifies — mirrors
+    postureEngine.js requiring `reliable` before "severe" counts, so a
+    metric that simply isn't measurable this frame (occluded, out of
+    tier, no face detected) can't fabricate a floor.
+
+    Debounced PER METRIC, reusing ALERT_DWELL_SECONDS — the same class of
+    fix apply_alert_dwell() applies to alerts, and for the same reason: a
+    momentarily noisy single frame (landmark jitter) can spike one metric's
+    raw severity without the underlying posture actually being that bad,
+    so a metric has to read severe CONTINUOUSLY for the dwell window before
+    it can trip the floor, exactly like an alert condition does. Kept in
+    its own _severity_dwell_state (not shared with _alert_dwell_state) so a
+    severity streak and an alert streak for the same underlying condition
+    track independently and don't reset each other.
+
+    69 — one point under this codebase's own "Good" grade boundary (70,
+    e.g. the `"Good" if overall >= 70` grading used elsewhere in this
+    file). The minimal cap that satisfies "cannot read as Good/Excellent",
+    not an arbitrarily harsher one — the confidence-weighted average still
+    decides how far below that a frame with other real faults lands.
+
+    now_ts: inject a fixed timestamp for deterministic tests instead of
+    monkeypatching time.time(), same convention as apply_alert_dwell().
+    """
+    now = now_ts if now_ts is not None else time.time()
+    bucket = _severity_dwell_state.setdefault(session_id, {})
+
+    seen_keys = set()
+    any_sustained = False
+    for key, (severity, reliable) in severe_candidates.items():
+        if reliable and severity == "severe":
+            seen_keys.add(key)
+            first_seen = bucket.get(key)
+            if first_seen is None:
+                bucket[key] = now
+                first_seen = now
+            if now - first_seen >= ALERT_DWELL_SECONDS:
+                any_sustained = True
+        # Not severe (or not reliable) this frame — no entry is kept for it
+        # below, so its dwell clock starts over next time it does read severe.
+
+    # Flicker-clearing: same rationale as apply_alert_dwell — a key not
+    # severe this frame had its condition clear, so its streak resets.
+    for k in list(bucket.keys()):
+        if k not in seen_keys:
+            del bucket[k]
+
+    # Unbounded-growth guard, same as apply_alert_dwell (there are only 9
+    # candidate keys today, so this only trims pathological cases).
+    if len(bucket) > 64:
+        oldest_keys = sorted(bucket, key=lambda k: bucket[k])[: len(bucket) - 64]
+        for k in oldest_keys:
+            del bucket[k]
+
+    return min(overall, 69) if any_sustained else overall
+
+
 def compute_gaze(face_lms, w, h):
     """
     Estimate gaze direction from iris position within eye socket.
@@ -3402,6 +3521,39 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         penalty    = (0.6 - avg_vis) / 0.6  # 0→1 as vis→0
         overall    = int(overall * (1 - penalty * 0.35) + 65 * penalty * 0.35)
         overall    = max(0, min(100, overall))
+
+    # ── Severity floor ────────────────────────────────────────────
+    # See apply_severity_floor()'s own docstring for the mechanism and the
+    # postureEngine.js bug it mirrors. Reliability per candidate mirrors
+    # each metric's own existing confidence/gating signal rather than
+    # inventing a new one: conf_* >= 0.5 for the four vis_conf()-gated
+    # metrics (same threshold that decides whether the frontend's binary
+    # `reliable` flag would be true or false for a continuous confidence),
+    # conf_rounded > 0 for rounded shoulders, hp_reliable (reprojection
+    # error gate) for yaw, and simply whether each optional metric's dict
+    # made it into out["metrics"] at all for fhp/elbow/monitor — each of
+    # those is only written after its own try block succeeds, so absence
+    # already means "not measurable this frame".
+    _wm = out["metrics"].get("wrist_angle")
+    _mh = out["metrics"].get("monitor_height")
+    _fh = out["metrics"].get("fhp_index")
+    _severe_candidates = {
+        "neck":     (classify_severity(neck_lean, _SEV["neck"]),      conf_neck  >= 0.5),
+        "tilt":     (classify_severity(head_tilt, _SEV["tilt"]),      conf_tilt  >= 0.5),
+        "shoulder": (classify_severity(sh_tilt,   _SEV["shoulder"]),  conf_sh    >= 0.5),
+        "spine":    (classify_severity(spine_lean,_SEV["spine"]),     conf_spine >= 0.5),
+        "rounded":  (_rounded_severity,                               conf_rounded > 0),
+        "yaw":      (classify_severity(abs(hp["yaw"]), _SEV["yaw"]) if hp else None,
+                     bool(hp) and hp_reliable),
+        "fhp":      (classify_severity(_fh.get("value") if _fh else None, _SEV["fhp"]),
+                     _fh is not None),
+        "elbow":    (classify_severity(_wm.get("deviation") if _wm else None, _SEV["elbow"]),
+                     _wm is not None and _wm.get("reliable", True) and wrist_sc is not None),
+        "monitor":  (classify_severity(abs(_mh.get("pitch_deg", 0)) if _mh else None, _SEV["monitor"]),
+                     _mh is not None),
+    }
+    overall = apply_severity_floor(_sid, overall, _severe_candidates)
+
     # Confidence = weighted average of per-metric confidences
     overall_conf_raw = (
         conf_neck  * eff_w["neck"]  +
