@@ -505,6 +505,158 @@ class TestWeightTableRedesign:
         )
 
 
+class TestPositionOcclusionPenalty:
+    """analyze_front()'s confidence-weighted average can look fine even when
+    the frame itself makes every reading on it less trustworthy -- sitting
+    on top of the lens, sitting far back, or resting a chin/cheek on a hand
+    (hiding one ear) all degrade geometry across the board without any
+    single per-metric score reacting to it. postureEngine.js already
+    charges for this (checkFrameQuality()'s too_close/too_far half,
+    handProp.detected -> occlusionPenalty); analyze_front had no
+    equivalent at all until _check_frame_crop()/compute_position_penalty()/
+    compute_occlusion_penalty() were added.
+
+    _check_frame_crop/compute_position_penalty/compute_occlusion_penalty
+    are tested directly as pure functions (same rationale as
+    TestAlertDwell/TestSeverityFloor: precise control over the inputs that
+    trigger each branch, with no synthetic pose needed). No dumped
+    synthetic pose has asymmetric ear visibility (the rig always emits
+    0.95/0.95 -- confirmed by inspecting every case in synthetic_poses.json),
+    so hand-prop-occlusion detection itself can only be exercised at the
+    pure-function level here; the distance/crop half of the wiring is
+    additionally checked end-to-end through analyze_front() below, since
+    several dumped poses genuinely land outside the ideal distance band.
+    """
+
+    # ── _check_frame_crop ────────────────────────────────────────────
+    def test_crop_normal_framing_is_a_no_op(self):
+        # Shoulders comfortably centred and a normal width for a 1280px
+        # frame -- nothing should trip.
+        reason, severity = be._check_frame_crop((560, 300), (720, 300), 1280)
+        assert reason is None and severity == 0.0
+
+    def test_crop_flags_too_close_from_shoulder_span_fraction(self):
+        # Shoulder span > 85% of frame width, well inside the frame edges
+        # (so this is the width-fraction branch, not the edge-run-off one).
+        reason, severity = be._check_frame_crop((80, 300), (1200, 300), 1280)
+        assert reason == "too_close"
+        assert 0 < severity <= 1.0
+
+    def test_crop_flags_too_close_when_a_wide_span_runs_off_the_frame_edge(self):
+        # A shoulder pinned at the very edge AND a wide span together should
+        # read as maximum severity (1.0) via the edge-run-off branch.
+        reason, severity = be._check_frame_crop((-5, 300), (900, 300), 1280)
+        assert reason == "too_close"
+        assert severity == 1.0
+
+    def test_crop_flags_too_far_for_a_narrow_shoulder_span(self):
+        reason, severity = be._check_frame_crop((620, 300), (660, 300), 1280)
+        assert reason == "too_far"
+        assert 0 < severity <= 1.0
+
+    def test_crop_severity_increases_with_how_far_past_the_threshold(self):
+        # Both trip the plain width-fraction branch (comfortably inside the
+        # frame edges), one just past the 0.85 threshold and one close to
+        # filling the frame -- severity should track the difference.
+        _, mild   = be._check_frame_crop((65, 300),  (1215, 300), 1280)   # frac ~0.898
+        _, severe = be._check_frame_crop((15, 300),  (1265, 300), 1280)   # frac ~0.977
+        assert mild > 0 and severe > 0
+        assert severe > mild, f"a more extreme crop should score a higher severity: mild={mild} severe={severe}"
+
+    # ── compute_position_penalty ─────────────────────────────────────
+    def test_position_penalty_zero_for_a_well_framed_in_range_subject(self):
+        pen = be.compute_position_penalty((560, 300), (720, 300), 1280, 70, 50, 100)
+        assert pen == 0
+
+    def test_position_penalty_from_crop_alone(self):
+        pen = be.compute_position_penalty((80, 300), (1200, 300), 1280, 70, 50, 100)
+        assert pen > 0
+
+    def test_position_penalty_from_distance_alone(self):
+        # Well-framed shoulders (no crop signal) but a calibrated distance
+        # far outside [lo, hi].
+        pen = be.compute_position_penalty((560, 300), (720, 300), 1280, 160, 50, 100)
+        assert pen > 0
+
+    def test_position_penalty_takes_the_larger_signal_not_the_sum(self):
+        # Both crop AND distance are tripped at once -- the combined penalty
+        # must equal the worse of the two, not their sum, per the function's
+        # own docstring.
+        crop_only = be.compute_position_penalty((80, 300), (1200, 300), 1280, 70, 50, 100)
+        dist_only = be.compute_position_penalty((560, 300), (720, 300), 1280, 160, 50, 100)
+        both = be.compute_position_penalty((80, 300), (1200, 300), 1280, 160, 50, 100)
+        assert both == max(crop_only, dist_only), (
+            f"expected max(crop, dist) = {max(crop_only, dist_only)}, got {both} "
+            f"(crop_only={crop_only}, dist_only={dist_only}) -- looks summed, not maxed"
+        )
+
+    def test_position_penalty_never_exceeds_the_cap(self):
+        pen = be.compute_position_penalty((-50, 300), (1300, 300), 1280, 300, 50, 100)
+        assert pen <= 18
+
+    def test_position_penalty_small_distance_overshoot_is_forgiven(self):
+        # dist_over <= 2cm is explicitly a no-charge zone per the function's
+        # own ramp comment.
+        pen = be.compute_position_penalty((560, 300), (720, 300), 1280, 101.5, 50, 100)
+        assert pen == 0
+
+    # ── compute_occlusion_penalty ────────────────────────────────────
+    def test_occlusion_penalty_zero_when_no_hand_prop_detected(self):
+        assert be.compute_occlusion_penalty(0.3, False) == 0
+
+    def test_occlusion_penalty_zero_for_full_coverage_even_if_flagged(self):
+        # weight_used >= 0.9 means coverage saturates at 1.0 -- full
+        # confidence survived, so there's nothing to charge for even if the
+        # (cheap, heuristic) hand-prop detector fired.
+        assert be.compute_occlusion_penalty(1.0, True) == 0
+
+    def test_occlusion_penalty_scales_with_how_much_weight_was_lost(self):
+        light = be.compute_occlusion_penalty(0.8, True)
+        heavy = be.compute_occlusion_penalty(0.2, True)
+        assert 0 < light < heavy <= 26, f"expected 0 < light < heavy <= 26, got light={light} heavy={heavy}"
+
+    def test_occlusion_penalty_maxes_out_near_zero_weight_used(self):
+        pen = be.compute_occlusion_penalty(0.0, True)
+        assert pen == 26
+
+    # ── End-to-end through analyze_front() ───────────────────────────
+    def test_in_range_distance_poses_carry_no_position_penalty(self):
+        # neutral_at_40cm/60cm both land inside the laptop [50,100] band
+        # once run through analyze_front's own distance estimate (which
+        # doesn't map 1:1 to the synthetic rig's camera-distance label --
+        # confirmed empirically, not assumed) -- absent metrics keys mean
+        # the `if _position_penalty or _occlusion_penalty` gate never fired.
+        for case in ("neutral_at_40cm", "neutral_at_60cm"):
+            out = analyze(case, tier="professional")
+            assert out["distCm"] is not None and 50 <= out["distCm"] <= 100, (
+                f"test premise failed for {case}: distCm={out.get('distCm')} not inside [50,100]"
+            )
+            assert out["metrics"].get("_position_penalty") is None, (
+                f"{case} is inside the ideal distance band and should carry no position penalty: "
+                f"{out['metrics'].get('_position_penalty')}"
+            )
+
+    def test_out_of_range_distance_pose_is_charged_a_position_penalty_and_loses_score(self):
+        out_near = analyze("neutral_at_60cm", tier="professional")   # in range
+        out_far  = analyze("neutral_at_90cm", tier="professional")   # empirically resolves well past hi=100
+        assert out_far["distCm"] > 100, f"test premise failed: distCm={out_far['distCm']} not past the ideal band"
+        pp = out_far["metrics"].get("_position_penalty")
+        assert pp is not None and pp["value"] > 0, f"expected a nonzero position penalty, got {pp}"
+        assert out_far["score"] < out_near["score"], (
+            f"a subject well outside the ideal distance band scored {out_far['score']}, not lower than "
+            f"the in-range pose's {out_near['score']}"
+        )
+
+    def test_occlusion_penalty_metric_reports_not_detected_when_ears_are_symmetric(self):
+        # Every dumped synthetic pose has symmetric ear visibility, so the
+        # hand-prop heuristic should never fire through the real pipeline
+        # here -- guards the wiring's `detected` flag against a false
+        # positive on ordinary, fully-visible poses.
+        out = analyze("neutral_at_90cm", tier="professional")  # has a penalty dict written (position)
+        op = out["metrics"].get("_occlusion_penalty")
+        assert op is not None and op["detected"] is False and op["value"] == 0, f"{op}"
+
+
 class TestSeverityFloor:
     """A confidence-weighted average can hide one severe fault behind
     several good ones -- see apply_severity_floor()'s own docstring for the

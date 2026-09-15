@@ -2092,6 +2092,113 @@ def apply_severity_floor(session_id, overall, severe_candidates, now_ts=None):
     return min(overall, 69) if any_sustained else overall
 
 
+def _check_frame_crop(l_sh_px, r_sh_px, frame_w):
+    """
+    Mirrors the too_close/too_far half of postureEngine.js's
+    checkFrameQuality() — raw frame-crop geometry (how much of the frame
+    the shoulders span), independent of and in addition to the distance
+    estimate (dist_cm), which can disagree with it: a calibrated distance
+    reading can still say "inside the ideal band" while the shoulders are
+    visibly filling the lens, if the calibration itself is off. (The
+    reclined/lying-down half of checkFrameQuality() — which HARD-blocks
+    analysis entirely on the frontend — is deliberately not mirrored here;
+    that is a bigger API-contract change (this endpoint always returns a
+    full analysis today) and is tracked separately, not silently folded
+    into this pass.)
+
+    Returns (reason, severity): reason is "too_close", "too_far", or None;
+    severity is 0..1, how far past the threshold, not just whether it was
+    crossed — a boundary case and an extreme case should not cost the same.
+    """
+    sh_width_px = abs(r_sh_px[0] - l_sh_px[0])
+    sh_min_px = min(l_sh_px[0], r_sh_px[0])
+    sh_max_px = max(l_sh_px[0], r_sh_px[0])
+    # Only a genuinely wide subject can have a shoulder run off the visible
+    # frame edge because they're close; a narrow one is simply off-centre,
+    # which is not a proximity problem.
+    if sh_min_px < frame_w * 0.01 or sh_max_px > frame_w * 0.99:
+        span_frac = sh_width_px / max(frame_w, 1)
+        if span_frac > 0.55:
+            return "too_close", 1.0
+    sh_width_frac = sh_width_px / max(frame_w, 1)
+    if sh_width_frac > 0.85:
+        return "too_close", min(1.0, (sh_width_frac - 0.85) / 0.15)
+    if sh_width_px < 50:
+        return "too_far", min(1.0, (50 - sh_width_px) / 30)
+    return None, 0.0
+
+
+def compute_position_penalty(l_sh_px, r_sh_px, frame_w, dist_cm, lo, hi):
+    """
+    Numeric deduction (capped at 18 points), charged ON TOP OF — not
+    instead of — whatever the confidence-weighted average already scored.
+    Mirrors postureEngine.js's positionPenalty exactly. The confidence-
+    weighted average alone can look fine even when the frame itself makes
+    every reading on it less trustworthy: sitting on top of the lens or
+    three metres back degrades neck/spine/FHP geometry across the board,
+    yet nothing in the per-metric scoring reacts to that on its own.
+
+    A too-close/too-far frame still gets its metrics computed and scored
+    normally (this function only adds a deduction, it never blocks
+    analysis) — the most common way to trigger "too close" is leaning or
+    slouching forward toward the screen, which is exactly the event
+    spine_lean/fhp exist to catch, so silently swallowing the reading
+    instead of scoring it would hide the worse case behind the more
+    routine one.
+
+    Two independent signals are combined by taking the larger, not the
+    sum, so a frame that trips both is charged once: _check_frame_crop's
+    raw geometry (how much of the frame the shoulders span — the more
+    direct evidence, since it measures pixels that are actually there with
+    no calibration in the path) and how far the calibrated dist_cm itself
+    sits outside [lo, hi] (catches cases the crop check's coarser
+    thresholds miss).
+    """
+    _, crop_severity = _check_frame_crop(l_sh_px, r_sh_px, frame_w)
+    crop_penalty = min(18, round(6 + 12 * crop_severity)) if crop_severity > 0 else 0
+
+    if dist_cm and dist_cm < lo:
+        dist_over = lo - dist_cm
+    elif dist_cm and dist_cm > hi:
+        dist_over = dist_cm - hi
+    else:
+        dist_over = 0.0
+    # Ramps to the cap over 25cm of overshoot: a 3cm overstep is a nudge
+    # (~2 points), 10cm costs 7, 25cm or more costs the full 18.
+    dist_penalty = 0 if dist_over <= 2 else round(min(18, 18 * (dist_over - 2) / 25))
+
+    return min(18, max(crop_penalty, dist_penalty))
+
+
+def compute_occlusion_penalty(weight_used, hand_prop_detected):
+    """
+    Numeric deduction for suspected hand/chin-prop occlusion — resting your
+    chin or cheek on your hand, hiding one ear, is common enough at a desk
+    to name specifically. Mirrors postureEngine.js's occlusionPenalty.
+
+    Without this, occluding an ear drops neck_lean/fhp_index/
+    rounded_shoulders — together a large share of this engine's own
+    weight — out of the confidence-weighted average as "unreliable",
+    which RAISES a bad-posture score instead of penalising it: those are
+    precisely the metrics that score worst for a slumped user, so the
+    surviving average rises. Without a charge here, covering an ear is a
+    straightforward way to improve a bad-posture score by adopting a worse
+    habit.
+
+    weight_used: this frame's actual total effective weight (analyze_front's
+    own `weight_used` — 1.0 minus whatever confidence-based exclusion left
+    unscored), the same quantity the occlusion detection is meant to react
+    to. Scaled against 0.9 (roughly what a fully-visible frame keeps after
+    ordinary confidence gating), so a brief or partial occlusion that still
+    leaves most metrics measurable costs little, and full occlusion costs
+    the full 26 points.
+    """
+    if not hand_prop_detected:
+        return 0
+    coverage = min(1.0, weight_used / 0.9)
+    return round(26 * (1 - coverage))
+
+
 def compute_gaze(face_lms, w, h):
     """
     Estimate gaze direction from iris position within eye socket.
@@ -3780,6 +3887,31 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         overall = max(0, min(100, int(round(score_val / weight_used))))
     else:
         overall = 0
+
+    # ── Position / occlusion penalties ──────────────────────────────
+    # Mirrors postureEngine.js's checkFrameQuality() (too_close/too_far
+    # crop half only — reclined is deliberately not mirrored, see
+    # _check_frame_crop's docstring) and its handProp.detected/
+    # occlusionPenalty mechanism. Both are additive point deductions;
+    # metrics themselves are always still computed and reported.
+    _hand_prop_yaw = abs(hp["yaw"]) if hp else 0.0
+    _hand_prop_detected = (
+        (vis_l_ear > 0.55) != (vis_r_ear > 0.55)
+    ) and _hand_prop_yaw < 15
+    _position_penalty  = compute_position_penalty(l_sh, r_sh, w, dist_cm, lo, hi)
+    _occlusion_penalty = compute_occlusion_penalty(weight_used, _hand_prop_detected)
+    if _position_penalty or _occlusion_penalty:
+        overall = max(0, overall - _position_penalty - _occlusion_penalty)
+        out["metrics"]["_position_penalty"] = {
+            "value": _position_penalty, "unit": "pts", "label": "Positioning adjustment",
+        }
+        out["metrics"]["_occlusion_penalty"] = {
+            "value": _occlusion_penalty, "unit": "pts", "label": "Hand/chin-prop occlusion adjustment",
+            "detected": _hand_prop_detected,
+        }
+        if _hand_prop_detected:
+            add_alert(out, "Resting your chin/cheek on your hand hides real neck strain from being measured — try to keep your hand off your face",
+                      "إسناد ذقنك أو خدك على يدك يخفي إجهاد الرقبة الحقيقي عن القياس — حاول إبعاد يدك عن وجهك")
 
     # ── Confidence: penalize low shoulder visibility ────────────────
     vis_l_sh_val = vis_l_sh  # already computed above
