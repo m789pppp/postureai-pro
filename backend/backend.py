@@ -1833,6 +1833,15 @@ _alert_dwell_state    = {}
 _severity_dwell_state = {}
 ALERT_DWELL_SECONDS = 1.2  # matches postureEngine.js's ALERT_DWELL_MS
 
+# {session_id: unix_ts_or_None} — first time THIS session's reclined-geometry
+# check went "extreme" with no clean frame in between. Separate dwell window
+# from ALERT_DWELL_SECONDS because postureEngine.js's own _checkReclined()
+# uses a longer, distinct constant (1800ms, vs 1200ms for ordinary alerts) —
+# lying down is a much bigger claim than a routine alert and deliberately
+# gets more confirmation time before it's acted on.
+_reclined_dwell_state = {}
+RECLINE_DWELL_SECONDS = 1.8  # matches postureEngine.js's _checkReclined's 1800ms
+
 # ── Session self-baselines for trunk rotation / torso flexion ───────
 # {session_id: {"skipped": int, "samples": [float,...], "value": float|None}}
 # Both metrics are ratios of body measurements with no usable population
@@ -1856,6 +1865,67 @@ _BASELINE_SAMPLE_N    = 40
 _head_sh_base_state = {}
 _HEAD_SH_WARMUP_SKIP = 15
 _HEAD_SH_SAMPLE_N    = 30
+
+# Same per-session-baseline mechanism, for rounded-shoulders' hip-to-ear-axis
+# protraction measurement (see that block, also after dist_cm is finalised).
+# Matches postureEngine.js's own _protractBase = _makeBaseline(12, 25).
+_protract_base_state = {}
+_PROTRACT_WARMUP_SKIP = 12
+_PROTRACT_SAMPLE_N    = 25
+
+# ── Depth-channel usability gate (rounded-shoulders protraction) ────
+# {session_id: [ahead_cm, ...]} rolling window (max 30 samples) of the
+# nose-ahead-of-ears distance, in cm — an anatomical fact that holds in
+# every posture (the nose is always ~8-11cm in front of the ears, whichever
+# way the head is turned or tilted). Mirrors postureEngine.js's
+# _updateDepthUsable()/_depthOK: MediaPipe's Z channel is sometimes flat,
+# inverted, or just noise depending on device/browser, and using it
+# unvalidated silently produces confidently WRONG readings rather than
+# missing ones — that file's own comment documents measuring protraction
+# read 0.0cm ("no rounding", reliable:true) for a subject actually rounded
+# 6cm, once Z stopped carrying real depth. Two separate questions decide
+# _depth_ok_state: is Z pointing the right way and roughly the right size
+# (the median, checked against _DEPTH_MIN_CM/_DEPTH_MAX_CM), and is it
+# steady enough to resolve a few centimetres of posture with (the spread,
+# checked against _DEPTH_MAX_NOISE_CM) — a channel can pass the first and
+# fail the second badly, since the median of a symmetric error is still
+# correct while any single noisy reading is not.
+_depth_win_state = {}
+_depth_ok_state  = {}
+_DEPTH_MIN_CM       = 3     # below this, z is flat or inverted
+_DEPTH_MAX_CM       = 30    # above this, z is not in the units we think
+_DEPTH_MAX_NOISE_CM = 1.2   # matches postureEngine.js's own measured cutoff
+_FOCAL_PX_1280 = 800  # matches postureEngine.js's FOCAL_PX_1280 (calibrated at 1280px width)
+
+
+def _update_depth_usable(session_id, ear_z_avg, nose_z, w, dist_cm, nose_vis, ear_l_vis, ear_r_vis):
+    """
+    Updates and returns THIS session's _depth_ok_state -- see the module-
+    level comment above for the rationale. Mirrors postureEngine.js's
+    _updateDepthUsable() exactly: skips the update entirely (keeping
+    whatever state already existed) on a frame where the required
+    landmarks aren't visible or no distance estimate exists yet, rather
+    than treating a single bad frame as proof the depth channel is
+    unusable.
+    """
+    if not (nose_vis >= 0.55 and ear_l_vis >= 0.55 and ear_r_vis >= 0.55) or not (dist_cm and dist_cm > 0):
+        return _depth_ok_state.get(session_id, False)
+    focal_px = (_FOCAL_PX_1280 * w) / 1280
+    frame_width_cm = (dist_cm * w) / max(focal_px, 1)
+    ahead_cm = (ear_z_avg - nose_z) * frame_width_cm
+    if not math.isfinite(ahead_cm):
+        return _depth_ok_state.get(session_id, False)
+    win = _depth_win_state.setdefault(session_id, [])
+    win.append(ahead_cm)
+    if len(win) > 30:
+        win.pop(0)
+    if len(win) >= 12:
+        s = sorted(win)
+        med  = s[len(win) // 2]
+        mean = sum(win) / len(win)
+        sd   = math.sqrt(sum((x - mean) ** 2 for x in win) / len(win))
+        _depth_ok_state[session_id] = (_DEPTH_MIN_CM <= med <= _DEPTH_MAX_CM and sd <= _DEPTH_MAX_NOISE_CM)
+    return _depth_ok_state.get(session_id, False)
 
 
 def _feed_baseline(bucket, value, warmup_skip=_BASELINE_WARMUP_SKIP, sample_n=_BASELINE_SAMPLE_N):
@@ -2100,11 +2170,11 @@ def _check_frame_crop(l_sh_px, r_sh_px, frame_w):
     estimate (dist_cm), which can disagree with it: a calibrated distance
     reading can still say "inside the ideal band" while the shoulders are
     visibly filling the lens, if the calibration itself is off. (The
-    reclined/lying-down half of checkFrameQuality() — which HARD-blocks
-    analysis entirely on the frontend — is deliberately not mirrored here;
-    that is a bigger API-contract change (this endpoint always returns a
-    full analysis today) and is tracked separately, not silently folded
-    into this pass.)
+    reclined/lying-down half of checkFrameQuality() is handled separately —
+    see _check_reclined_geometry()/apply_reclined_dwell() below — via the
+    same additive-cap approach as the severity floor, deliberately NOT the
+    frontend's hard "return score:null" block, since this endpoint's
+    contract is to always return a full analysis.)
 
     Returns (reason, severity): reason is "too_close", "too_far", or None;
     severity is 0..1, how far past the threshold, not just whether it was
@@ -2197,6 +2267,62 @@ def compute_occlusion_penalty(weight_used, hand_prop_detected):
         return 0
     coverage = min(1.0, weight_used / 0.9)
     return round(26 * (1 - coverage))
+
+
+def _check_reclined_geometry(l_sh_px, r_sh_px, l_hip_px, r_hip_px, hips_visible):
+    """
+    Mirrors postureEngine.js's _checkReclined() per-frame geometry check
+    (the debounce is a separate concern — see apply_reclined_dwell()):
+    detects a body orientation this engine has no seated-posture model for
+    (reclined / lying down flat, e.g. on a couch with a laptop propped on
+    the stomach), which can otherwise read as a stable "Good" score for as
+    long as the subject stays still — spine_lean only measures deviation
+    from vertical, and lying down IS a ~90 deg deviation from vertical that
+    is normal for lying down, not a posture fault this engine is built to
+    grade.
+
+    Two signals, in priority order, exactly matching the frontend:
+    1. Hip-to-shoulder line vs vertical (angle_vert) -- the direct,
+       strongest signal, but needs hips in frame (often cropped out at
+       normal laptop-webcam distance).
+    2. Shoulder-to-shoulder line vs horizontal (angle_horiz) -- visible
+       even when hips are cropped. A seated user's worst realistic
+       shoulder tilt is well under SEV.shoulder's "severe" band; crossing
+       38 deg means the camera is seeing the shoulders at an angle only
+       lying down, falling sideways out of the chair, or a knocked-over
+       camera produces.
+
+    Returns a plain bool ("extreme" this single frame) -- callers debounce.
+    """
+    if hips_visible:
+        mid_hip = ((l_hip_px[0] + r_hip_px[0]) / 2, (l_hip_px[1] + r_hip_px[1]) / 2)
+        mid_sh  = ((l_sh_px[0]  + r_sh_px[0])  / 2, (l_sh_px[1]  + r_sh_px[1])  / 2)
+        return angle_vert(mid_hip, mid_sh) > 42
+    return angle_horiz(l_sh_px, r_sh_px) > 38
+
+
+def apply_reclined_dwell(session_id, extreme, now_ts=None):
+    """
+    Debounce _check_reclined_geometry() over RECLINE_DWELL_SECONDS (1.8s),
+    same rationale and mechanism as apply_alert_dwell()/apply_severity_floor()
+    -- a single noisy frame (leaning down to grab something off the desk,
+    a fast stretch) must not be mistaken for lying down; a body still this
+    extreme after nearly two full seconds is not a stretch. Kept in its own
+    _reclined_dwell_state (not shared with the other two) since it tracks a
+    single boolean condition per session, not a per-key/per-metric bucket.
+
+    now_ts: inject a fixed timestamp for deterministic tests instead of
+    monkeypatching time.time(), same convention as the other dwell functions.
+    """
+    now = now_ts if now_ts is not None else time.time()
+    since = _reclined_dwell_state.get(session_id)
+    if extreme:
+        if since is None:
+            _reclined_dwell_state[session_id] = now
+            since = now
+        return (now - since) > RECLINE_DWELL_SECONDS
+    _reclined_dwell_state[session_id] = None
+    return False
 
 
 def compute_gaze(face_lms, w, h):
@@ -2744,7 +2870,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         "mode": mode, "detected": False, "metrics": {}, "score": 0,
         "alerts": [], "recommendations": [], "landmarks": [],
         "head_pose": None, "confidence": 0, "engine": "mediapipe",
-        "eye_strain": None
+        "eye_strain": None, "reclined": False,
     }
 
     pose_model = POSE_FULL if tier in ("professional", "elite", "pro", "premium", "business") else POSE_LITE
@@ -3019,73 +3145,11 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     except Exception:
         pass
 
-    # ── Rounded shoulders (protraction) ────────────────────────────
-    # PRIMARY: 2D ear-to-shoulder elevation ratio — mirrors the frontend
-    # live-camera engine's analyzeRoundedShoulders() in postureEngine.js.
-    # This used to be Z-depth only. MediaPipe Z is noisy and, used alone,
-    # silently gave a different rounded-shoulders reading here (PDF
-    # reports / AI insights) than the live camera gave for the exact same
-    # posture — flagged to the user as an open "backend not synced with
-    # frontend" risk. SECONDARY: Z is now blended in only when both
-    # shoulder Z readings agree (low L/R asymmetry = a stable, non-jittery
-    # frame), same as the frontend. Also now honors the user's own
-    # Personal Posture Calibration (rounded_neutral) — it was already
-    # being saved and sent to this endpoint, just never read here.
-    _ls_z = g(PL.L_SHOULDER).z
-    _rs_z = g(PL.R_SHOULDER).z
-    _sh_z_avg  = (_ls_z + _rs_z) / 2.0     # negative = forward of spine
-    _sh_z_asym = abs(_ls_z - _rs_z)         # L/R asymmetry — low = stable frame
-    _ear_ok    = vis_l_ear > 0.5 and vis_r_ear > 0.5
-    _personalised = False
-    _z_blended    = False
-    conf_rounded  = 0.0
-
-    if _ear_ok:
-        _elev_ratio = (mid_sh[1] - mid_ear[1]) / max(sh_width_px, 1)  # mid_sh/mid_ear already in px
-        _neutral_ratio = (rounded_neutral if isinstance(rounded_neutral, (int, float))
-                           and 0.2 < rounded_neutral < 1.0 else 0.52)
-        _personalised = _neutral_ratio != 0.52
-        _rounded_depth = max(0.0, (_neutral_ratio - _elev_ratio) * 45)
-        if _sh_z_asym <= 0.04:
-            _z_depth = max(0.0, -_sh_z_avg * 100)
-            _rounded_depth = _rounded_depth * 0.8 + _z_depth * 0.2
-            _z_blended = True
-        conf_rounded = 1.0
-    elif _sh_z_asym <= 0.04:
-        # Fallback: ears not visible — Z only, same as frontend's fallback path
-        _rounded_depth = max(0.0, -_sh_z_avg * 100)
-        conf_rounded = 0.5
-    else:
-        # Neither signal trustworthy — don't fabricate a reading
-        _rounded_depth = 0.0
-        conf_rounded = 0.0
-
-    _rounded_sc = score_m(_rounded_depth, 0, 10, 22)
-    _rounded_severity = ("severe" if _rounded_depth >= 18 else
-                          "moderate" if _rounded_depth >= 10 else
-                          "mild" if _rounded_depth >= 5 else "normal")
-    out["metrics"]["rounded_shoulders"] = {
-        "value":        round(_rounded_depth, 1),
-        "z_left":       round(_ls_z, 3),
-        "z_right":      round(_rs_z, 3),
-        "asymmetry":    round(_sh_z_asym, 3),
-        "score":        _rounded_sc,
-        "severity":     _rounded_severity,
-        "unit":         "depth units",
-        "label":        "Rounded shoulders (protraction)",
-        "personalised": _personalised,
-        "reference":    ("2D ear-to-shoulder elevation ratio" + (" + Z-depth blend" if _z_blended else "")
-                          if _ear_ok else "MediaPipe Z-depth (ears not visible)"),
-    }
-    if _rounded_depth > 18:
-        add_alert(out, "⚠️ Rounded shoulders detected — pull shoulder blades together and down",
-                  "⚠️ كتفان مائلان للأمام — اسحب لوحي الكتف للخلف وللأسفل")
-    elif _rounded_depth > 10:
-        add_alert(out, "Shoulders slightly forward — open chest, squeeze shoulder blades gently",
-                  "الكتفان مائلان للأمام قليلاً — افتح صدرك واضغط لوحي الكتف برفق")
-    if _rounded_severity in ("mild", "moderate") and not _personalised:
-        add_alert(out, "Tip: run Personal Posture Calibration for a more precise rounded-shoulders reading",
-                  "نصيحة: شغّل معايرة الوضعية الشخصية لقراءة أدق لانحناء الكتفين")
+    # Rounded-shoulders (protraction) now lives further down, right after
+    # dist_cm is finalised — the new hip-to-ear-axis method needs a
+    # resolved distance to convert Z into centimetres, which the old
+    # ear-to-shoulder-ratio formula it replaces never needed. See that
+    # block's own comment for the full rationale.
 
     # ── IMPROVED: 4-point spine with kyphosis detection ──────────
     # 4 reference points (top→bottom):
@@ -3299,6 +3363,140 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         focal   = _focal_fallback if _focal_fallback else (630 * (w / 640))
         dist_cm = round((40.0 * focal) / max(_sh_w_fallback, 1), 1)
         dist_cm = max(20, min(150, dist_cm))
+
+    # ── Rounded shoulders (protraction) ────────────────────────────
+    # Full rewrite: mirrors postureEngine.js's CURRENT analyzeRoundedShoulders()
+    # — a hip-to-ear-axis protraction measurement, self-baselined per
+    # session, gated behind a validated depth channel — not the ear-to-
+    # shoulder elevation-ratio formula this block used to carry (moved from
+    # its old, pre-dist_cm location above; the new method needs a resolved
+    # distance to convert Z into centimetres, which the ratio formula never
+    # did). That ratio formula is the frontend's own OLD, explicitly-
+    # abandoned method — that file's comment on it: "NEUTRAL_RATIO was the
+    # hardcoded 0.52, and no real body has that ear-to-shoulder ratio...
+    # every uncalibrated user read ~9 depth against an alert threshold of 8
+    # and was told 'shoulders slightly forward' while sitting perfectly
+    # upright. The number tracked their neck length and shoulder width, not
+    # their posture." Leaving that formula here any longer would mean the
+    # paid Enterprise API and PDF/AI-insight reports kept scoring this
+    # metric by a method the live-camera engine itself has already
+    # rejected as wrong.
+    #
+    # New method: the line from the hip midpoint to the ear midpoint is the
+    # trunk's own axis. Project it to the height the shoulders sit at and
+    # measure how far in front of that axis (in Z) the shoulders actually
+    # are — that is protraction. A forward trunk lean rotates hips,
+    # shoulders and ears together and stays collinear (largely cancels); a
+    # forward head moves the ear and not the shoulder, which pushes the raw
+    # number NEGATIVE and can't be mistaken for rounding. Self-baselined
+    # per session (like trunk_rotation/torso_flexion above) because the
+    # raw Z-derived number carries a per-camera/per-build offset with no
+    # usable population constant.
+    #
+    # Requires ALL of: both shoulders visible, both ears visible, both hips
+    # visible, a resolved distance estimate, and this session's own
+    # depth-usability gate passing (_update_depth_usable() — MediaPipe Z is
+    # sometimes flat or inverted depending on device/browser, and using it
+    # unvalidated used to silently read "0cm rounding" — confidently wrong
+    # — for a subject actually rounded 6cm). Short of all of that: ears
+    # visible but hips/distance/depth not yet available reports
+    # confidence=0/reliable=False (never falls back to the old ratio —
+    # "measure nothing" beats "confidently measure the wrong thing," the
+    # same principle the frontend's own comment states); ears not visible
+    # falls back to a plain Z-depth reading (unchanged from before this
+    # rewrite — that fallback path was already correct and needed no fix).
+    #
+    # rounded_neutral (this function's own parameter, still accepted for
+    # backward compatibility with existing callers) fed the OLD ratio
+    # formula's calibration input. The new self-baselined method has no use
+    # for a static neutral-ratio constant — postureEngine.js's own current
+    # analyzeRoundedShoulders() accepts a `calib` argument but no longer
+    # reads anything off it either — so it is intentionally unused below.
+    _ls_z = g(PL.L_SHOULDER).z
+    _rs_z = g(PL.R_SHOULDER).z
+    _sh_z_avg  = (_ls_z + _rs_z) / 2.0
+    _sh_z_asym = abs(_ls_z - _rs_z)
+    _rs_sh_ok  = g(PL.L_SHOULDER).visibility >= 0.55 and g(PL.R_SHOULDER).visibility >= 0.55
+    _rs_ear_ok = vis_l_ear >= 0.55 and vis_r_ear >= 0.55
+    _rs_hip_ok = g(PL.L_HIP).visibility >= 0.55 and g(PL.R_HIP).visibility >= 0.55
+    _rounded_depth     = 0.0
+    _rounded_sc        = 90
+    _rounded_severity  = "normal"
+    _personalised      = False
+    _rounded_learning  = False
+    conf_rounded       = 0.0
+    _rounded_reference = None
+
+    if not _rs_sh_ok:
+        pass  # out of frame entirely — neutral default above stands
+    elif not _rs_ear_ok:
+        # Fallback: ears not visible — Z only, clamped for jitter. Unchanged
+        # from before this rewrite; only the primary (ears-visible) path
+        # above it changed.
+        if _sh_z_asym <= 0.04:
+            _rounded_depth = round(max(0.0, -_sh_z_avg * 100), 1)
+            _rounded_sc = score_m(_rounded_depth, 0, 10, 22)
+            _rounded_severity = classify_severity(_rounded_depth, _SEV["rounded"])
+            conf_rounded = 0.5
+            _rounded_reference = "MediaPipe Z-depth (ears not visible)"
+    else:
+        if _rs_hip_ok and dist_cm and dist_cm > 0:
+            _rs_ear_z = (g(PL.L_EAR).z + g(PL.R_EAR).z) / 2.0
+            _rs_hip_z = (g(PL.L_HIP).z + g(PL.R_HIP).z) / 2.0
+            _rs_mid_sh_yn = mid_sh[1] / max(h, 1)
+            _rs_hip_yn = (g(PL.L_HIP).y + g(PL.R_HIP).y) / 2.0
+            _rs_ear_yn = (g(PL.L_EAR).y + g(PL.R_EAR).y) / 2.0
+            _rs_span = _rs_hip_yn - _rs_ear_yn
+            _rs_depth_ok = _update_depth_usable(
+                _sid, _rs_ear_z, g(PL.NOSE).z, w, dist_cm,
+                nose_vis=vis_nose, ear_l_vis=vis_l_ear, ear_r_vis=vis_r_ear,
+            )
+            if _rs_depth_ok and abs(_rs_span) > 0.02:
+                _rs_t = (_rs_hip_yn - _rs_mid_sh_yn) / _rs_span
+                _rs_z_on_axis = _rs_hip_z + _rs_t * (_rs_ear_z - _rs_hip_z)
+                _rs_focal_px = (_FOCAL_PX_1280 * w) / 1280
+                _rs_frame_width_cm = (dist_cm * w) / max(_rs_focal_px, 1)
+                _rs_raw = (_rs_z_on_axis - _sh_z_avg) * _rs_frame_width_cm
+                if math.isfinite(_rs_raw) and abs(_rs_raw) < 40:
+                    _rs_bucket = _protract_base_state.setdefault(_sid, {})
+                    _rs_base = _feed_baseline(_rs_bucket, _rs_raw,
+                                               warmup_skip=_PROTRACT_WARMUP_SKIP, sample_n=_PROTRACT_SAMPLE_N)
+                    if _rs_base is None:
+                        _rounded_learning = True
+                    else:
+                        _protract_cm = max(0.0, _rs_raw - _rs_base)
+                        _rounded_depth = round(_protract_cm, 1)
+                        _rounded_sc = score_m(_rounded_depth, 0, 10, 22)
+                        _rounded_severity = classify_severity(_rounded_depth, _SEV["rounded"])
+                        conf_rounded = 1.0
+                        _personalised = True
+                        _rounded_reference = "Hip-to-ear axis protraction (self-baselined)"
+        if _rounded_reference is None:
+            _rounded_reference = ("still learning this session's own baseline"
+                                   if _rounded_learning else
+                                   "unreliable — needs hips visible, a resolved distance, and a validated depth channel")
+
+    out["metrics"]["rounded_shoulders"] = {
+        "value":        _rounded_depth,
+        "z_left":       round(_ls_z, 3),
+        "z_right":      round(_rs_z, 3),
+        "asymmetry":    round(_sh_z_asym, 3),
+        "score":        _rounded_sc,
+        "severity":     _rounded_severity,
+        "unit":         "cm" if conf_rounded >= 1.0 else "depth units",
+        "label":        "Rounded shoulders (protraction)",
+        "personalised": _personalised,
+        "reliable":     conf_rounded > 0,
+        "learning":     _rounded_learning,
+        "reference":    _rounded_reference or "unreliable — needs hips visible, a resolved distance, and a validated depth channel",
+    }
+    if conf_rounded > 0:
+        if _rounded_severity == "severe":
+            add_alert(out, "⚠️ Rounded shoulders detected — pull shoulder blades together and down",
+                      "⚠️ كتفان مائلان للأمام — اسحب لوحي الكتف للخلف وللأسفل")
+        elif _rounded_severity in ("mild", "moderate"):
+            add_alert(out, "Shoulders slightly forward — open chest, squeeze shoulder blades gently",
+                      "الكتفان مائلان للأمام قليلاً — افتح صدرك واضغط لوحي الكتف برفق")
 
     # ── Forward-head displacement from apparent head size ─────────────
     # The SAGITTAL FHP estimator — replaces the lateral-offset fallback
@@ -3966,6 +4164,33 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
                        _torso_flex_metric is not None),
     }
     overall = apply_severity_floor(_sid, overall, _severe_candidates)
+
+    # ── Reclined / lying-down detection ─────────────────────────────
+    # See _check_reclined_geometry()/apply_reclined_dwell()'s own
+    # docstrings. Applied AFTER the severity floor and capped lower than
+    # it (30, vs the floor's 69): this isn't "one severe fault among
+    # otherwise-clean metrics" (the floor's scenario), it's "no seated-
+    # posture model applies to this frame at all" -- a strictly bigger
+    # claim, so it gets a strictly harder cap. Metrics are still computed
+    # and reported as normal (same "never blocks analysis" contract as the
+    # position/occlusion penalties above) -- out["reclined"] is the
+    # explicit, programmatically-checkable signal for API consumers who
+    # want to filter or special-case these frames themselves, in place of
+    # the frontend's hard score:null block (a bigger API-contract change
+    # than this pass is scoped to make -- see _check_frame_crop's
+    # docstring).
+    _recline_hips_ok = vis_l_hip > 0.55 and vis_r_hip > 0.55
+    _recline_extreme = _check_reclined_geometry(l_sh, r_sh, l_hip, r_hip, _recline_hips_ok)
+    _reclined = apply_reclined_dwell(_sid, _recline_extreme)
+    out["reclined"] = _reclined
+    if _reclined:
+        overall = min(overall, 30)
+        out["metrics"]["_reclined"] = {
+            "value": True, "label": "Reclined / lying down — no seated-posture model applies",
+            "signal": "hip_shoulder_vertical" if _recline_hips_ok else "shoulder_horizontal",
+        }
+        add_alert(out, "You appear to be reclined or lying down — this tool measures seated posture and can't read this position reliably",
+                  "يبدو أنك مستلقٍ أو منبطح — هذه الأداة تقيس وضعية الجلوس ولا يمكنها قراءة هذا الوضع بدقة")
 
     # Confidence = weighted average of per-metric confidences
     overall_conf_raw = (

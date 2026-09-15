@@ -54,7 +54,7 @@ of scope for this comparison.
 
 Run: cd backend && pytest tests/test_analyze_front_synthetic.py -v
 """
-import sys, os, json, math
+import sys, os, json, math, time
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -655,6 +655,323 @@ class TestPositionOcclusionPenalty:
         out = analyze("neutral_at_90cm", tier="professional")  # has a penalty dict written (position)
         op = out["metrics"].get("_occlusion_penalty")
         assert op is not None and op["detected"] is False and op["value"] == 0, f"{op}"
+
+
+def _tilted_shoulder_lm_dicts(base_case, angle_deg, w=W, h=H):
+    """Perturb a copy of base_case's dumped landmarks so the shoulder-to-
+    shoulder line reads angle_deg degrees from horizontal in PIXEL space
+    (W x H, matching backend.py's own anisotropic px() scaling -- a raw
+    normalised-coordinate angle is NOT the same number once x and y are
+    scaled by different factors). Used only for TestReclinedDetection's
+    analyze_front() integration checks: no dumped pose crosses the 38deg
+    reclined threshold (lateral_lean_25, the most extreme lean available,
+    measures only 25deg in pixel space -- confirmed empirically, not
+    assumed -- see that class's own docstring for why). Every other
+    landmark is untouched; only L/R shoulder y is shifted, symmetrically
+    around the original midpoint, so the shoulder midpoint other metrics
+    (e.g. neck lean) key off doesn't itself move.
+    """
+    lms = [dict(p) for p in _POSES[base_case]["landmarks"]]
+    l_sh, r_sh = lms[11], lms[12]
+    dx_px = (r_sh["x"] - l_sh["x"]) * w
+    dy_px = math.tan(math.radians(angle_deg)) * abs(dx_px)
+    mid_y = (l_sh["y"] + r_sh["y"]) / 2
+    half_dy_norm = (dy_px / 2) / h
+    l_sh["y"] = mid_y - half_dy_norm
+    r_sh["y"] = mid_y + half_dy_norm
+    return lms
+
+
+class TestReclinedDetection:
+    """analyze_front() previously had no equivalent at all of
+    postureEngine.js's _checkReclined() -- a subject reclined flat (e.g. on
+    a couch, laptop propped on their stomach) could read a stable "Good"
+    score indefinitely, since spine_lean only measures deviation from
+    vertical and lying down IS a normal ~90deg deviation for that specific
+    orientation, not a posture fault. Ported as an additive score cap
+    (out["reclined"] flag + overall capped at 30) rather than the
+    frontend's hard score:null block -- see _check_reclined_geometry's own
+    docstring for the scoping rationale.
+
+    _check_reclined_geometry/apply_reclined_dwell are tested directly as
+    pure functions first (same rationale as TestAlertDwell/TestSeverityFloor:
+    precise control over inputs and timestamps, no wall-clock sleep needed
+    in a test suite). The analyze_front() wiring is then checked end-to-end
+    too, using _tilted_shoulder_lm_dicts() (above) for the extreme case
+    specifically because no dumped synthetic pose is itself extreme enough
+    -- lateral_lean_25 only reaches 25deg of shoulder tilt, well under the
+    38deg reclined threshold -- and a pre-seeded, already-old
+    _reclined_dwell_state entry for the "sustained" full-wiring case, so the
+    test doesn't need to block on a real 1.8s sleep.
+    """
+
+    # ── _check_reclined_geometry ─────────────────────────────────────
+    def test_normal_seated_shoulders_with_hips_hidden_is_not_extreme(self):
+        assert be._check_reclined_geometry((560, 300), (720, 300), None, None, hips_visible=False) is False
+
+    def test_extreme_shoulder_tilt_with_hips_hidden_is_extreme(self):
+        # A shoulder line steeper than 38deg from horizontal, with hips out
+        # of frame, is exactly the fallback signal _checkReclined uses.
+        assert be._check_reclined_geometry((600, 200), (700, 500), None, None, hips_visible=False) is True
+
+    def test_normal_seated_hip_shoulder_line_with_hips_visible_is_not_extreme(self):
+        # Hips roughly below shoulders (near-vertical hip->shoulder line).
+        assert be._check_reclined_geometry(
+            (560, 300), (720, 300), (570, 600), (710, 600), hips_visible=True
+        ) is False
+
+    def test_extreme_hip_shoulder_angle_with_hips_visible_is_extreme(self):
+        # Hips shifted far sideways from the shoulders -- a hip->shoulder
+        # line well past 42deg from vertical.
+        assert be._check_reclined_geometry(
+            (560, 300), (720, 300), (900, 320), (1050, 320), hips_visible=True
+        ) is True
+
+    def test_hip_signal_takes_priority_when_hips_are_visible(self):
+        # Extreme shoulder tilt alone would read "extreme" via the fallback
+        # branch, but with hips visible AND reporting a normal (near-
+        # vertical) hip->shoulder line, the direct signal must win --
+        # mirrors _checkReclined's documented signal priority order.
+        assert be._check_reclined_geometry(
+            (600, 200), (700, 500), (620, 750), (680, 760), hips_visible=True
+        ) is False
+
+    # ── apply_reclined_dwell ──────────────────────────────────────────
+    def test_sustained_extreme_trips_after_the_dwell_window(self):
+        sid = "unit-reclined-dwell-sustained"
+        t = 1_700_000_000.0
+        result = False
+        for _ in range(5):
+            t += 0.5
+            result = be.apply_reclined_dwell(sid, True, now_ts=t)
+        assert result is True
+
+    def test_not_tripped_before_the_dwell_window_elapses(self):
+        sid = "unit-reclined-dwell-too-soon"
+        result = be.apply_reclined_dwell(sid, True, now_ts=1_700_000_000.0)
+        assert result is False
+
+    def test_flicker_never_trips_the_dwell(self):
+        sid = "unit-reclined-dwell-flicker"
+        t = 1_700_000_000.0
+        result = True
+        for i in range(6):
+            t += 0.9
+            result = be.apply_reclined_dwell(sid, i % 2 == 0, now_ts=t)
+        assert result is False, "a flickering reclined signal should never accumulate 1.8s continuous dwell"
+
+    def test_a_clean_frame_resets_the_clock(self):
+        sid = "unit-reclined-dwell-reset"
+        t = 1_700_000_000.0
+        be.apply_reclined_dwell(sid, True, now_ts=t)
+        t += 1.0
+        be.apply_reclined_dwell(sid, False, now_ts=t)  # clears the streak
+        t += 1.0
+        result = be.apply_reclined_dwell(sid, True, now_ts=t)  # restarts it
+        assert result is False, "the clock should have restarted after the clean frame, not stayed running"
+
+    # ── Wiring through analyze_front() ────────────────────────────────
+    def test_reclined_flag_is_false_for_an_ordinary_seated_pose(self):
+        sid = "unit-reclined-wiring-normal"
+        out = analyze("neutral", tier="professional")
+        assert out["reclined"] is False
+        assert out["metrics"].get("_reclined") is None
+
+    def test_a_lean_under_the_threshold_never_starts_the_dwell_clock(self):
+        # lateral_lean_25 (25deg) is well under the 38deg fallback threshold
+        # -- confirms the wiring doesn't fire early/over-eagerly.
+        sid = "unit-reclined-wiring-under-threshold"
+        _current_case["lm_dicts"] = _POSES["lateral_lean_25"]["landmarks"]
+        for _ in range(5):
+            be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="professional", session_id=sid)
+        assert be._reclined_dwell_state.get(sid) is None
+
+    def test_an_extreme_pose_starts_the_dwell_clock_without_tripping_immediately(self):
+        # Real analyze_front() calls in this file run their whole loop in
+        # well under 1.8s of real wall-clock time (same premise
+        # TestAlertDwell's dwell-window tests rely on) -- enough iterations
+        # to let the 3-frame/Kalman landmark smoothing converge to the
+        # extreme geometry, but nowhere near enough real time to trip.
+        sid = "unit-reclined-wiring-extreme-fresh"
+        _current_case["lm_dicts"] = _tilted_shoulder_lm_dicts("neutral", 45)
+        out = None
+        for _ in range(10):
+            out = be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="professional", session_id=sid)
+        assert be._reclined_dwell_state.get(sid) is not None, "an extreme-geometry frame should have started the dwell clock"
+        assert out["reclined"] is False, "should not trip within milliseconds of real wall-clock time"
+
+    def test_a_sustained_extreme_pose_caps_the_score_and_sets_the_flag(self):
+        # Same technique TestAlertDwell's test_a_sustained_bad_pose_does_eventually_alert
+        # uses: monkeypatch backend.time.time() to advance a controlled
+        # amount per call instead of a real multi-second sleep, so the
+        # landmark smoothing converges AND the dwell window elapses within
+        # the fake timeline together.
+        sid = "unit-reclined-wiring-sustained"
+        _current_case["lm_dicts"] = _tilted_shoulder_lm_dicts("neutral", 45)
+        fake_now = [1_700_000_000.0]
+        def fake_time():
+            fake_now[0] += 0.05
+            return fake_now[0]
+        with __import__("unittest.mock", fromlist=["patch"]).patch.object(be.time, "time", side_effect=fake_time):
+            out = None
+            for _ in range(60):  # ~3s of fake elapsed time -- past both convergence and the 1.8s dwell window
+                out = be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="professional", session_id=sid)
+        assert out["reclined"] is True
+        assert out["score"] <= 30, f"a sustained reclined reading should cap the score at 30, got {out['score']}"
+        assert out["metrics"].get("_reclined") is not None
+        assert out["detected"] is True, "reclined must not be confused with no-person-detected -- metrics are still reported"
+        assert out["metrics"].get("neck_lean") is not None, (
+            "metrics should still be computed and present, not swallowed by the reclined cap"
+        )
+
+
+class TestRoundedShouldersProtraction:
+    """rounded_shoulders used to be computed by an ear-to-shoulder
+    elevation-RATIO formula against a hardcoded 0.52 "neutral" constant --
+    mirroring an OLD method postureEngine.js itself has since abandoned and
+    documented as wrong in its own comments: "NEUTRAL_RATIO was the
+    hardcoded 0.52, and no real body has that ear-to-shoulder ratio...
+    every uncalibrated user read ~9 depth against an alert threshold of 8
+    and was told 'shoulders slightly forward' while sitting perfectly
+    upright. The number tracked their neck length and shoulder width, not
+    their posture." The paid Enterprise API and PDF/AI-insight reports were
+    still scoring this metric by that rejected method. Rewritten to match
+    postureEngine.js's CURRENT analyzeRoundedShoulders(): a hip-to-ear-axis
+    protraction measurement in centimetres, self-baselined per session
+    (same _feed_baseline() mechanism as trunk_rotation/torso_flexion),
+    gated behind both hips being visible, a resolved distance estimate,
+    and this session's own depth-channel validity gate
+    (_update_depth_usable()) -- see that block's own comment in backend.py
+    for the full rationale, including why it deliberately reports
+    unreliable rather than ever falling back to the old ratio.
+
+    _update_depth_usable() is tested directly as a pure function first
+    (same rationale as every other dwell/baseline helper in this file:
+    precise control over inputs). The rewritten metric is then checked
+    end-to-end via analyze_with_baseline(), using
+    rounded_shoulders_6_hips_visible (added to synthetic_poses.json
+    alongside this change -- the hips are out of frame at normal
+    laptop-webcam distance, the same constraint trunk_rotation/
+    torso_flexion's own hips-visible test cases document).
+    """
+
+    # ── _update_depth_usable ─────────────────────────────────────────
+    def test_returns_false_by_default_before_enough_samples(self):
+        sid = "unit-depth-usable-fresh"
+        result = be._update_depth_usable(sid, ear_z_avg=-0.05, nose_z=-0.15, w=1280, dist_cm=90,
+                                          nose_vis=0.9, ear_l_vis=0.9, ear_r_vis=0.9)
+        assert result is False
+
+    def test_becomes_true_once_enough_steady_in_range_samples_accumulate(self):
+        sid = "unit-depth-usable-steady"
+        result = False
+        # A steady ~10cm nose-ahead-of-ears reading (frameWidthCm = 90*1280/800
+        # = 144cm; 0.0694 * 144 ~= 10cm), well inside [_DEPTH_MIN_CM,
+        # _DEPTH_MAX_CM] and with zero frame-to-frame noise.
+        for _ in range(15):
+            result = be._update_depth_usable(sid, ear_z_avg=0.0, nose_z=-0.0694, w=1280, dist_cm=90,
+                                               nose_vis=0.9, ear_l_vis=0.9, ear_r_vis=0.9)
+        assert result is True
+
+    def test_stays_false_when_the_median_is_outside_the_plausible_range(self):
+        sid = "unit-depth-usable-outofrange"
+        # nose barely ahead of ears at all -- z reads far too small to be
+        # real anatomy (flat/dead z channel).
+        result = False
+        for _ in range(15):
+            result = be._update_depth_usable(sid, ear_z_avg=0.0, nose_z=-0.001, w=1280, dist_cm=90,
+                                               nose_vis=0.9, ear_l_vis=0.9, ear_r_vis=0.9)
+        assert result is False
+
+    def test_stays_false_when_readings_are_too_noisy(self):
+        sid = "unit-depth-usable-noisy"
+        result = False
+        for i in range(15):
+            # Alternates between two plausible-individually but wildly
+            # different readings -- median might still land in range, but
+            # the spread must fail the noise gate.
+            nose_z = -0.02 if i % 2 == 0 else -0.09
+            result = be._update_depth_usable(sid, ear_z_avg=0.0, nose_z=nose_z, w=1280, dist_cm=90,
+                                               nose_vis=0.9, ear_l_vis=0.9, ear_r_vis=0.9)
+        assert result is False
+
+    def test_a_frame_with_missing_landmarks_does_not_reset_existing_state(self):
+        sid = "unit-depth-usable-skip"
+        for _ in range(15):
+            be._update_depth_usable(sid, ear_z_avg=0.0, nose_z=-0.0446, w=1280, dist_cm=90,
+                                     nose_vis=0.9, ear_l_vis=0.9, ear_r_vis=0.9)
+        assert be._depth_ok_state.get(sid) is True   # test premise
+        # A frame with the nose occluded should be skipped, not counted as
+        # evidence the channel went bad.
+        result = be._update_depth_usable(sid, ear_z_avg=0.0, nose_z=-0.0446, w=1280, dist_cm=90,
+                                           nose_vis=0.1, ear_l_vis=0.9, ear_r_vis=0.9)
+        assert result is True, "a single occluded frame should not discard already-established depth-ok state"
+
+    # ── End-to-end through analyze_front() ────────────────────────────
+    def test_hips_hidden_reports_unreliable_never_falls_back_to_the_old_ratio(self):
+        # rounded_shoulders_6 (hips out of frame at normal laptop distance)
+        # is a genuinely rounded pose (6cm of protraction). The old ratio
+        # formula would have read a nonzero "depth" for it anyway (it never
+        # needed hips) -- the whole point of this rewrite is that a
+        # measurement this engine can't actually make must say so, not
+        # guess. neutral is the negative-control counterpart: a pose that
+        # ISN'T rounded must equally not fabricate a reading.
+        for case in ("rounded_shoulders_6", "neutral"):
+            out = analyze(case, tier="professional")
+            rs = out["metrics"].get("rounded_shoulders")
+            assert rs is not None
+            assert rs["reliable"] is False, f"{case}: expected unreliable with hips hidden, got {rs}"
+            assert rs["value"] == 0.0, f"{case}: expected no fabricated reading, got {rs}"
+            assert "unreliable" in rs["reference"], f"{case}: {rs}"
+
+    def test_a_static_neutral_session_learns_itself_as_baseline_and_reads_zero(self):
+        sid = "synthetic-rounded-static-neutral"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "neutral_at_130cm", warmup=80, settle=40)
+        rs = out["metrics"].get("rounded_shoulders")
+        assert rs is not None
+        assert rs["reliable"] is True, f"expected the protraction baseline to have learned by now: {rs}"
+        assert rs["value"] <= 1.5, f"a session that never actually rounded its shoulders read {rs['value']}cm"
+        assert rs["reference"] == "Hip-to-ear axis protraction (self-baselined)"
+
+    def test_a_genuinely_rounded_pose_is_detected_against_a_neutral_baseline(self):
+        sid = "synthetic-rounded-detect"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "rounded_shoulders_6_hips_visible", warmup=80, settle=40)
+        rs = out["metrics"].get("rounded_shoulders")
+        assert rs is not None and rs["reliable"] is True, f"{rs}"
+        # A true 6cm of protraction: postureEngine.js's own comment on this
+        # exact method measures 6.67cm on the harness for a true 6cm --
+        # generous tolerance since this is an independent (Python) geometry
+        # implementation of the same formula, not a shared code path.
+        assert 4.0 <= rs["value"] <= 9.0, f"expected roughly 6cm of detected protraction, got {rs}"
+        assert rs["severity"] in ("mild", "moderate", "severe"), f"{rs}"
+        assert rs["personalised"] is True
+
+    def test_reports_learning_before_its_own_baseline_has_converged(self):
+        # Fed the rounded pose from session start (no established neutral
+        # first) -- the depth-usability gate needs ~12 steady frames, then
+        # the baseline itself needs 12 warmup-skip + 25 samples on top, so
+        # a session only 25 frames in must still be "learning", not yet a
+        # (misleadingly-zero, since it would be self-baselining against its
+        # own rounded posture) reliable reading.
+        sid = "synthetic-rounded-learning"
+        _current_case["lm_dicts"] = _POSES["rounded_shoulders_6_hips_visible"]["landmarks"]
+        out = None
+        for _ in range(25):
+            out = be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="professional", session_id=sid)
+        rs = out["metrics"].get("rounded_shoulders")
+        assert rs is not None
+        assert rs["reliable"] is False
+        assert rs["learning"] is True, f"expected a still-converging baseline to report learning=True: {rs}"
+        assert rs["reference"] == "still learning this session's own baseline", (
+            f"a learning-but-otherwise-valid frame (hips visible, distance resolved, depth gate passed) "
+            f"should not be mislabelled as needing hips/distance/depth: {rs}"
+        )
+
+    def test_rounded_shoulders_carries_weight_in_the_score_once_reliable(self):
+        sid = "synthetic-rounded-weight"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "neutral_at_130cm", warmup=80, settle=40)
+        eff_w = out["metrics"]["_confidence"]["eff_weights"]
+        assert eff_w.get("rounded", 0) > 0, "rounded_shoulders is reliable here but BASE_W['rounded'] isn't reaching eff_weights"
 
 
 class TestSeverityFloor:
