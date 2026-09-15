@@ -206,6 +206,65 @@ class TestDistanceRange:
               f"score={dist_metric.get('score')}")
 
 
+class TestElbowArmAtRest:
+    """analyzeElbow's 90-120deg guidance is about keyboard height, and only
+    means anything while the hands are at a keyboard. Arms hanging relaxed
+    at the sides read ~170-180deg included angle and used to be scored and
+    alerted on as a severe elbow fault -- telling someone doing nothing
+    wrong to adjust their desk. Mirrors postureEngine.js's analyzeElbow()
+    armWorking() gate: an arm whose wrist sits far below, and almost
+    directly under, its elbow (in half-shoulder-width units) is reported
+    unreliable instead of penalised.
+
+    The synthetic-subject rig's elbow/wrist positions are a FIXED offset
+    from the shoulder (not independently parametrized -- see
+    dump_synthetic_poses.mjs's own comment), so it can only ever pose the
+    "typing" (working) arm. To exercise the resting-arm path this hand-
+    builds a variant of the elbow_typing_visible landmark set with both
+    wrists relocated straight down from their elbows, rather than adding a
+    second, unvalidated parametrization to the shared JS rig for one
+    Python-only test case.
+    """
+
+    @staticmethod
+    def _hanging_arm_landmarks():
+        lm = json.loads(json.dumps(_POSES["elbow_typing_visible"]["landmarks"]))
+        l_sh, r_sh = lm[be.PL.L_SHOULDER], lm[be.PL.R_SHOULDER]
+        el_l, el_r = lm[be.PL.L_ELBOW],    lm[be.PL.R_ELBOW]
+        s_half_px = abs(l_sh["x"] - r_sh["x"]) * W / 2
+        # Comfortably past armWorking()'s drop>0.75 / reach<0.45 thresholds.
+        drop_px, reach_px = 0.9 * s_half_px, 0.05 * s_half_px
+        lm[be.PL.L_WRIST]["y"] = el_l["y"] + drop_px / H
+        lm[be.PL.L_WRIST]["x"] = el_l["x"] + reach_px / W
+        lm[be.PL.R_WRIST]["y"] = el_r["y"] + drop_px / H
+        lm[be.PL.R_WRIST]["x"] = el_r["x"] - reach_px / W
+        return lm
+
+    def test_hanging_arms_are_excluded_not_penalised(self):
+        _current_case["lm_dicts"] = self._hanging_arm_landmarks()
+        sid = "synthetic-hanging-arms"
+        out = None
+        for _ in range(25):
+            out = be.analyze_front(_DUMMY_IMAGE, mode="laptop", tier="professional", session_id=sid)
+
+        wm = out["metrics"].get("wrist_angle")
+        assert wm is not None, "hanging arms should still report the angle for visibility"
+        assert wm.get("reliable") is False, f"a resting arm should be marked unreliable: {wm}"
+        assert wm.get("reason") == "arms_at_rest"
+        elbow_alerts = [a for a in out["alerts"] if "lbow" in a]
+        assert elbow_alerts == [], f"a resting arm should never fire an elbow alert: {elbow_alerts}"
+
+    def test_typing_arms_are_unaffected(self):
+        # Regression guard against the new at-rest branch swallowing the
+        # working-arm path by mistake -- test_typing_arm_scores_well_once_fixed
+        # above already checks the score itself, this checks the new fields.
+        out = analyze("elbow_typing_visible", tier="professional")
+        wm = out["metrics"].get("wrist_angle")
+        assert wm is not None
+        assert wm.get("reliable") is not False
+        assert wm.get("reason") != "arms_at_rest"
+
+
 class TestAlertDwell:
     """analyze_front() used to fire every alert off a single request with no
     temporal debouncing at all -- confirmed by reading every add_alert()/
