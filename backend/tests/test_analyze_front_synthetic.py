@@ -316,6 +316,195 @@ class TestShoulderDistanceFallbackFocal:
         )
 
 
+def analyze_with_baseline(sid, neutral_case, target_case, warmup=65, settle=25, mode="laptop", tier="standard"):
+    """Feed `neutral_case` landmarks long enough for the session's own
+    trunk-rotation/torso-flexion baseline to learn "this is neutral" (see
+    backend._feed_baseline's own docstring: 20-frame warmup-skip + 40
+    samples before it freezes a median -- 65 gives it margin), then switch
+    to `target_case` and let the much-faster 3-frame Kalman landmark
+    smoothing converge to it. Necessary because both metrics score the
+    CHANGE from a per-session learned baseline, not an absolute value --
+    feeding the same pose throughout (like the plain analyze() helper does)
+    would just teach the baseline that pose IS neutral and always read 0.
+    """
+    out = None
+    _current_case["lm_dicts"] = _POSES[neutral_case]["landmarks"]
+    for _ in range(warmup):
+        out = be.analyze_front(_DUMMY_IMAGE, mode=mode, tier=tier, session_id=sid)
+    _current_case["lm_dicts"] = _POSES[target_case]["landmarks"]
+    for _ in range(settle):
+        out = be.analyze_front(_DUMMY_IMAGE, mode=mode, tier=tier, session_id=sid)
+    return out
+
+
+class TestTrunkRotationAndTorsoFlexion:
+    """analyze_front() previously had no equivalent of postureEngine.js's
+    analyzeTrunkRotation()/analyzeTorsoFlexion() at all -- a 45deg trunk
+    twist or a full forward slouch moved neither the metrics dict nor the
+    score. Both need the hips in frame (hidden at normal laptop-webcam
+    distance -- same constraint elbow_typing_visible documents), and both
+    score the CHANGE from a per-session learned baseline rather than an
+    absolute value, so they're exercised via analyze_with_baseline() above
+    rather than the plain analyze() helper."""
+
+    def test_trunk_rotation_absent_when_hips_hidden(self):
+        # Normal laptop framing (neutral, 60cm) -- hips below frame, exactly
+        # the same reliability gate elbow/wrist and rounded-shoulders share.
+        out = analyze("neutral", tier="professional")
+        assert out["metrics"].get("trunk_rotation") is None
+
+    def test_torso_flexion_absent_when_hips_hidden(self):
+        out = analyze("neutral", tier="professional")
+        assert out["metrics"].get("torso_flexion") is None
+
+    def test_trunk_rotation_detects_a_real_twist(self):
+        sid = "synthetic-trunk-rot-detect"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "trunk_twist_45_hips_visible")
+        tr = out["metrics"].get("trunk_rotation")
+        assert tr is not None, "trunk_rotation missing once hips are in frame"
+        assert tr["value"] > 15, f"expected a meaningfully large rotation reading for a 45deg twist, got {tr}"
+        assert tr["severity"] in ("moderate", "severe"), f"a 45deg twist should not classify as normal/mild: {tr}"
+
+    def test_trunk_rotation_reads_near_zero_for_a_static_neutral_session(self):
+        # The baseline-learning design means a session that never moves
+        # learns its own (neutral) pose as baseline and should read ~0,
+        # not drift positive just from noise/rounding.
+        sid = "synthetic-trunk-rot-static"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "neutral_at_130cm")
+        tr = out["metrics"].get("trunk_rotation")
+        assert tr is not None
+        assert tr["value"] <= 5, f"a session that never actually twisted read {tr['value']}deg of rotation"
+
+    def test_torso_flexion_detects_a_real_slouch(self):
+        sid = "synthetic-torso-flex-detect"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "trunk_flex_15_hips_visible")
+        tf = out["metrics"].get("torso_flexion")
+        assert tf is not None, "torso_flexion missing once hips are in frame"
+        assert tf["value"] > 5, f"expected a meaningfully large shrink%% for a 15deg forward flex, got {tf}"
+
+    def test_torso_flexion_reads_near_zero_for_a_static_neutral_session(self):
+        sid = "synthetic-torso-flex-static"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "neutral_at_130cm")
+        tf = out["metrics"].get("torso_flexion")
+        assert tf is not None
+        assert tf["value"] <= 5, f"a session that never actually slouched read {tf['value']}% shortening"
+
+
+class TestForwardHeadDepthEstimator:
+    """The lateral-offset FHP fallback (abs(mid_ear.x - mid_sh.x)) is
+    dominated by lateral head position, not sagittal forward-head depth --
+    empirically confirmed here: forward_head_4cm/forward_head_8cm move the
+    head in Z only, and the fallback alone reads 0.0cm for both (see
+    TestWeightTableRedesign's own docstring/history -- this is what first
+    surfaced the gap). analyzeForwardHeadDepth's apparent-head-size ratio
+    estimator (backend's mirror of postureEngine.js's own) fixes this by
+    using only x-coordinates. Exercised via analyze_with_baseline() since
+    it needs its own learned per-session baseline first."""
+
+    def test_neutral_reads_near_zero(self):
+        sid = "unit-fhd-neutral"
+        out = analyze_with_baseline(sid, "neutral", "neutral")
+        fh = out["metrics"].get("fhp_index")
+        assert fh is not None and fh.get("source") == "depth"
+        assert fh["value"] <= 2.0, f"a session that never moved forward read {fh['value']}cm of FHP"
+
+    def test_monotonic_in_true_forward_head_distance(self):
+        """0cm < 4cm < 8cm of true forward head should read out increasing,
+        not-all-zero values -- the exact property the lateral-offset-only
+        fallback fails (it reads ~0.0 for all three, since forwardHeadCm
+        moves the head in Z, which that formula never looks at)."""
+        readings = {}
+        for case in ("neutral", "forward_head_4cm", "forward_head_8cm"):
+            sid = f"unit-fhd-monotonic-{case}"
+            out = analyze_with_baseline(sid, "neutral", case)
+            fh = out["metrics"].get("fhp_index")
+            assert fh is not None and fh.get("source") == "depth", f"{case}: {fh}"
+            readings[case] = fh["value"]
+        assert readings["neutral"] < readings["forward_head_4cm"] < readings["forward_head_8cm"], (
+            f"expected strictly increasing FHP readings as true forward-head distance grows: {readings}"
+        )
+        assert readings["forward_head_8cm"] > 5, (
+            f"8cm of true forward head should read as a clearly non-trivial distance, got {readings}"
+        )
+
+    def test_falls_back_to_lateral_offset_before_baseline_is_learned(self):
+        """A fresh session (baseline still warming up) must still report
+        SOMETHING from the lateral-offset fallback rather than nothing."""
+        out = analyze("forward_head_8cm", tier="professional")   # default settle=25, no baseline yet
+        fh = out["metrics"].get("fhp_index")
+        assert fh is not None
+        assert fh.get("source") == "lateral_offset"
+
+
+class TestWeightTableRedesign:
+    """rounded-shoulders was folded into BASE_W once already (see that
+    change's own comment on BASE_W) after being computed and alerted on but
+    never affecting the score. The same audit found the identical gap for
+    THREE more metrics: fhp_index (forward head posture -- computed,
+    alerted on, but never referenced in BASE_W/eff_w/scores) and the newly
+    added trunk_rotation/torso_flexion. This class guards that all three
+    now actually carry nonzero weight when reliable, and that BASE_W still
+    sums to ~1.0 (a silent drift there would quietly rescale every score)."""
+
+    def test_base_w_sums_to_one(self):
+        # BASE_W is a local dict rebuilt fresh inside analyze_front() every
+        # call -- reach it by running one analysis and reading eff_weights'
+        # keys back with full confidence (1.0), which happens when every
+        # gated metric is reliable at once: landmarks fully visible AND (for
+        # trunk_rot/torso_flex/fhp's depth estimator) their per-session
+        # baselines already learned -- hence analyze_with_baseline() rather
+        # than the plain analyze() helper (a fresh session's 25-frame settle
+        # isn't long enough for those baselines to freeze).
+        sid = "unit-base-w-sum"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "neutral_at_130cm")
+        eff_w = out["metrics"]["_confidence"]["eff_weights"]
+        # dist absorbs any "lost" weight from low-confidence metrics, so on
+        # a fully-visible neutral pose the raw sum (pre-lost-weight-merge)
+        # isn't directly recoverable from eff_weights alone -- but eff_weights
+        # itself, plus whatever this pose kept, must still total ~1.0 (the
+        # normalisation analyze_front performs on weight_used guarantees
+        # this holds regardless of which metrics were reliable this frame).
+        assert abs(sum(eff_w.values()) - 1.0) < 0.02, f"eff_weights should total ~1.0, got {sum(eff_w.values())}: {eff_w}"
+
+    def test_fhp_carries_nonzero_weight(self):
+        out = analyze("neutral", tier="professional")
+        assert out["metrics"].get("fhp_index") is not None
+        assert out["metrics"]["_confidence"]["eff_weights"]["fhp"] > 0, \
+            "fhp_index is computed but BASE_W['fhp'] isn't reaching eff_weights"
+
+    def test_trunk_rot_and_torso_flex_carry_nonzero_weight_when_reliable(self):
+        sid = "synthetic-weight-trunk-torso"
+        out = analyze_with_baseline(sid, "neutral_at_130cm", "trunk_twist_45_hips_visible")
+        assert out["metrics"].get("trunk_rotation") is not None
+        eff_w = out["metrics"]["_confidence"]["eff_weights"]
+        assert eff_w["trunk_rot"] > 0, "trunk_rotation is computed but BASE_W['trunk_rot'] isn't reaching eff_weights"
+
+    def test_severe_fhp_pulls_the_overall_score_down(self):
+        # forward_head_8cm is a severe FHP reading (SEV.FHP severe=8) with
+        # everything else clean -- exactly the "one severe fault hidden by
+        # several good ones" scenario the severity floor and this weight
+        # fix both target. Before fhp carried any weight, this pose's score
+        # was determined entirely by its OTHER (clean) metrics.
+        #
+        # The lateral-offset fallback alone can't tell this pose apart from
+        # neutral (forwardHeadCm moves the head in Z, which that fallback
+        # doesn't look at at all -- the exact defect analyzeForwardHeadDepth
+        # exists to fix), so this needs the depth estimator's own baseline
+        # learned first, same as the trunk_rot/torso_flex tests above.
+        sid_neutral = "unit-fhp-neutral"
+        sid_fhp     = "unit-fhp-severe"
+        out_neutral = analyze_with_baseline(sid_neutral, "neutral", "neutral")
+        out_fhp     = analyze_with_baseline(sid_fhp,     "neutral", "forward_head_8cm")
+        fhp_metric = out_fhp["metrics"].get("fhp_index")
+        assert fhp_metric is not None and fhp_metric.get("source") == "depth", (
+            f"expected the depth estimator to have taken over by now: {fhp_metric}"
+        )
+        assert out_fhp["score"] < out_neutral["score"], (
+            f"a severe forward-head-posture pose scored {out_fhp['score']} vs a clean "
+            f"neutral pose's {out_neutral['score']} -- fhp doesn't appear to be moving the score"
+        )
+
+
 class TestSeverityFloor:
     """A confidence-weighted average can hide one severe fault behind
     several good ones -- see apply_severity_floor()'s own docstring for the
