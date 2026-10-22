@@ -73,9 +73,25 @@ export function tierAtLeast(rawTier, minLevel) {
 // ── Quality matrix — keyed by FEATURE LEVEL, not raw tier ───────────
 // Numeric AI Coach monthly limits intentionally match the existing,
 // already-working backend Redis counters in backend.py coach_chat()
-// (standard:5, basic:10, professional:50, elite:-1) — only the
-// *depth* dimensions (tokens/persona) are new. Local-only AI (Ollama):
-// every tier shares the same model, only token budget/persona differ.
+// (standard:5, basic:10, professional:30, elite:-1) and maxTokens
+// mirrors backend/config/tier_quality.py's AI_COACH_QUALITY (both
+// files' own docstrings require this). Local-only AI (Ollama): every
+// tier shares the same model, only token budget/persona differ.
+//
+// BUG FIX: professional's monthlyLimit here was 50 and maxTokens was
+// out of sync with all four tiers' backend values. Commit 59da920
+// already found and fixed this exact 50-vs-30 drift once — but only in
+// backend/config/tier_quality.py and PricingPage.jsx ("AI Coach (30
+// msgs/mo)"), never here. Since AICoach.jsx (~line 431) reads this
+// monthlyLimit to decide client-side whether the user has messages
+// left — `${coachLimit-msgCount} left`, and only blocks sending at
+// coachLimit — a Professional user who'd sent 30-49 messages this month
+// saw a "left" count telling them they could keep going, then had every
+// one of those sends rejected by the backend's real 30-message cap
+// (coach_limit_reached). maxTokens (used directly by AICoach.jsx's
+// localChatStream()/geminiChat() calls) was off for every tier, giving
+// a shorter reply on this client-direct path than the backend-routed
+// path intends for the same tier.
 export const QUALITY = {
   standard: {
     label: { en: "Free", ar: "مجاني" },
@@ -85,7 +101,7 @@ export const QUALITY = {
     backendAssist: false,       // no live AI-powered backend pass during session
     predictiveAI: false,
     pdfDetail: "none",
-    aiCoach: { monthlyLimit: 5, maxTokens: 350, depth: "brief" },
+    aiCoach: { monthlyLimit: 5, maxTokens: 550, depth: "brief" },
   },
   basic: {
     label: { en: "Basic", ar: "أساسي" },
@@ -95,7 +111,7 @@ export const QUALITY = {
     backendAssist: false,
     predictiveAI: false,
     pdfDetail: "none",
-    aiCoach: { monthlyLimit: 10, maxTokens: 450, depth: "brief" },
+    aiCoach: { monthlyLimit: 10, maxTokens: 650, depth: "brief" },
   },
   professional: {
     label: { en: "Professional", ar: "احترافي" },
@@ -105,7 +121,7 @@ export const QUALITY = {
     backendAssist: false,       // local MediaPipe is already accurate; backend stays Elite-exclusive
     predictiveAI: false,
     pdfDetail: "standard",
-    aiCoach: { monthlyLimit: 50, maxTokens: 700, depth: "standard" },
+    aiCoach: { monthlyLimit: 30, maxTokens: 900, depth: "standard" },
   },
   elite: {
     label: { en: "Elite", ar: "إيليت" },
@@ -115,7 +131,7 @@ export const QUALITY = {
     backendAssist: true,        // live local-AI-powered backend pass + PDF snapshots
     predictiveAI: true,
     pdfDetail: "full",
-    aiCoach: { monthlyLimit: -1, maxTokens: 1100, depth: "clinical" },
+    aiCoach: { monthlyLimit: -1, maxTokens: 1400, depth: "clinical" },
   },
 };
 

@@ -23,7 +23,8 @@
     "test:voice": "node src/lib/voiceCoach.test.mjs",
     "test:qa": "node src/lib/qaAccuracy.test.mjs",
     "test:claims": "node src/lib/claims.test.mjs",
-    "test:findings": "node src/lib/findings.test.mjs"
+    "test:findings": "node src/lib/findings.test.mjs",
+    "test:tiers": "node src/lib/tierQuality.test.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.14",
