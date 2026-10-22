@@ -20,6 +20,7 @@ import {
   mean, metricScore, metricValue, zoneRisk, cervicalLoadKg, neckFlexionDeg, decimate,
   sessionFatigue, weekWindows, lifetimeSessions, readingReliability,
   fmtMeasure, NON_POSTURAL_METRICS, sessionTimeMs, bySessionTimeDesc, sessionTrend,
+  ZONE_METRICS,
 } from "./clinicalMetrics.js";
 
 let pass = 0, fail = 0;
@@ -80,6 +81,23 @@ console.log("\nzoneRisk cannot be floored by metric names the engine never emits
   // Under the old default-to-100 behaviour this same input produced 4.
   const oldWay = Math.round(100 - (100 + 100 + 15 + 85) / 4);
   check("pins the old flooring as the regression", oldWay === 25 && real.risk === 50, `old=${oldWay} new=${real.risk}`);
+}
+
+console.log("\ncervical zone picks up backend-sourced sessions' head-turn reading too");
+{
+  // postureEngine.js emits this as "head_yaw"; backend.py's analyze_front()
+  // (the MediaPipe-load-failure fallback path, and the Enterprise API)
+  // computes the same angle via solvePnP but stores it as "yaw" -- a
+  // session recorded through that path had this reading sitting unread.
+  check("ZONE_METRICS.cervical lists both names",
+    ZONE_METRICS.cervical.includes("head_yaw") && ZONE_METRICS.cervical.includes("yaw"));
+
+  const frontendSession = sess({ metrics: { head_yaw: m(70) } });
+  const backendSession  = sess({ metrics: { yaw: m(30) } });
+  eq("a frontend-sourced session's head_yaw counts",
+    zoneRisk([frontendSession], ZONE_METRICS.cervical), { risk: 30, from: 1, of: ZONE_METRICS.cervical.length });
+  eq("a backend-sourced session's yaw counts too -- this is the fix",
+    zoneRisk([backendSession], ZONE_METRICS.cervical), { risk: 70, from: 1, of: ZONE_METRICS.cervical.length });
 }
 
 console.log("\ncervical load and flexion come from the engine's measurement");

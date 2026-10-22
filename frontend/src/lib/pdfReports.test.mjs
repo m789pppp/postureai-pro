@@ -44,7 +44,14 @@ console.log("\n══ PDF report — metric plumbing ══\n");
   const radarKeys = [...src.matchAll(/const met(?:Keys|K3)=\[([^\]]+)\]/g)]
     .flatMap(m => [...m[1].matchAll(/"([a-z_]+)"/g)].map(x => x[1]));
   const used = [...new Set([...zoneKeys, ...radarKeys])];
-  const phantom = used.filter(k => !engineKeys.has(k));
+  // "yaw" is deliberate, not phantom: backend.py's analyze_front() (the
+  // MediaPipe-load-failure fallback path, and the Enterprise API) emits the
+  // same head-turn angle postureEngine.js calls "head_yaw" under this name
+  // instead -- see ZONE_METRICS's own comment on it in clinicalMetrics.js.
+  // This engine (postureEngine.js, what `metrics` above comes from) never
+  // emits "yaw" itself, so it belongs in this allowlist, not in engineKeys.
+  const BACKEND_ONLY_ALIASES = new Set(["yaw"]);
+  const phantom = used.filter(k => !engineKeys.has(k) && !BACKEND_ONLY_ALIASES.has(k));
   check("Every key the zones and radars look up exists in the engine",
         phantom.length === 0,
         phantom.length ? `no such metric: ${phantom.join(", ")}` : `${used.length} keys checked`);
