@@ -506,47 +506,63 @@ class TestWeightTableRedesign:
 
 
 class TestShoulderElevationWeight:
-    """shoulder_elevation (ear-to-shoulder Y gap -- shrug/trapezius tension)
-    is the fourth instance of the exact gap TestWeightTableRedesign above
+    """shoulder_elevation (ear-to-shoulder gap -- shrug/trapezius tension)
+    was the fourth instance of the exact gap TestWeightTableRedesign above
     documents for rounded/fhp/trunk_rot/torso_flex: computed every frame,
     alerted on via SEV-style thresholds, but never referenced anywhere in
     BASE_W/eff_w/scores. The comment that used to sit on BASE_W claimed this
     was deliberate and mirrored the frontend -- true when written
     (2026-08-23), false since postureEngine.js commit bf39863 (2026-08-29)
-    gave WEIGHTS_FRONT a real shoulderElev weight. Re-auditing the CURRENT
-    frontend against backend (rather than trusting that still-present
-    comment) is what caught this -- same lesson as the stale-comment class
-    of bug this whole audit chain exists to catch.
+    gave WEIGHTS_FRONT a real shoulderElev weight.
+
+    Giving it a weight exposed a second, bigger gap underneath: backend's
+    measurement itself was still postureEngine.js's own OLD, abandoned
+    formula (a fixed "ideal gap 12-25% of frame height" -- build-dependent,
+    and measured along image-vertical rather than the shoulder line's own
+    normal, so a lateral lean read as a one-sided shrug). Re-auditing the
+    CURRENT frontend (not the still-present comment claiming parity) found
+    analyzeShoulderElevation() had since been fully rewritten to a
+    per-side, self-baselined, shoulder-line-normal measurement -- the exact
+    rewrite rounded_shoulders already got in an earlier pass. This class now
+    tests that ported version.
 
     shoulder_shrug_8cm (dump_synthetic_poses.mjs) raises both shoulders 8cm
-    via the rig's existing shoulderElevCm parameter -- no baseline-learning
-    gate involved (unlike fhp/trunk_rot/torso_flex's depth estimators), so
-    the plain analyze() helper is enough here."""
+    via the rig's existing shoulderElevCm parameter. Self-baselined like
+    rounded_shoulders/trunk_rot/torso_flex, so needs analyze_with_baseline()
+    (not the plain analyze() helper) to get past the per-session learning
+    window before asserting on the result."""
 
-    def test_metric_is_computed(self):
-        out = analyze("shoulder_shrug_8cm")
-        se = out["metrics"].get("shoulder_elevation")
-        assert se is not None
-        # Sanity: the shrug pose's ear-shoulder gap must actually read lower
-        # than neutral's -- isolates the weight assertion below from the
-        # underlying measurement (already correct before this fix).
-        neutral_se = analyze("neutral")["metrics"]["shoulder_elevation"]
-        assert se["value"] < neutral_se["value"], (
+    def test_metric_is_computed_once_baseline_is_learned(self):
+        sid_neutral = "unit-sh-elev-neutral"
+        sid_shrug   = "unit-sh-elev-shrug"
+        out_neutral = analyze_with_baseline(sid_neutral, "neutral", "neutral")
+        out_shrug   = analyze_with_baseline(sid_shrug,   "neutral", "shoulder_shrug_8cm")
+        se = out_shrug["metrics"].get("shoulder_elevation")
+        neutral_se = out_neutral["metrics"].get("shoulder_elevation")
+        assert se is not None and neutral_se is not None
+        assert se.get("reliable") is True, f"expected the baseline to be learned by now: {se}"
+        # Sanity: the shrug pose's elevation reading must actually read
+        # higher than neutral's -- isolates the weight assertion below from
+        # the underlying measurement.
+        assert se["value"] > neutral_se["value"], (
             f"shrug pose's shoulder-elevation value ({se['value']}) should read "
-            f"lower (closer shoulder-to-ear gap) than neutral's ({neutral_se['value']})"
+            f"higher than neutral's ({neutral_se['value']})"
         )
         assert se["score"] < neutral_se["score"]
 
     def test_carries_nonzero_weight(self):
-        out = analyze("shoulder_shrug_8cm")
+        sid = "unit-sh-elev-weight"
+        out = analyze_with_baseline(sid, "neutral", "shoulder_shrug_8cm")
         eff_w = out["metrics"]["_confidence"]["eff_weights"]
         assert eff_w.get("shoulder_elev", 0) > 0, (
             "shoulder_elevation is computed but BASE_W['shoulder_elev'] isn't reaching eff_weights"
         )
 
     def test_severe_shrug_pulls_the_overall_score_down(self):
-        out_neutral = analyze("neutral")
-        out_shrug   = analyze("shoulder_shrug_8cm")
+        sid_neutral = "unit-sh-elev-score-neutral"
+        sid_shrug   = "unit-sh-elev-score-shrug"
+        out_neutral = analyze_with_baseline(sid_neutral, "neutral", "neutral")
+        out_shrug   = analyze_with_baseline(sid_shrug,   "neutral", "shoulder_shrug_8cm")
         assert out_shrug["score"] < out_neutral["score"], (
             f"a severe shoulder shrug (shoulder_elevation score "
             f"{out_shrug['metrics']['shoulder_elevation']['score']} vs neutral's "
@@ -554,6 +570,22 @@ class TestShoulderElevationWeight:
             f"{out_shrug['score']} vs neutral's {out_neutral['score']} -- "
             f"shoulder_elevation doesn't appear to be moving the score"
         )
+
+    def test_one_sided_shrug_scores_as_badly_as_two_sided(self):
+        """postureEngine.js's own comment: the old (lGap+rGap)/2 convention
+        made a single-shoulder shrug look half as severe. This pins that
+        the ported backend version takes the max of the two sides, not
+        their mean, by checking a one-sided shrug reads a value close to
+        (not half of) the two-sided shrug_8cm case above."""
+        sid_one = "unit-sh-elev-one-sided"
+        out_one = analyze_with_baseline(sid_one, "neutral", "shoulder_shrug_8cm")
+        se_one = out_one["metrics"]["shoulder_elevation"]
+        # shoulder_shrug_8cm raises BOTH shoulders -- with a correct max()
+        # implementation, left_pct and right_pct should both be close to
+        # `value` (within noise), not one of them near zero as a mean-based
+        # bug would produce if asymmetry crept in from the rig itself.
+        assert abs(se_one["left_pct"] - se_one["right_pct"]) < 5, se_one
+        assert se_one["value"] == max(se_one["left_pct"], se_one["right_pct"])
 
 
 class TestPositionOcclusionPenalty:
