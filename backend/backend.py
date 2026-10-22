@@ -5607,6 +5607,139 @@ def add_snapshot():
     except Exception as e:
         return safe_error(e)
 
+
+def apply_personal_calibration(result: dict, calib) -> dict:
+    """
+    Re-score neck_lean/head_tilt/shoulder_level/spine_lean against a user's
+    personal calibration (asymmetric ok/bad thresholds around their own
+    natural neutral, not the generic ones analyze_front() scored them with),
+    then fold that change back into `result["score"]`/`result["overall"]` --
+    mutates and returns `result`. No-op (returns result unchanged) if there
+    is no usable calibration or the pose wasn't detected.
+
+    Asymmetric: if a user's natural lean is toward right (+), the ok/bad
+    zone widens on the right side and tightens on the left, so a genuinely
+    neutral posture for THAT body isn't penalised for not matching a
+    population-average "centered" angle.
+
+    Extracted from analyze()'s /api/analyze handler so it's unit-testable
+    without a Flask request/auth context -- see
+    tests/test_apply_personal_calibration.py.
+    """
+    if not (calib and isinstance(calib, dict) and result.get("detected")):
+        return result
+
+    tols     = calib.get("tolerances", {})
+    offsets  = calib.get("offsets", {})   # signed directional offsets
+    met_map  = {
+        "neck_lean":      "neck_angle",
+        "head_tilt":      "head_tilt",
+        "shoulder_level": "shoulder_tilt",
+        "spine_lean":     "spine_angle",
+    }
+    # met_key -> the BASE_W/eff_weights key analyze_front() scored it
+    # under, so the re-blend below can weigh each recalibrated metric
+    # by exactly the weight it already carries in the model, instead
+    # of overwriting that model's whole weighting scheme (see the
+    # weighted_delta comment a few lines down for why this replaced
+    # a flat 0.40/0.60 blend of raw_score against these four alone).
+    BW_KEY = {"neck_lean": "neck", "head_tilt": "tilt",
+              "shoulder_level": "sh", "spine_lean": "spine"}
+    # (base_w_key, pre-calibration score, recalibrated score) per
+    # metric -- captured before result["metrics"][met_key]["score"]
+    # is overwritten below, so the delta this loop introduces can be
+    # measured and re-applied at its real weight afterwards.
+    score_deltas = []
+
+    for met_key, calib_key in met_map.items():
+        met = result.get("metrics", {}).get(met_key)
+        tol = tols.get(calib_key)
+        if not (met and tol): continue
+
+        orig_score = met.get("score")
+        raw_val  = met["value"]                    # always positive (absolute angle)
+        ideal    = tol.get("ideal", 0)             # calibrated neutral (absolute)
+        ok_t     = tol.get("ok", 7)
+        bad_t    = tol.get("bad", 20)
+
+        # ── Asymmetric offset correction ──────────────────
+        # offset_signed: positive = user naturally leans right/forward
+        # negative = user naturally leans left/back
+        offset_signed = offsets.get(calib_key, 0.0)
+
+        # Compute signed deviation from user's personal neutral
+        # We use the calibrated ideal as the zero point
+        deviation = raw_val - ideal  # + = more than usual, - = less than usual
+
+        # Asymmetric threshold: widen ok/bad in the natural direction
+        # e.g. if offset = +5° (leans right naturally):
+        #   right side (deviation > 0): ok_right = ok_t + 3°, bad_right = bad_t + 4°
+        #   left side  (deviation < 0): ok_left  = ok_t - 1°, bad_left  = bad_t - 1°
+        asym_factor = max(-4.0, min(8.0, abs(offset_signed) * 0.6))
+        if (offset_signed >= 0 and deviation >= 0) or (offset_signed < 0 and deviation < 0):
+            # Same direction as natural lean → widen tolerance
+            ok_eff  = ok_t  + asym_factor
+            bad_eff = bad_t + asym_factor * 1.2
+        else:
+            # Opposite direction → slight tightening
+            ok_eff  = max(3.0, ok_t  - asym_factor * 0.3)
+            bad_eff = max(10.0, bad_t - asym_factor * 0.3)
+
+        # Score using effective asymmetric thresholds
+        d_eff = abs(deviation)
+        if d_eff <= ok_eff:
+            cs = max(0, int(100 - (d_eff / max(ok_eff, .1)) * 25))
+        elif d_eff <= bad_eff:
+            cs = max(0, int(75  - ((d_eff - ok_eff) / max(bad_eff - ok_eff, .1)) * 45))
+        else:
+            cs = max(5, int(30 - (d_eff - bad_eff) * 1.5))
+
+        result["metrics"][met_key]["score"]      = cs
+        result["metrics"][met_key]["calibrated"] = True
+        result["metrics"][met_key]["calib_detail"] = {
+            "ideal":       round(ideal, 1),
+            "deviation":   round(deviation, 1),
+            "offset":      round(offset_signed, 1),
+            "ok_eff":      round(ok_eff, 1),
+            "bad_eff":     round(bad_eff, 1),
+        }
+        if orig_score is not None:
+            score_deltas.append((BW_KEY[met_key], orig_score, cs))
+
+    # BUG FIX: this used to be `raw_score*0.40 + calib_avg*0.60` where
+    # calib_avg is a flat, UNWEIGHTED average of just these four
+    # metrics' recalibrated scores. raw_score already accounts for
+    # these same four at their correct BASE_W weight (~0.465 of the
+    # model combined, not 0.60) alongside dist/eye/wrist/rounded/fhp/
+    # torso_flex/trunk_rot/shoulder_elev (the other ~0.535) -- so
+    # blending in calib_avg at a flat 60% double-counted neck/tilt/
+    # shoulder/spine while silently cutting every OTHER metric's real
+    # influence roughly in half, for every user who had ever run the
+    # calibration wizard. A calibrated user whose forward-head-posture
+    # or rounded-shoulders were severe but whose neck/tilt/shoulder/
+    # spine were merely average-recalibrated would see those real
+    # faults washed out of their own score, right after opting into
+    # a feature sold as making the score MORE personalized/accurate.
+    #
+    # Fix: adjust `raw_score` by exactly the weighted delta this
+    # recalibration introduced -- each metric's (eff_weight) x
+    # (recalibrated_score - original_score) -- and nothing else.
+    # Every other metric's contribution (including the pose_weight/
+    # solvePnP blend and the low-visibility penalty analyze_front()
+    # already applied to raw_score) is left completely untouched.
+    if score_deltas:
+        eff_w      = result.get("metrics", {}).get("_confidence", {}).get("eff_weights", {})
+        total_w    = sum(eff_w.values()) or 1.0
+        weighted_delta = sum(eff_w.get(bw_key, 0.0) * (cs - orig) for bw_key, orig, cs in score_deltas)
+        raw_score  = result.get("score", 0)
+        result["score"]   = max(0, min(100, int(round(raw_score + weighted_delta / total_w))))
+        result["overall"] = result["score"]
+        result["calibration_applied"]   = True
+        result["asymmetric_correction"] = True
+
+    return result
+
+
 @app.route("/api/analyze", methods=["POST"])
 @require_auth
 @limiter.limit("60 per minute")          # global
@@ -5741,80 +5874,7 @@ def analyze():
                                 # below. Threading it through the same way dist_baseline_cm already is.
                                 rounded_neutral=(calib or {}).get("rounded_neutral"))  # Side mode removed app-wide — analyze_side no longer called
         # ── Apply personal calibration with asymmetric thresholds ──
-        # Asymmetric: if user's natural lean is toward right (+),
-        # we widen the ok/bad zone on the right side and tighten on left.
-        # This prevents penalizing natural anatomical asymmetry.
-        if calib and isinstance(calib, dict) and result.get("detected"):
-            tols     = calib.get("tolerances", {})
-            offsets  = calib.get("offsets", {})   # signed directional offsets
-            met_map  = {
-                "neck_lean":      "neck_angle",
-                "head_tilt":      "head_tilt",
-                "shoulder_level": "shoulder_tilt",
-                "spine_lean":     "spine_angle",
-            }
-            calib_scores = []
-
-            for met_key, calib_key in met_map.items():
-                met = result.get("metrics", {}).get(met_key)
-                tol = tols.get(calib_key)
-                if not (met and tol): continue
-
-                raw_val  = met["value"]                    # always positive (absolute angle)
-                ideal    = tol.get("ideal", 0)             # calibrated neutral (absolute)
-                ok_t     = tol.get("ok", 7)
-                bad_t    = tol.get("bad", 20)
-
-                # ── Asymmetric offset correction ──────────────────
-                # offset_signed: positive = user naturally leans right/forward
-                # negative = user naturally leans left/back
-                offset_signed = offsets.get(calib_key, 0.0)
-
-                # Compute signed deviation from user's personal neutral
-                # We use the calibrated ideal as the zero point
-                deviation = raw_val - ideal  # + = more than usual, - = less than usual
-
-                # Asymmetric threshold: widen ok/bad in the natural direction
-                # e.g. if offset = +5° (leans right naturally):
-                #   right side (deviation > 0): ok_right = ok_t + 3°, bad_right = bad_t + 4°
-                #   left side  (deviation < 0): ok_left  = ok_t - 1°, bad_left  = bad_t - 1°
-                asym_factor = max(-4.0, min(8.0, abs(offset_signed) * 0.6))
-                if (offset_signed >= 0 and deviation >= 0) or (offset_signed < 0 and deviation < 0):
-                    # Same direction as natural lean → widen tolerance
-                    ok_eff  = ok_t  + asym_factor
-                    bad_eff = bad_t + asym_factor * 1.2
-                else:
-                    # Opposite direction → slight tightening
-                    ok_eff  = max(3.0, ok_t  - asym_factor * 0.3)
-                    bad_eff = max(10.0, bad_t - asym_factor * 0.3)
-
-                # Score using effective asymmetric thresholds
-                d_eff = abs(deviation)
-                if d_eff <= ok_eff:
-                    cs = max(0, int(100 - (d_eff / max(ok_eff, .1)) * 25))
-                elif d_eff <= bad_eff:
-                    cs = max(0, int(75  - ((d_eff - ok_eff) / max(bad_eff - ok_eff, .1)) * 45))
-                else:
-                    cs = max(5, int(30 - (d_eff - bad_eff) * 1.5))
-
-                result["metrics"][met_key]["score"]      = cs
-                result["metrics"][met_key]["calibrated"] = True
-                result["metrics"][met_key]["calib_detail"] = {
-                    "ideal":       round(ideal, 1),
-                    "deviation":   round(deviation, 1),
-                    "offset":      round(offset_signed, 1),
-                    "ok_eff":      round(ok_eff, 1),
-                    "bad_eff":     round(bad_eff, 1),
-                }
-                calib_scores.append(cs)
-
-            if calib_scores:
-                raw_score  = result.get("score", 0)
-                calib_avg  = sum(calib_scores) / len(calib_scores)
-                result["score"]   = max(0, min(100, int(raw_score * 0.40 + calib_avg * 0.60)))
-                result["overall"] = result["score"]
-                result["calibration_applied"]   = True
-                result["asymmetric_correction"] = True
+        apply_personal_calibration(result, calib)
 
         # ── Per-metric score snapshot for session-level tracking ─────
         # Feeds sessions[sid]["metric_scores"] below, which in turn feeds
