@@ -18,6 +18,7 @@ const CASES = {
   trunk_flex_15:       { trunkFlexDeg: 15 },      // forward torso lean about the hips
   rounded_shoulders_6: { roundShoulderCm: 6 },
   trunk_twist_45:      { trunkRotDeg: 45 },
+  shoulder_shrug_8cm:  { shoulderElevCm: 8 },     // severe trapezius shrug
 };
 
 const out = {};

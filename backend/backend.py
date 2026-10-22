@@ -3119,6 +3119,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     # Measured: distance from shoulder to ear (Y axis)
     # Normal: shoulder 15-25% of frame height below ear
     # Elevated: < 10% = shrugging
+    _sh_elev_sc = None   # stays None (-> 0 weight below) if the try block fails
     try:
         _l_ear_y  = g(PL.L_EAR).y
         _r_ear_y  = g(PL.R_EAR).y
@@ -3730,6 +3731,11 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     conf_sh    = vis_conf(min(vis_l_sh, vis_r_sh))   # both must be visible
     # spine_lean: needs shoulders + hips
     conf_spine = vis_conf(avg_sh_vis * 0.5 + avg_hip_vis * 0.5)
+    # shoulder_elevation: same ear-Y + shoulder-Y gap conf_neck already
+    # depends on (it's the same two landmark groups, just read for a
+    # vertical gap instead of a lean angle) — reuse rather than invent a
+    # second, redundant visibility signal.
+    conf_shoulder_elev = conf_neck
 
     vis_bonus = 10 if (avg_sh_vis > 0.7 and avg_ear_vis > 0.7) else 0
 
@@ -3993,9 +3999,25 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     # added across the three (same rebalancing approach used for the
     # `rounded` addition above and for the frontend's own WEIGHTS_FRONT
     # when a weighted metric is added there) — new sum is still ~1.00.
-    BASE_W = {"neck": 0.214, "tilt": 0.076, "sh": 0.061, "spine": 0.138, "dist": 0.168,
-              "eye": 0.038, "wrist": 0.069, "rounded": 0.066,
-              "fhp": 0.10, "torso_flex": 0.05, "trunk_rot": 0.02}
+    #
+    # BUG FIX (found re-auditing this same list against the CURRENT
+    # frontend): the NOTE below used to read "shoulder_elevation ... [is]
+    # alert-only ... on the frontend by deliberate design" — true when that
+    # line was written (2026-08-23), false since 2026-08-29 (postureEngine.js
+    # commit bf39863 gave WEIGHTS_FRONT a real shoulderElev:0.0483 slot, with
+    # its own comment explaining a measured severe shrug used to move the
+    # frontend's score by 1 point despite the UI simultaneously flagging
+    # "Shoulder Elevation: severe"). Backend was never updated to match, so
+    # the exact same bug the frontend fixed in August was still live here:
+    # confirmed with the shoulder_shrug_8cm synthetic case (ear-shoulder gap
+    # drops from the neutral pose's 78 to 23) moving `overall` by 0 points.
+    # Giving it frontend's own weight here too, scaled into the existing
+    # ×0.952 room (everything else here scaled down to make space, same as
+    # every other addition to this table).
+    BASE_W = {"neck": 0.204, "tilt": 0.072, "sh": 0.058, "spine": 0.131, "dist": 0.160,
+              "eye": 0.036, "wrist": 0.066, "rounded": 0.063,
+              "fhp": 0.095, "torso_flex": 0.048, "trunk_rot": 0.019,
+              "shoulder_elev": 0.048}
     # dist boosted — screen distance is #1 preventable risk factor
     # Refs: AOA 2023 (20-20-20 rule), WHO screen guidelines
     #
@@ -4003,9 +4025,10 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     # own weighted component here — pitch already feeds pose_sc below
     # (pitch*0.45 + yaw*0.40 + roll*0.15). Giving it a second, separate
     # weight would double-count the same signal. It stays alert-only via
-    # the existing "monitor_height"/"ergonomics_score" metrics, same as
-    # shoulder_elevation and hand-prop occlusion are alert-only (not
-    # score-weighted) on the frontend by deliberate design, not oversight.
+    # the existing "monitor_height"/"ergonomics_score" metrics — that one
+    # IS a deliberate, still-current backend/frontend divergence (frontend
+    # has no equivalent double-counting risk since its `neck` doesn't blend
+    # in pitch the way this engine's does), unlike shoulder_elevation above.
 
     _fhp_metric        = out["metrics"].get("fhp_index")
     _trunk_rot_metric  = out["metrics"].get("trunk_rotation")
@@ -4015,17 +4038,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     conf_torso_flex = 1.0 if _torso_flex_metric is not None else 0.0
 
     eff_w = {
-        "neck":       BASE_W["neck"]       * conf_neck,
-        "tilt":       BASE_W["tilt"]       * conf_tilt,
-        "sh":         BASE_W["sh"]         * conf_sh,
-        "spine":      BASE_W["spine"]      * conf_spine,
-        "dist":       BASE_W["dist"],                        # camera-independent — no penalty
-        "eye":        BASE_W["eye"]        * conf_eye,        # 0.038 when FaceMesh active, else 0
-        "wrist":      BASE_W["wrist"]      * conf_wrist,      # 0.069 for paid tiers, else 0
-        "rounded":    BASE_W["rounded"]    * conf_rounded,    # 0 when ears occluded AND Z unreliable
-        "fhp":        BASE_W["fhp"]        * conf_fhp,        # 0 if the fhp_index computation failed
-        "torso_flex": BASE_W["torso_flex"] * conf_torso_flex, # 0 while hips hidden or baseline still learning
-        "trunk_rot":  BASE_W["trunk_rot"]  * conf_trunk_rot,  # 0 while hips/eyes hidden or baseline still learning
+        "neck":          BASE_W["neck"]          * conf_neck,
+        "tilt":          BASE_W["tilt"]           * conf_tilt,
+        "sh":            BASE_W["sh"]             * conf_sh,
+        "spine":         BASE_W["spine"]          * conf_spine,
+        "dist":          BASE_W["dist"],                            # camera-independent — no penalty
+        "eye":           BASE_W["eye"]            * conf_eye,        # 0.036 when FaceMesh active, else 0
+        "wrist":         BASE_W["wrist"]           * conf_wrist,      # 0.066 for paid tiers, else 0
+        "rounded":       BASE_W["rounded"]         * conf_rounded,    # 0 when ears occluded AND Z unreliable
+        "fhp":           BASE_W["fhp"]             * conf_fhp,        # 0 if the fhp_index computation failed
+        "torso_flex":    BASE_W["torso_flex"]      * conf_torso_flex, # 0 while hips hidden or baseline still learning
+        "trunk_rot":     BASE_W["trunk_rot"]       * conf_trunk_rot,  # 0 while hips/eyes hidden or baseline still learning
+        "shoulder_elev": BASE_W["shoulder_elev"]   * (conf_shoulder_elev if _sh_elev_sc is not None else 0.0),
     }
 
     # Lost weight from low-vis metrics → redistributed to dist (stable)
@@ -4034,17 +4058,18 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
 
     # Build score_val from all present metrics
     scores = {
-        "neck":       neck_sc,
-        "tilt":       tilt_sc,
-        "sh":         sh_sc,
-        "spine":      spine_sc,
-        "dist":       dist_sc,
-        "eye":        eye_sc   if eye_sc   is not None else 0,
-        "wrist":      wrist_sc if wrist_sc is not None else 0,
-        "rounded":    _rounded_sc,
-        "fhp":        _fhp_metric["score"]        if _fhp_metric        is not None else 0,
-        "torso_flex": _torso_flex_metric["score"] if _torso_flex_metric is not None else 0,
-        "trunk_rot":  _trunk_rot_metric["score"]  if _trunk_rot_metric  is not None else 0,
+        "neck":          neck_sc,
+        "tilt":          tilt_sc,
+        "sh":            sh_sc,
+        "spine":         spine_sc,
+        "dist":          dist_sc,
+        "eye":           eye_sc   if eye_sc   is not None else 0,
+        "wrist":         wrist_sc if wrist_sc is not None else 0,
+        "rounded":       _rounded_sc,
+        "fhp":           _fhp_metric["score"]        if _fhp_metric        is not None else 0,
+        "torso_flex":    _torso_flex_metric["score"] if _torso_flex_metric is not None else 0,
+        "trunk_rot":     _trunk_rot_metric["score"]  if _trunk_rot_metric  is not None else 0,
+        "shoulder_elev": _sh_elev_sc if _sh_elev_sc is not None else 0,
     }
     score_val = sum(scores[k] * eff_w[k] for k in scores)
     remaining = 1.0 - sum(eff_w.values())
@@ -4073,6 +4098,7 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
         "fhp": round(conf_fhp, 2),
         "torso_flex": round(conf_torso_flex, 2),
         "trunk_rot": round(conf_trunk_rot, 2),
+        "shoulder_elev": round(conf_shoulder_elev if _sh_elev_sc is not None else 0.0, 2),
         "eff_weights": {k: round(v, 3) for k, v in eff_w.items()},
         "label": "Per-metric visibility confidence",
     }
