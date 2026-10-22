@@ -588,6 +588,48 @@ class TestShoulderElevationWeight:
         assert se_one["value"] == max(se_one["left_pct"], se_one["right_pct"])
 
 
+class TestSpineLeanDirection:
+    """spine_lean's "direction" field (out["metrics"]["spine_lean"]["direction"])
+    feeds directly into the alert text: "Leaning {direction} X deg -- sit
+    centered". Its comment claimed to already match postureEngine.js's own
+    fix for this -- that file's analyzeSpineLean() used to assume the raw
+    screen-x ordering always means "higher x = subject's right", which only
+    holds in an unmirrored front-facing frame IF L_SHOULDER happens to sit
+    at higher x than R_SHOULDER, and read backwards otherwise -- but the
+    ported code only changed the alert WORDING (left/right instead of
+    "forward slouch"), not the sign convention itself, which was still the
+    exact pre-fix formula.
+
+    syntheticSubject.mjs's own doc comment on lateralLeanDeg: "+ = toward
+    subject's right". lateral_lean_12 (dump_synthetic_poses.mjs) poses the
+    rig at lateralLeanDeg=12 -- a KNOWN lean to the subject's own right --
+    so this is ground truth, not a guess at what the "right" answer should
+    be. Before the fix, this read "left": exactly backwards, on the one
+    alert in this engine where the wrong answer actively points someone
+    at the side that is NOT their problem."""
+
+    def test_known_rightward_lean_reports_right_not_left(self):
+        out = analyze("lateral_lean_12")
+        spine = out["metrics"]["spine_lean"]
+        assert spine["direction"] == "right", (
+            f"lateral_lean_12 poses a KNOWN lean toward the subject's own right "
+            f"(syntheticSubject.mjs: lateralLeanDeg '+ = toward subject's right') "
+            f"but spine_lean reported direction={spine['direction']!r} -- backwards"
+        )
+        assert spine["signed"] > 0, "a rightward lean should report a positive signed angle"
+
+    def test_signed_matches_direction_label(self):
+        """signed and direction must always agree with each other -- both
+        are derived from the same _leaning_right, so a mismatch would mean
+        one of the two was edited without the other."""
+        out = analyze("lateral_lean_12")
+        spine = out["metrics"]["spine_lean"]
+        if spine["direction"] == "right":
+            assert spine["signed"] > 0
+        else:
+            assert spine["signed"] < 0
+
+
 class TestPositionOcclusionPenalty:
     """analyze_front()'s confidence-weighted average can look fine even when
     the frame itself makes every reading on it less trustworthy -- sitting
