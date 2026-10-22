@@ -88,7 +88,16 @@ export function metricValue(sessions, key, n = 10) {
  * seated upper-body camera view cannot observe the hips or pelvis.
  */
 export const ZONE_METRICS = {
-  cervical: ["neck_lean", "head_tilt", "head_yaw", "fhp_index"],
+  // "yaw" alongside "head_yaw": postureEngine.js (most sessions) emits this
+  // reading as "head_yaw"; backend.py's analyze_front() (the MediaPipe-load-
+  // failure fallback path, and the Enterprise API) computes the same head-
+  // turn angle via solvePnP but stores it as "yaw" -- a session recorded
+  // through that path had this reading sitting in its metrics object under
+  // a name this zone never looked for, same gap as WorkforceAnalytics.jsx's
+  // "arms" zone had for elbow_angle/wrist_angle. zoneRisk() below only
+  // averages whatever keys actually resolve to a reading, so listing both
+  // names can't double-count a session (each one only ever emits one).
+  cervical: ["neck_lean", "head_tilt", "head_yaw", "yaw", "fhp_index"],
   thoracic: ["shoulder_level", "rounded_shoulders", "shoulder_elevation"],
   lumbar:   ["spine_lean", "torso_flexion", "trunk_rotation"],
 };
