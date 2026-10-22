@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+import { NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
 
 // ── Score Smoothing ───────────────────────────────────────────────
 /**
@@ -361,7 +362,11 @@ export function usePainPrediction(safeThreshold = 60, strainThreshold = 12) {
     if (metrics) {
       for (const [key, m] of Object.entries(metrics)) {
         if (typeof m?.score !== "number") continue;
-        if (key === "session_fatigue" || key === "confidence_val") continue;
+        // position_penalty has a numeric score too (100 - the penalty) so it
+        // passed the guard above and, missing from this check, could become
+        // the metric this pain-prediction countdown names as the cause --
+        // "position_penalty"/"Positioning adjustment" is not a body part.
+        if (NON_POSTURAL_METRICS.has(key)) continue;
         if (!worst || m.score < worst.score) worst = { key, label: m.label || key, score: m.score };
       }
     }
