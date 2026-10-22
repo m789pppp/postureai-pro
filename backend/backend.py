@@ -1873,6 +1873,18 @@ _protract_base_state = {}
 _PROTRACT_WARMUP_SKIP = 12
 _PROTRACT_SAMPLE_N    = 25
 
+# Same per-session-baseline mechanism, for shoulder elevation (shrug) — see
+# that block below for why this has TWO buckets per session (one per side,
+# not one average). Matches postureEngine.js's own
+# _earShBaseL/_earShBaseR = _makeBaseline(20, 35) (set in resetProportions(),
+# which is what actually runs at session start — that file also carries an
+# unused module-level _makeBaseline(40, 60) default from before that
+# function existed, which (20, 35) superseded for every real session).
+_sh_elev_base_state_l = {}
+_sh_elev_base_state_r = {}
+_SH_ELEV_WARMUP_SKIP = 20
+_SH_ELEV_SAMPLE_N    = 35
+
 # ── Depth-channel usability gate (rounded-shoulders protraction) ────
 # {session_id: [ahead_cm, ...]} rolling window (max 30 samples) of the
 # nose-ahead-of-ears distance, in cm — an anatomical fact that holds in
@@ -2067,6 +2079,8 @@ _SEV = {
     # "calibrated" band to pick between here.
     "monitor":  {"mild": 12, "moderate": 18, "severe": 25},
     "trunk_rot":  {"mild": 12, "moderate": 20, "severe": 30},
+    # Matches postureEngine.js's SEV.SHOULDER_ELEV exactly.
+    "shoulder_elev": {"mild": 3, "moderate": 7, "severe": 12},
     "torso_flex": {"mild": 12, "moderate": 20, "severe": 30},
 }
 
@@ -3114,35 +3128,103 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     sh_tilt    = angle_horiz(l_sh, r_sh)
     sh_sc      = score_m(sh_tilt, 0, 5, 12)
 
-    # ── Shoulder elevation (shrug/tension) ────────────────────────
-    # Elevated shoulders = trapezius tension / stress posture
-    # Measured: distance from shoulder to ear (Y axis)
-    # Normal: shoulder 15-25% of frame height below ear
-    # Elevated: < 10% = shrugging
-    _sh_elev_sc = None   # stays None (-> 0 weight below) if the try block fails
+    # ── Shoulder elevation (shrug/tension) — full rewrite ─────────
+    # Mirrors postureEngine.js's CURRENT analyzeShoulderElevation(), not the
+    # frontend's own OLD, explicitly-abandoned formula this block used to
+    # carry (fixed "ideal gap 12-25% of frame height"). That file's comment
+    # on the old formula: NEUTRAL was the hardcoded constant 0.52, and no
+    # real body has that ratio — measured across the plausible adult range
+    # (neck 10-16cm, biacromial width 36-48cm) the true resting ratio is
+    # 0.20-0.43, so an uncalibrated user sitting perfectly relaxed read
+    # 9-32% "shoulder elevation" PERMANENTLY, tracking their build rather
+    # than their posture. Leaving that formula here any longer would mean
+    # the paid Enterprise API and PDF/AI-insight reports kept scoring this
+    # now-weighted metric (see BASE_W["shoulder_elev"] below) by a method
+    # the live-camera engine itself has already rejected as wrong.
+    #
+    # New method: each ear-to-shoulder gap is measured PERPENDICULAR TO THE
+    # SHOULDER LINE (its own downward normal), not along the image
+    # vertical — a rigid lateral lean or trunk roll then cancels out of
+    # both gaps (same lean raises one gap by as much as it lowers the
+    # other), and only a real shoulder-toward-ear movement survives.
+    # Measuring along image-vertical instead (the old formula's approach)
+    # read a lateral lean as a one-sided shrug.
+    #
+    # The gap ratio is a fact about the person's skeleton (neck length,
+    # shoulder width), so — like trunk_rotation/torso_flexion/
+    # rounded_shoulders above — it is self-baselined per session rather
+    # than scored against a population constant. Learned PER SIDE (not
+    # averaged) so a single raised shoulder isn't diluted by half; this
+    # metric's final value is the WORSE of the two sides, not their mean.
+    _sh_elev_sc = None   # stays None (-> 0 weight below) unless a reliable reading is produced
     try:
-        _l_ear_y  = g(PL.L_EAR).y
-        _r_ear_y  = g(PL.R_EAR).y
-        _l_sh_gap = g(PL.L_SHOULDER).y - _l_ear_y   # positive = shoulder below ear (normal)
-        _r_sh_gap = g(PL.R_SHOULDER).y - _r_ear_y
-        _sh_elev  = (_l_sh_gap + _r_sh_gap) / 2      # avg gap (normalized 0-1)
-        _sh_elev_pct = round(_sh_elev * 100, 1)       # % of frame height
+        _se_sh_ok  = (g(PL.L_SHOULDER).visibility >= 0.55 and g(PL.R_SHOULDER).visibility >= 0.55)
+        _se_ear_ok = vis_l_ear >= 0.55 and vis_r_ear >= 0.55
+        # shWidthPx == 0 with shoulders clamped to the frame border makes this
+        # metric divide by (near) nothing and read a shrug that isn't there —
+        # same guard postureEngine.js's prop.shAtEdge exists for.
+        if _se_sh_ok and _se_ear_ok and sh_width_px > 1:
+            _se_ux, _se_uy = l_sh[0] - r_sh[0], l_sh[1] - r_sh[1]
+            _se_ul = math.hypot(_se_ux, _se_uy) or 1.0
+            _se_nx, _se_ny = -(_se_uy / _se_ul), _se_ux / _se_ul   # unit normal, down when upright
+            def _se_proj(sh, ear):
+                return ((sh[0] - ear[0]) * _se_nx + (sh[1] - ear[1]) * _se_ny) / sh_width_px
+            _se_l_gap = _se_proj(l_sh, l_ear)
+            _se_r_gap = _se_proj(r_sh, r_ear)
 
-        # Score: ideal gap 12-25%, too close = elevated shoulders
-        _sh_elev_sc = score_m(_sh_elev_pct, 18, 4, 8)
-        out["metrics"]["shoulder_elevation"] = {
-            "value":      _sh_elev_pct,
-            "score":      _sh_elev_sc,
-            "unit":       "% frame",
-            "label":      "Shoulder elevation (tension)",
-            "reference":  "Normal: 12-25% gap between ear and shoulder",
-        }
-        if _sh_elev_pct < 6:
-            add_alert(out, "⚠️ Shoulders elevated/shrugging — relax shoulders down and back",
-                      "⚠️ الكتفان مرفوعان — أرخِ كتفيك للأسفل والخلف")
-        elif _sh_elev_pct < 10:
-            add_alert(out, "Shoulders slightly elevated — try to relax trap muscles",
-                      "الكتفان مرتفعان قليلاً — حاول إرخاء عضلات الترابيس")
+            # calib.rounded_neutral (same calibration-wizard value
+            # rounded_shoulders' OLD formula used to read) was measured in a
+            # relaxed symmetrical position, so applying it to both sides
+            # introduces at most ~5% error — well within THR ok(=3).
+            _se_calib_neutral = (
+                rounded_neutral if (isinstance(rounded_neutral, (int, float))
+                                     and 0.10 < rounded_neutral < 0.80) else None
+            )
+            _se_l_bucket = _sh_elev_base_state_l.setdefault(_sid, {})
+            _se_r_bucket = _sh_elev_base_state_r.setdefault(_sid, {})
+            _se_l_learned = _feed_baseline(_se_l_bucket, _se_l_gap,
+                                            warmup_skip=_SH_ELEV_WARMUP_SKIP, sample_n=_SH_ELEV_SAMPLE_N)
+            _se_r_learned = _feed_baseline(_se_r_bucket, _se_r_gap,
+                                            warmup_skip=_SH_ELEV_WARMUP_SKIP, sample_n=_SH_ELEV_SAMPLE_N)
+            _se_neutral_l = _se_calib_neutral if _se_calib_neutral is not None else _se_l_learned
+            _se_neutral_r = _se_calib_neutral if _se_calib_neutral is not None else _se_r_learned
+
+            if _se_neutral_l is None or _se_neutral_r is None:
+                out["metrics"]["shoulder_elevation"] = {
+                    "value": 0.0, "score": 90, "unit": "%",
+                    "label": "Shoulder elevation (tension)", "reliable": False, "learning": True,
+                    "reference": "still learning this session's own baseline",
+                }
+            else:
+                _se_l_pct = max(0.0, _se_neutral_l - _se_l_gap) * 100
+                _se_r_pct = max(0.0, _se_neutral_r - _se_r_gap) * 100
+                if math.isfinite(_se_l_pct) and math.isfinite(_se_r_pct):
+                    # Max, not mean — a one-sided shrug must score as badly as
+                    # a two-sided one. See postureEngine.js's own comment: the
+                    # old (lGap+rGap)/2 convention made a single-shoulder
+                    # shrug look half as severe.
+                    _se_pct   = max(_se_l_pct, _se_r_pct)
+                    _sh_elev_sc = score_m(_se_pct, 0, 3, 10)   # matches THR.SHOULDER_ELEV
+                    _se_asym = ("left" if _se_l_pct > _se_r_pct else "right") if abs(_se_l_pct - _se_r_pct) > 4 else None
+                    out["metrics"]["shoulder_elevation"] = {
+                        "value":      round(_se_pct, 1),
+                        "score":      _sh_elev_sc,
+                        "unit":       "%",
+                        "label":      "Shoulder elevation (tension)",
+                        "left_pct":   round(_se_l_pct, 1),
+                        "right_pct":  round(_se_r_pct, 1),
+                        "asymmetric": _se_asym,
+                        "personalised": _se_calib_neutral is None,
+                        "reliable":   True,
+                        "reference":  "Perpendicular ear-to-shoulder gap, self-baselined per side",
+                    }
+                    _se_sev = classify_severity(_se_pct, _SEV["shoulder_elev"])
+                    if _se_sev == "severe":
+                        add_alert(out, "⚠️ Shoulders elevated/shrugging — relax shoulders down and back",
+                                  "⚠️ الكتفان مرفوعان — أرخِ كتفيك للأسفل والخلف")
+                    elif _se_sev == "moderate":
+                        add_alert(out, "Shoulders slightly elevated — try to relax trap muscles",
+                                  "الكتفان مرتفعان قليلاً — حاول إرخاء عضلات الترابيس")
     except Exception:
         pass
 
