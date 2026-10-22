@@ -505,6 +505,57 @@ class TestWeightTableRedesign:
         )
 
 
+class TestShoulderElevationWeight:
+    """shoulder_elevation (ear-to-shoulder Y gap -- shrug/trapezius tension)
+    is the fourth instance of the exact gap TestWeightTableRedesign above
+    documents for rounded/fhp/trunk_rot/torso_flex: computed every frame,
+    alerted on via SEV-style thresholds, but never referenced anywhere in
+    BASE_W/eff_w/scores. The comment that used to sit on BASE_W claimed this
+    was deliberate and mirrored the frontend -- true when written
+    (2026-08-23), false since postureEngine.js commit bf39863 (2026-08-29)
+    gave WEIGHTS_FRONT a real shoulderElev weight. Re-auditing the CURRENT
+    frontend against backend (rather than trusting that still-present
+    comment) is what caught this -- same lesson as the stale-comment class
+    of bug this whole audit chain exists to catch.
+
+    shoulder_shrug_8cm (dump_synthetic_poses.mjs) raises both shoulders 8cm
+    via the rig's existing shoulderElevCm parameter -- no baseline-learning
+    gate involved (unlike fhp/trunk_rot/torso_flex's depth estimators), so
+    the plain analyze() helper is enough here."""
+
+    def test_metric_is_computed(self):
+        out = analyze("shoulder_shrug_8cm")
+        se = out["metrics"].get("shoulder_elevation")
+        assert se is not None
+        # Sanity: the shrug pose's ear-shoulder gap must actually read lower
+        # than neutral's -- isolates the weight assertion below from the
+        # underlying measurement (already correct before this fix).
+        neutral_se = analyze("neutral")["metrics"]["shoulder_elevation"]
+        assert se["value"] < neutral_se["value"], (
+            f"shrug pose's shoulder-elevation value ({se['value']}) should read "
+            f"lower (closer shoulder-to-ear gap) than neutral's ({neutral_se['value']})"
+        )
+        assert se["score"] < neutral_se["score"]
+
+    def test_carries_nonzero_weight(self):
+        out = analyze("shoulder_shrug_8cm")
+        eff_w = out["metrics"]["_confidence"]["eff_weights"]
+        assert eff_w.get("shoulder_elev", 0) > 0, (
+            "shoulder_elevation is computed but BASE_W['shoulder_elev'] isn't reaching eff_weights"
+        )
+
+    def test_severe_shrug_pulls_the_overall_score_down(self):
+        out_neutral = analyze("neutral")
+        out_shrug   = analyze("shoulder_shrug_8cm")
+        assert out_shrug["score"] < out_neutral["score"], (
+            f"a severe shoulder shrug (shoulder_elevation score "
+            f"{out_shrug['metrics']['shoulder_elevation']['score']} vs neutral's "
+            f"{out_neutral['metrics']['shoulder_elevation']['score']}) scored "
+            f"{out_shrug['score']} vs neutral's {out_neutral['score']} -- "
+            f"shoulder_elevation doesn't appear to be moving the score"
+        )
+
+
 class TestPositionOcclusionPenalty:
     """analyze_front()'s confidence-weighted average can look fine even when
     the frame itself makes every reading on it less trustworthy -- sitting
