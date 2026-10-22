@@ -28,6 +28,11 @@ const METRIC_LABELS = {
   trunk_lean:"Trunk Lean",
   hip_angle:"Hip Angle", knee_angle:"Knee Angle",
   session_fatigue:"Fatigue Adjustment", confidence_val:"Detection Confidence",
+  // These three are acronyms — the naive title-case fallback a few lines
+  // down (`k.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())`) turns
+  // them into "Rula Score"/"Iso 11226"/"Rsi Risk" on a document aimed at
+  // physiotherapists and HR clients who read these as standard abbreviations.
+  rula_score:"RULA Score", iso_11226:"ISO 11226", rsi_risk:"RSI Risk",
 };
 const METRIC_LABELS_AR = {
   neck_lean:"ميل الرقبة", neck_lean_side:"ميل الرقبة (جانبي)",
@@ -43,6 +48,7 @@ const METRIC_LABELS_AR = {
   trunk_lean:"ميل الجذع",
   hip_angle:"زاوية الورك", knee_angle:"زاوية الركبة",
   session_fatigue:"تعديل الإجهاد", confidence_val:"دقة الكشف",
+  rula_score:"درجة RULA", iso_11226:"معيار ISO 11226", rsi_risk:"خطر RSI (إصابة الإجهاد التكراري)",
 };
 
 // Meta/diagnostic fields the engine attaches to a metrics object that are
