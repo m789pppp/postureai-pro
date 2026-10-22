@@ -280,7 +280,15 @@ function buildAnalytics(sessions=[], allUsers=[], profile={}) {
     shoulder: ["shoulder_level", "rounded_shoulders", "shoulder_elevation"],
     spine:    ["spine_lean", "trunk_rotation"],
     lower:    ["torso_flexion", "spine_lean"],
-    arms:     ["elbow_angle"],
+    // postureEngine.js (the live-camera engine most sessions come from)
+    // emits this metric as "elbow_angle"; backend.py's analyze_front()
+    // (the engine behind the MediaPipe-load-failure fallback path and the
+    // Enterprise API) computes the exact same shoulder-elbow-wrist included
+    // angle but stores it as "wrist_angle" -- a naming split backend.py's
+    // own comments already acknowledge ("the elbow/'wrist' angle..."). Any
+    // session recorded through that path had its arm data silently excluded
+    // from this zone, since nothing here ever looked for the other name.
+    arms:     ["elbow_angle", "wrist_angle"],
   };
   const zoneRisk = {};
   for (const [zone, keys] of Object.entries(ZONE_METRICS)) {
