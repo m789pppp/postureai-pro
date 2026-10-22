@@ -211,8 +211,24 @@ def _normalize_tier(raw_tier: str) -> str:
 # The domain check happens AFTER the normal tier is resolved from Firestore,
 # so it overrides (elevates) whatever tier the user currently has stored.
 # Domains are matched as email suffixes: "@tkh.edu.eg" matches "tkh.edu.eg".
+#
+# BUG FIX: this was missing three entries frontend/src/firebase.js's own
+# duplicate copy already had — coventry.ac.uk, coventry-university.ac.uk,
+# city.ac.uk — even though THIS file is the one every actual backend-
+# enforced elite feature (AI Coach limits, backend-assisted analysis,
+# etc.) reads, and that file's own comment says it exists only to mirror
+# this one ("Client-side elite elevation — mirrors backend middleware").
+# Commit history ("state the real Coventry pilot") confirms Coventry is a
+# genuine institutional partner, not placeholder/test data — so a
+# Coventry or City, University of London pilot user was shown Elite-tier
+# UI (unlimited AI Coach, backend-assisted analysis available) that the
+# backend would not actually grant, the opposite of every other drift
+# found in this audit (frontend ahead of backend here, not behind).
 ELITE_DOMAINS: list[str] = [
-    "tkh.edu.eg",          # The Knowledge Hub — institutional partner
+    "tkh.edu.eg",                  # The Knowledge Hub — institutional partner
+    "coventry.ac.uk",              # Coventry University — institutional pilot
+    "coventry-university.ac.uk",   # Coventry University — institutional pilot
+    "city.ac.uk",                  # City, University of London — institutional pilot
 ]
 
 # Specific email addresses that also get elite access (for individual
@@ -220,6 +236,7 @@ ELITE_DOMAINS: list[str] = [
 ELITE_EMAILS: list[str] = [
     "judyayman36@gmail.com",
     "m789pppp@gmail.com",
+    "support@corvus.io",   # internal support account — needs elite access to test/verify elite-only features
     # add individual emails here as needed
 ]
 
