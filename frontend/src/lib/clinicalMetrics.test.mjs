@@ -190,6 +190,19 @@ check("session_fatigue excluded", NON_POSTURAL_METRICS.has("session_fatigue"));
 check("confidence_val excluded", NON_POSTURAL_METRICS.has("confidence_val"));
 check("a real metric is not excluded", !NON_POSTURAL_METRICS.has("neck_lean"));
 
+// backend.py's analyze_front() metrics-object entries with no `score` field
+// (confirmed via the grep that found this gap: none of these seven appear
+// alongside a "score" key in their out["metrics"][...] = {...} block) --
+// pdfReports.js/SharedReportPage.jsx/ui/index.jsx/App.jsx each used to
+// filter on their OWN, independently-maintained, independently-stale copy
+// of this set, which is how these seven stayed unexcluded across all of
+// them for as long as they did.
+console.log("\ndiagnostic-only backend.py fields (no score field) are excluded too");
+for (const k of ["neck_source", "head_pose_detail", "shoulder_width_ratio",
+                  "spine_upper", "spine_mid", "spine_lower", "kyphosis_pen", "head_creep"]) {
+  check(`${k} excluded`, NON_POSTURAL_METRICS.has(k));
+}
+
 
 console.log("\na pending server timestamp must not bury the session that just ended");
 {

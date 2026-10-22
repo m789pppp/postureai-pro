@@ -12,6 +12,7 @@
  *  Layout:   BottomSheet, SafeView, ResponsiveGrid
  */
 import { useState, useEffect, useRef, useCallback } from "react";
+import { NON_POSTURAL_METRICS } from "../lib/clinicalMetrics.js";
 
 // ─────────────────────────────────────────────────────────────────
 // TOKENS (local copy — single-file self-contained)
@@ -1259,9 +1260,12 @@ export function SessionDetailModal({ session, allSessions = [], profile, cs, isA
             {isAr ? "تفاصيل القياسات" : "Metric Breakdown"}
           </div>
           {Object.entries(metrics)
-            // session_fatigue/confidence_val are meta/diagnostic fields, not
-            // real posture metrics — exclude them from the breakdown list.
-            .filter(([k]) => k !== "session_fatigue" && k !== "confidence_val")
+            // Meta/diagnostic fields, not real posture metrics — exclude
+            // them from the breakdown list. See NON_POSTURAL_METRICS's doc
+            // comment in clinicalMetrics.js (this used to be a two-entry
+            // inline check here, independently out of sync with every
+            // other file that renders a metrics object generically).
+            .filter(([k]) => !NON_POSTURAL_METRICS.has(k))
             .map(([k, v]) => {
               // The engine returns each metric as {value, score, unit, label}
               // (see postureEngine.js) — v used to be assumed to be a plain
