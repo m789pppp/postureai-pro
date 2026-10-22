@@ -4563,8 +4563,21 @@ export default function App(){
           if(mpStatus==="fallback"&&d.overall>0){
             backendFailRef.current=0; // reset — backend is responding fine
             if(backendFailShownRef.current){ backendFailShownRef.current=false; setBackendDown(false); }
-            const rawScore = d.overall;
-            const smoothed = pushScore(rawScore) || rawScore; // same 15s window as local MP
+            // d.overall is ALREADY backend-smoothed -- analyze() (backend.py)
+            // runs it through push_score()/get_smoothed_score() (an EWMA over
+            // this uid's last ~20 analyzed frames, see redis_service.py)
+            // before returning. Running it through pushScore() again here
+            // stacked a SECOND, independent smoothing window (10s/6s
+            // half-life, plus its own ±3pt-per-call jump guard) on top of an
+            // already-smoothed value. The old comment's intent -- "same 15s
+            // window as local MP" -- assumed this branch's input was as raw
+            // as the local-MediaPipe path's `finalResult.overall` (which
+            // really is unsmoothed engine output, correctly fed through
+            // pushScore() at its other call site below). It isn't: fallback
+            // mode was double-smoothing on every frame, compounding into
+            // noticeably laggier live feedback than the local-MediaPipe path
+            // this was supposed to match. Use backend's own smoothed value.
+            const smoothed = d.overall;
             const result={...d, overall: smoothed};
             result.pain_prediction = updatePainPrediction(smoothed, result.metrics);
             totalRef.current++;setTotalF(totalRef.current);
