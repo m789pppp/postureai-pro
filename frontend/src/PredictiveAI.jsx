@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   cervicalLoadKg, neckFlexionDeg, sessionFatigue,
-  weekWindows, lifetimeSessions,
+  weekWindows, lifetimeSessions, NON_POSTURAL_METRICS,
 } from "./lib/clinicalMetrics.js";
 import { geminiAnalysis } from "./gemini.js";
 import { getCached, setCache } from "./aiPreloader.js";
@@ -141,12 +141,16 @@ function computeWeeklyForecast(sessions) {
     if (!buckets[key]) buckets[key] = { weekday, part, scores: [], metricSums: {}, metricCounts: {} };
     buckets[key].scores.push(s.avg_score);
     Object.entries(s.metrics || {}).forEach(([k, v]) => {
-      // session_fatigue/confidence_val are meta/diagnostic fields, not
-      // real posture metrics — without this exclusion either could win
-      // "worstMetric" below purely from e.g. poor lighting hurting
-      // detection confidence, silently replacing the actual worst body
-      // region with a generic fallback (see WF_REGION_LABEL lookup).
-      if (k.startsWith("_") || k === "session_fatigue" || k === "confidence_val") return;
+      // Meta/diagnostic fields, not real posture metrics — without this
+      // exclusion one could win "worstMetric" below purely from e.g. poor
+      // lighting hurting detection confidence, or a too-close/far session
+      // tripping position_penalty, silently replacing the actual worst
+      // body region with a generic fallback (see WF_REGION_LABEL lookup).
+      // position_penalty has a real numeric score (unlike the backend-only
+      // diagnostic keys this same set also covers), so it needed this
+      // explicit exclusion too -- the `sc == null` check below doesn't
+      // catch it. See NON_POSTURAL_METRICS's doc comment in clinicalMetrics.js.
+      if (k.startsWith("_") || NON_POSTURAL_METRICS.has(k)) return;
       const sc = typeof v === "number" ? v : (v?.score ?? null);
       if (sc == null) return;
       buckets[key].metricSums[k] = (buckets[key].metricSums[k] || 0) + sc;

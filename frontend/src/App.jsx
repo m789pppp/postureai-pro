@@ -5901,8 +5901,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
       const aiPromise = (async()=>{
         try {
           const { geminiAnalysis } = await import("./gemini.js");
+          // Was missing "position_penalty" and the backend-only diagnostic
+          // keys (see NON_POSTURAL_METRICS's doc comment in
+          // clinicalMetrics.js) -- any of those leaking into "Worst
+          // metrics" here feeds straight into the AI prompt below, which
+          // could then write a clinical-sounding sentence about
+          // "positioning adjustment" or "neck source" as if it were a
+          // real posture fault, in a paid Elite PDF report.
           const topMetrics = Object.entries(la.metrics||{})
-            .filter(([k,v])=>v?.score!==undefined && !["session_fatigue","confidence_val"].includes(k))
+            .filter(([k,v])=>v?.score!==undefined && !NON_POSTURAL_METRICS.has(k))
             .sort(([,a],[,b])=>(a.score??100)-(b.score??100))
             .slice(0,3)
             .map(([k,v])=>`${k}: score ${Math.round(v.score)}, value ${v.value}${v.unit||""}`)
@@ -8121,9 +8128,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     points were in metrics this panel does not show, and a user
                     looking for the reason had nowhere to find it. */}
                 {(()=>{
-                  const HIDE = new Set(["session_fatigue","confidence_val"]);
+                  // Was missing "position_penalty" (a real scoring deduction,
+                  // not a posture metric, with a `score` field that passes
+                  // every other check below) and the backend-only diagnostic
+                  // keys fallback-mode sessions can carry — see
+                  // NON_POSTURAL_METRICS's doc comment in clinicalMetrics.js.
+                  // Someone sitting too close/far could see "biggest drop:
+                  // Positioning adjustment" here instead of a real metric.
                   const worst = Object.entries(analysis?.metrics||{})
-                    .filter(([k,v])=>!HIDE.has(k) && v && v.reliable!==false && typeof v.score==="number")
+                    .filter(([k,v])=>!NON_POSTURAL_METRICS.has(k) && v && v.reliable!==false && typeof v.score==="number")
                     .sort(([,a],[,b])=>a.score-b.score)[0];
                   if(!worst || worst[1].score >= 80) return null;
                   const label = isAr ? (METRIC_LABEL_AR[worst[0]]||worst[1].label) : worst[1].label;
