@@ -3289,8 +3289,31 @@ def analyze_front(image, mode="laptop", tier="standard", session_id=None, dist_b
     # that motion is mostly along the camera's depth axis. The alert copy
     # below used to say "sit back with lumbar support", which assumes
     # forward slouch — wrong for what this number actually measures.
-    # Matches the frontend fix: name the real side instead.
-    _spine_dir    = "right" if (mid_sh[0] - mid_hip[0]) > 0 else "left"
+    #
+    # BUG FIX: the line above claimed to match the frontend fix but only
+    # ported the WORDING half of it (left/right instead of "forward
+    # slouch"), not the SIGN CONVENTION half, which is the half that
+    # actually mattered. `"right" if (mid_sh.x - mid_hip.x) > 0 else "left"`
+    # is postureEngine.js's own OLD, since-corrected formula — that file's
+    # comment on it: the camera feed MediaPipe reads is unmirrored (the
+    # live <video>'s CSS scaleX(-1) is display-only and never touches the
+    # pixels Pose/this backend's frame capture processes — same raw frame
+    # either way), so in an unmirrored front-facing shot the subject's own
+    # LEFT appears at the HIGHER image x. The naive test above reads
+    # "shoulders shifted toward higher x" (= the subject's own LEFT) and
+    # labels it "right" — backwards. A user leaning to their own left was
+    # told "Leaning right — sit centered", the one alert in this whole
+    # engine where a wrong answer is worse than no answer: it points
+    # exactly at the side that is NOT the problem.
+    #
+    # Fix: derive which screen-x direction is "the subject's right" from
+    # the landmarks themselves (as postureEngine.js's leftIsHigherX/
+    # towardHigherX/leaningRight now does) instead of assuming unmirrored
+    # ordering always holds.
+    _left_is_higher_x = l_sh[0] >= r_sh[0]
+    _toward_higher_x  = (mid_sh[0] - mid_hip[0]) > 0
+    _leaning_right    = (not _toward_higher_x) if _left_is_higher_x else _toward_higher_x
+    _spine_dir    = "right" if _leaning_right else "left"
     _spine_dir_ar = "اليمين" if _spine_dir == "right" else "اليسار"
     _spine_signed = spine_lean if _spine_dir == "right" else -spine_lean
 
