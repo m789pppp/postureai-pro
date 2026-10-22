@@ -5,7 +5,7 @@
  * Expires: 30 days after creation
  */
 import { useEffect, useState, useRef } from "react";
-import { ZONE_METRICS } from "./lib/clinicalMetrics.js";
+import { ZONE_METRICS, NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
 import { getSharedReport } from "./firebase.js";
 
 const METRIC_LABELS = {
@@ -308,13 +308,14 @@ export default function SharedReportPage() {
     thoracic: {title:"الفقرات الصدرية (أعلى الظهر)", region:"T1–T12", detail:"توازن الأكتاف، تقوّس الأكتاف، رفع الأكتاف"},
     lumbar:   {title:"الفقرات القطنية (أسفل الظهر)", region:"L1–S1", detail:"ميل العمود، انحناء الجذع، دوران الجذع (الكاميرا بتشوف الجزء العلوي بس — الحوض مش متقاس)"},
   };
-  // `position_penalty` was not filtered out alongside session_fatigue and
-  // confidence_val, so an internal scoring deduction — value = penalty points,
-  // score = 100 - penalty — rendered on a clinical document as a full posture
-  // metric with a progress bar and a grade.
-  const INTERNAL = new Set(["session_fatigue", "confidence_val", "position_penalty"]);
+  // This used to be its own local Set (missing several diagnostic-only
+  // fields backend.py has since grown — see NON_POSTURAL_METRICS's doc
+  // comment in clinicalMetrics.js) that let a raw internal scoring
+  // deduction — value = penalty points, score = 100 - penalty — render on
+  // this public clinical document as a full posture metric with a
+  // progress bar and a grade.
   const metricEntries = Object.entries(metrics)
-    .filter(([k,v]) => v !== null && v !== undefined && !INTERNAL.has(k))
+    .filter(([k,v]) => v !== null && v !== undefined && !NON_POSTURAL_METRICS.has(k))
     .map(([k,v]) => ({
       k,
       // firebase.js already writes a resolved `label` into each metric snapshot;

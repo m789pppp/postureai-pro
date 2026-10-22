@@ -282,15 +282,43 @@ export function fmtMeasure(v, unit, isAr = false) {
 }
 
 /**
- * Metrics that are internal scoring adjustments, not postural findings. They
- * must never be rendered as a metric row or folded into a zone: `position_penalty`
- * is a deduction in points and `session_fatigue` is a scoring adjustment, both
- * with a `score` field that looks exactly like a real metric's.
+ * Metrics that are internal scoring adjustments or raw diagnostic readouts,
+ * not postural findings. They must never be rendered as a metric row or
+ * folded into a zone.
+ *
+ * `position_penalty` is a deduction in points and `session_fatigue` is a
+ * scoring adjustment, both with a `score` field that looks exactly like a
+ * real metric's. The rest carry no `score` field at all (backend.py's
+ * analyze_front() never put one on them) — a generic walk that defaults a
+ * missing score to 100 (every one of this file's four other callers used
+ * to, independently, before each was pointed at this shared set) turns
+ * them into fake "100, Low Priority" rows: `neck_source`/`head_pose_detail`/
+ * `shoulder_width_ratio` are pure diagnostic readouts (neck_source.value is
+ * literally the string "solvePnP+nose_blend"), `spine_upper`/`spine_mid`/
+ * `spine_lower` are the three raw segment angles `spine_lean` (a real,
+ * already-listed metric) is already a weighted composite of, `kyphosis_pen`
+ * is a correction term folded into spine_lean's value rather than a fault
+ * of its own, and `head_creep`'s own severity ("severe"/"mild") never gets
+ * read this way, so a genuinely severe forward-head-creep trend could print
+ * as "Low Priority" right next to the real posture metrics.
+ *
+ * This set used to be re-declared ad hoc in pdfReports.js, SharedReportPage.jsx,
+ * ui/index.jsx and App.jsx — each independently, each missing a different
+ * subset of these names, which is exactly how the bug above kept recurring.
+ * Every one of those now imports this one set instead of keeping its own.
  */
 export const NON_POSTURAL_METRICS = new Set([
   "session_fatigue",
   "position_penalty",
   "confidence_val",
+  "neck_source",
+  "head_pose_detail",
+  "shoulder_width_ratio",
+  "spine_upper",
+  "spine_mid",
+  "spine_lower",
+  "kyphosis_pen",
+  "head_creep",
 ]);
 
 /**

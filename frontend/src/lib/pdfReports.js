@@ -5,7 +5,7 @@
  */
 
 import { tierAtLeast } from "./tierQuality.js";
-import { ZONE_METRICS } from "./clinicalMetrics.js";
+import { ZONE_METRICS, NON_POSTURAL_METRICS } from "./clinicalMetrics.js";
 import { installArabicText } from "./arabicShaper.js";
 
 // ── Metric labels (used in PDF tables) ───────────────────────────
@@ -45,15 +45,16 @@ const METRIC_LABELS_AR = {
   session_fatigue:"تعديل الإجهاد", confidence_val:"دقة الكشف",
 };
 
-// session_fatigue and confidence_val are meta/diagnostic fields the engine
-// attaches to every metrics object — not real posture metrics with an
-// "ideal angle" to correct. Left un-excluded, they were being iterated
-// alongside neck_lean/head_tilt/etc in the per-session priority tables AND
-// in the cross-session longitudinal trend analysis, where confidence_val's
-// naturally lower value could surface as a bogus "recurring pattern" (e.g.
-// "Detection Confidence" listed as a top concern next to real posture
-// issues). Exclude both from any generic Object.entries(metrics) walk.
-const META_METRIC_KEYS = new Set(["session_fatigue", "confidence_val"]);
+// Meta/diagnostic fields the engine attaches to a metrics object that are
+// not real posture metrics with an "ideal angle" to correct — the `sc =
+// v?.score??100` fallback a few lines down turns any of these into a fake
+// "100, Low Priority" row if they aren't excluded first. This used to be a
+// locally-declared set (and three OTHER files each kept their own,
+// independently drifting, copy of the same concept) — see
+// NON_POSTURAL_METRICS's own doc comment in clinicalMetrics.js for the
+// full list and why each entry is there. Kept under its old local name so
+// the three `.has()` call sites below didn't all need touching too.
+const META_METRIC_KEYS = NON_POSTURAL_METRICS;
 
 
 // ── Elite-extras helpers (goal progress / exercise plan / snapshots) ──

@@ -11,7 +11,7 @@ if (typeof window !== 'undefined') {
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startTransition } from "react";
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
-import { decimate, sessionTrend } from "./lib/clinicalMetrics.js";
+import { decimate, sessionTrend, NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -5145,12 +5145,15 @@ export default function App(){
     })() : 0;
     const dur  = sessRef.current ? Math.floor((Date.now()-sessRef.current)/1000) : 0;
     const gPct = totalRef.current ? Math.round(goodRef.current/totalRef.current*100) : 0;
-    // session_fatigue/confidence_val are meta/diagnostic fields the engine
-    // attaches to every metrics object, not real posture metrics — without
-    // this exclusion they could get picked as the session's "top issue to
-    // fix" (e.g. "Detection Confidence — score 62/100"), which is
-    // meaningless and unfixable feedback to show right after a session.
-    const NON_POSTURAL_METRICS = new Set(["session_fatigue","confidence_val"]);
+    // Meta/diagnostic fields the engine attaches to every metrics object,
+    // not real posture metrics — without this exclusion they could get
+    // picked as the session's "top issue to fix" (e.g. "Detection
+    // Confidence — score 62/100"), which is meaningless and unfixable
+    // feedback to show right after a session. This used to be a locally
+    // re-declared Set here (shadowing the shared NON_POSTURAL_METRICS
+    // import above by name) missing "position_penalty" and several newer
+    // diagnostic-only fields — see that export's doc comment in
+    // clinicalMetrics.js.
     const _realMetricEntries = la.metrics ? Object.entries(la.metrics).filter(([k])=>!NON_POSTURAL_METRICS.has(k)) : [];
 
     const result={
