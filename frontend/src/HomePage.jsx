@@ -105,7 +105,8 @@ function Ring({ score = 0, size = 100, cs, showValue = true }) {
       {pct > 0 && (
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={6}
           strokeDasharray={`${(pct/100)*circ} ${circ}`} strokeLinecap="round"
-          style={{ transition:"stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)" }}/>
+          style={{ transition:"stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)",
+            filter:`drop-shadow(0 0 6px ${col}99)` }}/>
       )}
       {/* Callers that draw their own centered value pass showValue={false};
           otherwise two copies of the score render on the same center point. */}
@@ -128,7 +129,8 @@ function StatCard({ label, value, sub, color="#3b82f6", cs }) {
       <div style={{ fontSize:10, color:cs.muted, textTransform:"uppercase",
         letterSpacing:".07em", fontWeight:600, marginBottom:3 }}>{label}</div>
       <div style={{ fontSize:24, fontWeight:800, color, lineHeight:1,
-        fontFamily:"system-ui,-apple-system" }}>{value??"—"}</div>
+        fontFamily:"system-ui,-apple-system",
+        textShadow: value!=null&&value!=="—" ? `0 0 16px ${color}55` : "none" }}>{value??"—"}</div>
       {sub&&<div style={{ fontSize:11, color:cs.muted, marginTop:3 }}>{sub}</div>}
     </div>
   );
@@ -259,21 +261,28 @@ function WeekChart({ sessions, cs }) {
 // and draws it inside a soft disc; `icon` still works for any call site not
 // yet converted.
 function EmptyBlock({ icon, ico, tone="#3b82f6", title, desc, action, onAction, cs }) {
+  // Flat gray circle + two lines of text, repeated on every empty card in
+  // the app, read as "broken" rather than "not filled in yet" — a glowing
+  // gradient ring reads as a placeholder waiting for data instead.
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
       gap:12, padding:"48px 24px", textAlign:"center" }}>
       {ico ? (
-        <span style={{ width:56, height:56, borderRadius:"50%", background:`${tone}1f`,
+        <span style={{ width:64, height:64, borderRadius:"50%",
+          background:`radial-gradient(circle at 35% 30%, ${tone}33, ${tone}0d 70%)`,
+          border:`1px solid ${tone}40`,
+          boxShadow:`0 0 28px -6px ${tone}66, inset 0 0 14px -4px ${tone}40`,
           display:"inline-flex", alignItems:"center", justifyContent:"center" }}>
-          <NavIcon name={ico} size={26} color={tone}/>
+          <NavIcon name={ico} size={28} color={tone}/>
         </span>
       ) : <span style={{ fontSize:42 }}>{icon}</span>}
       <div style={{ fontSize:16, fontWeight:700, color:cs.text }}>{title}</div>
       <div style={{ fontSize:13, color:cs.muted, maxWidth:320, lineHeight:1.6 }}>{desc}</div>
       {action&&onAction&&(
         <button onClick={onAction} style={{ marginTop:8, padding:"9px 20px",
-          background:"#3b82f6", color:"#fff", border:"none", borderRadius:8,
-          fontSize:13, fontWeight:600, cursor:"pointer" }}>{action}</button>
+          background:`linear-gradient(135deg, ${tone}, ${tone}cc)`, color:"#fff", border:"none", borderRadius:8,
+          fontSize:13, fontWeight:600, cursor:"pointer",
+          boxShadow:`0 4px 16px -4px ${tone}80` }}>{action}</button>
       )}
     </div>
   );
@@ -741,26 +750,52 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
         </div>
       )}
 
-      {/* Calibrate — always visible quick action */}
-      <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12,
-        padding:"16px 18px", display:"flex", alignItems:"center", gap:16 }}>
-        <div style={{ width:46, height:46, borderRadius:10, flexShrink:0,
-          background:"rgba(16,185,129,.12)", display:"flex", alignItems:"center",
-          justifyContent:"center" }}><NavIcon name="target" size={22} color="#10b981"/></div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
-            {isAr?"معايرة الكاميرا":"Camera Calibration"}
+      {/* Calibrate + Certificate — two quick-action cards side by side on
+          wider screens instead of two full-width rows stacked on top of
+          each other; collapses back to one column automatically below
+          ~560px per card via auto-fit, same pattern as the stat tiles above. */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
+        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12,
+          padding:"16px 18px", display:"flex", alignItems:"center", gap:16 }}>
+          <div style={{ width:46, height:46, borderRadius:10, flexShrink:0,
+            background:"rgba(16,185,129,.12)", display:"flex", alignItems:"center",
+            justifyContent:"center" }}><NavIcon name="target" size={22} color="#10b981"/></div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
+              {isAr?"معايرة الكاميرا":"Camera Calibration"}
+            </div>
+            <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
+              {isAr?"اضبط موضع الكاميرا للحصول على دقة أعلى":"Align your camera for accurate posture tracking"}
+            </div>
           </div>
-          <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
-            {isAr?"اضبط موضع الكاميرا للحصول على دقة أعلى":"Align your camera for accurate posture tracking"}
-          </div>
+          <button onClick={()=>setShowCalibWizard(true)}
+            style={{ padding:"8px 16px", background:"rgba(16,185,129,.15)",
+              border:"1px solid rgba(16,185,129,.3)", borderRadius:8,
+              color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
+            {isAr?"ابدأ المعايرة":"Calibrate"}
+          </button>
         </div>
-        <button onClick={()=>setShowCalibWizard(true)}
-          style={{ padding:"8px 16px", background:"rgba(16,185,129,.15)",
-            border:"1px solid rgba(16,185,129,.3)", borderRadius:8,
-            color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-          {isAr?"ابدأ المعايرة":"Calibrate"}
-        </button>
+
+        <div style={{ background:cs.card, border:profile?.has_cert?"1px solid rgba(245,158,11,.3)":"1px dashed rgba(245,158,11,.25)",
+          borderRadius:14, padding:"16px 18px", display:"flex", alignItems:"center", gap:14 }}>
+          <span style={{fontSize:26}}>🏅</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
+              {isAr?"شهادة إرجونوميكس Corvus":"Corvus Ergonomist Certificate"}
+            </div>
+            <div style={{fontSize:11,color:cs.muted,marginTop:2}}>
+              {profile?.has_cert
+                ?(isAr?"✅ شهادتك صالحة · "+profile.cert_id:"✅ Valid · "+profile.cert_id)
+                :(isAr?"أثبت بيئة عملك الصحية على LinkedIn · ١٥٠ جنيه مرة واحدة":"Prove healthy workspace on LinkedIn · 150 EGP one-time")}
+            </div>
+          </div>
+          <button onClick={()=>setShowCertModal?.(true)}
+            style={{padding:"8px 16px",background:"linear-gradient(135deg,#f59e0b,#d97706)",
+              border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:700,
+              cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
+            {profile?.has_cert?(isAr?"تحميل":"Download"):(isAr?"احصل عليها":"Get Badge")}
+          </button>
+        </div>
       </div>
 
       {/* Analytics section — inline rich view */}
@@ -773,29 +808,10 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
 
       {/* Basic Plan extras — streak freeze, habit score, WhatsApp reminder
           (daily check-in / weekly challenge / pain prediction render
-          elsewhere on this page as the AI-backed, server-verified versions) */}
-      {/* Corvus Certificate Badge card */}
-      <div style={{ background:cs.card, border:profile?.has_cert?"1px solid rgba(245,158,11,.3)":"1px dashed rgba(245,158,11,.25)",
-        borderRadius:14, padding:"16px 20px", display:"flex", alignItems:"center", gap:14 }}>
-        <span style={{fontSize:26}}>🏅</span>
-        <div style={{flex:1}}>
-          <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
-            {isAr?"شهادة إرجونوميكس Corvus":"Corvus Ergonomist Certificate"}
-          </div>
-          <div style={{fontSize:11,color:cs.muted,marginTop:2}}>
-            {profile?.has_cert
-              ?(isAr?"✅ شهادتك صالحة · "+profile.cert_id:"✅ Valid · "+profile.cert_id)
-              :(isAr?"أثبت بيئة عملك الصحية على LinkedIn · ١٥٠ جنيه مرة واحدة":"Prove healthy workspace on LinkedIn · 150 EGP one-time")}
-          </div>
-        </div>
-        <button onClick={()=>setShowCertModal?.(true)}
-          style={{padding:"8px 16px",background:"linear-gradient(135deg,#f59e0b,#d97706)",
-            border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:700,
-            cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-          {profile?.has_cert?(isAr?"تحميل":"Download"):(isAr?"احصل عليها":"Get Badge")}
-        </button>
-      </div>
-
+          elsewhere on this page as the AI-backed, server-verified versions).
+          The Certificate card used to repeat here as a second full-width
+          row right after the Calibrate+Certificate grid above — same card,
+          rendered twice. */}
       <BasicDashboard
         profile={profile}
         userSessions={userSessions}
@@ -3247,6 +3263,13 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
   setShowCalibWizard, setShowDashboard, setShowNotificationsHub,
 }) {
   const unreadNotifCount = useUnreadNotificationsCount(profile?.uid || user?.uid);
+  // Coming-Soon labels were scattered one-off across WhatsApp Reminder,
+  // Find a Physiotherapist, and Company signup, each styled slightly
+  // differently depending on which developer touched it last. One roadmap
+  // view, reachable from the sidebar, gives a visitor (or an investor) a
+  // single place to see "what's not live yet and why" instead of
+  // stumbling into disabled features one at a time.
+  const [showRoadmap, setShowRoadmap] = useState(false);
   const nav = (()=>{
     if(userRole==="hr_admin"||userRole==="platform_admin") return [
       { id:"home",      icon:"⊞", ico:"grid",  en:"Overview",   ar:"النظرة العامة" },
@@ -3348,6 +3371,8 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       items: [
         { id:"t-marketplace", icon:"🩺", ico:"stethoscope", en:"Find a Physiotherapist", ar:"أخصائيو العلاج الطبيعي",
           onClick:()=>setPage("marketplace") },
+        { id:"t-roadmap", icon:"🗺️", en:"What's Coming", ar:"قريباً على Corvus",
+          onClick:()=>setShowRoadmap(true) },
       ],
     },
     ...(isAdmin ? [{
@@ -3369,12 +3394,12 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
 
   const [hov, setHov] = useState(null);
 
-  return (
-    // Was hardcoded to always-dark background + a fixed `left:0`. The inner
-    // nav items/dividers/hover states already read from `cs`/`isAr` (see
-    // below) — only this outer shell was left behind when the rest of the
-    // file's light-mode/RTL passes landed, so the persistent nav rail
-    // stayed pinned black-and-left-edge even in light mode / Arabic.
+  return (<>
+    {/* Was hardcoded to always-dark background + a fixed `left:0`. The inner
+        nav items/dividers/hover states already read from `cs`/`isAr` (see
+        below) — only this outer shell was left behind when the rest of the
+        file's light-mode/RTL passes landed, so the persistent nav rail
+        stayed pinned black-and-left-edge even in light mode / Arabic. */}
     <aside style={{ width:236, flexShrink:0, height:"100dvh", position:"fixed", top:0,
       left:isAr?"auto":0, right:isAr?0:"auto",
       background:cs.card, borderRight:isAr?"none":`1px solid ${cs.border}`,
@@ -3544,6 +3569,68 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         </button>
       </div>
     </aside>
+    {showRoadmap && createPortal(
+      <RoadmapModal isAr={isAr} cs={cs} onClose={()=>setShowRoadmap(false)} />,
+    document.body)}
+    </>
+  );
+}
+
+function RoadmapModal({ isAr, cs, onClose }) {
+  const items = [
+    { icon:"📱", en:"WhatsApp session reminders", ar:"تذكيرات الجلسة عبر واتساب",
+      enDesc:"Automatic daily reminders to start your session — focusing on the physiotherapy side first.",
+      arDesc:"تذكير يومي تلقائي لبدء جلستك — بنركّز الأول على جانب العلاج الطبيعي." },
+    { icon:"🩺", en:"Physiotherapist booking", ar:"حجز أخصائي علاج طبيعي",
+      enDesc:"Real, secure booking with certified physiotherapy clinics we're partnering with.",
+      arDesc:"حجز حقيقي وآمن مع عيادات علاج طبيعي معتمدة بنتعاون معاها." },
+    { icon:"👔", en:"Self-serve company signup", ar:"تسجيل شركتك بنفسك",
+      enDesc:"Spin up your own company workspace instantly. For now, contact us and we'll set it up for you.",
+      arDesc:"أنشئ مساحة شركتك فوراً بنفسك. لحد دلوقتي، كلّمنا وهنظبطهالك." },
+    { icon:"🎓", en:"Corvus for Education", ar:"Corvus للمؤسسات التعليمية",
+      enDesc:"Posture programs for schools and universities. Book a demo to talk to us directly.",
+      arDesc:"برامج وضعية للمدارس والجامعات. احجز عرض للتواصل معانا مباشرة." },
+  ];
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)",
+      display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:20 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:cs.card, border:`1px solid ${cs.border}`,
+        borderRadius:16, maxWidth:480, width:"100%", maxHeight:"85vh", overflowY:"auto", padding:"24px 22px" }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+          <div style={{ fontSize:18, fontWeight:800, color:cs.text, display:"flex", alignItems:"center", gap:8 }}>
+            🗺️ {isAr?"قريباً على Corvus":"What's Coming to Corvus"}
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:cs.muted,
+            fontSize:18, cursor:"pointer", padding:4 }}>✕</button>
+        </div>
+        <div style={{ fontSize:12.5, color:cs.muted, marginBottom:18, lineHeight:1.6 }}>
+          {isAr
+            ? "هذه الميزات جاهزة من ناحية المنتج، وبنفعّلها على مراحل. كل حاجة فيها بديل تقدر تستخدمه دلوقتي."
+            : "These are built and on the way — we're rolling them out in stages. Every one has a way to reach us right now instead."}
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {items.map((it,i)=>(
+            <div key={i} style={{ display:"flex", gap:12, padding:"12px 14px",
+              background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:12 }}>
+              <span style={{ fontSize:22, flexShrink:0 }}>{it.icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                  <span style={{ fontSize:13, fontWeight:700, color:cs.text }}>{isAr?it.ar:it.en}</span>
+                  <span style={{ fontSize:9, fontWeight:800, padding:"2px 7px", borderRadius:99,
+                    background:"rgba(217,119,6,.15)", border:"1px solid rgba(217,119,6,.35)",
+                    color:"#d97706", letterSpacing:".03em", whiteSpace:"nowrap" }}>
+                    {isAr?"قريباً":"COMING SOON"}
+                  </span>
+                </div>
+                <div style={{ fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
+                  {isAr?it.arDesc:it.enDesc}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
