@@ -303,7 +303,18 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("[Kashier Webhook] Error:", err);
-    // Always 200 so Kashier doesn't retry indefinitely
-    return res.status(200).json({ received: true, error: err.message });
+    // Every expected "nothing to do" case above (bad JSON, unparseable
+    // orderId, no matching user, already-processed transaction) already
+    // returns its own 200 well before this catch. Reaching here means an
+    // UNEXPECTED exception interrupted actual payment processing (e.g. a
+    // transient Firestore write failure) — this used to return 200
+    // anyway "so Kashier doesn't retry indefinitely", which meant a real
+    // charge could silently never activate the subscription, with no
+    // retry and nothing but a buried Vercel log to show it happened. The
+    // idempotency check above (last_transaction_id) now makes a retry of
+    // the SAME transaction safe — it was added after this 200-always
+    // behavior was written — so a genuine mid-processing failure should
+    // get a 5xx and let Kashier retry instead of being swallowed.
+    return res.status(500).json({ received: false, error: err.message });
   }
 }

@@ -14774,10 +14774,16 @@ def coach_chat():
         _month_key  = f"usage:{_uid_coach}:ai_coach:{datetime.utcnow().strftime('%Y-%m')}"
         _limit = _quality_coach["monthly_limit"]
         if _limit > 0:
+            # Was a one-off redis.from_url(..., "redis://localhost:6379/0")
+            # instead of this file's own rget() helper. Without REDIS_URL set
+            # (this deployment's actual configuration — see
+            # ALLOW_INMEMORY_RATELIMIT), that connection always failed and
+            # was caught here as `_used = 0` — meaning the monthly AI Coach
+            # quota below NEVER triggered for any tier, regardless of how
+            # many messages someone actually sent. rget() has its own
+            # in-memory fallback, so the quota is now actually enforced.
             try:
-                import redis as _rc_coach
-                _rc = _rc_coach.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_timeout=1)
-                _used = int(_rc.get(_month_key) or 0)
+                _used = int(rget(_month_key) or 0)
             except Exception:
                 _used = 0
             if _used >= _limit:
@@ -14952,11 +14958,13 @@ CONVERSATION STYLE:
         _uid = getattr(g, "uid", "unknown")
         audit(_uid, "ai_coach_query", "local:" + LOCAL_LLM_MODEL if OLLAMA_URL else "none", {"lang": lang, "turns": len(gemini_contents)})
         try:
-            import redis as _r2
-            _rc2 = _r2.from_url(os.getenv("REDIS_URL","redis://localhost:6379/0"))
+            # Same fix as the quota check above this function used — rincr()
+            # has the in-memory fallback this ad-hoc redis.from_url(...,
+            # "redis://localhost:6379/0") never did, so the counter the
+            # check above actually reads now really increments.
             _month2 = datetime.utcnow().strftime("%Y-%m")
             _k2 = f"usage:{_uid}:ai_coach:{_month2}"
-            _rc2.incr(_k2); _rc2.expire(_k2, 86400 * 35)
+            rincr(_k2, ttl_s=86400 * 35)
         except Exception: pass
         return jsonify({"text": text, "ok": True})
     except req.exceptions.Timeout:
@@ -15017,10 +15025,11 @@ def coach_daily_checkin():
         _month_key = f"usage:{uid}:ai_coach:{datetime.utcnow().strftime('%Y-%m')}"
         _used = 0
         if _limit > 0:
+            # Same fix as the free-form AI Coach chat quota check — rget()
+            # has the in-memory fallback the old ad-hoc
+            # redis.from_url(..., "redis://localhost:6379/0") never did.
             try:
-                import redis as _rc_ci
-                _rc = _rc_ci.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_timeout=1)
-                _used = int(_rc.get(_month_key) or 0)
+                _used = int(rget(_month_key) or 0)
             except Exception:
                 _used = 0
             if _used >= _limit:
@@ -15140,9 +15149,11 @@ piece of data you have; don't waste it on a generic question when it's available
             print(f"[daily_checkin] failed to bump checkin_streak uid={uid}: {e}", file=sys.stderr)
 
         try:
-            import redis as _rc_ci2
-            _rc2 = _rc_ci2.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-            _rc2.incr(_month_key); _rc2.expire(_month_key, 86400 * 35)
+            # Same fix as the free-form AI Coach chat increment — rincr() has
+            # the in-memory fallback the old ad-hoc redis.from_url(...,
+            # "redis://localhost:6379/0") never did, so the counter the
+            # quota check above actually reads now really increments.
+            rincr(_month_key, ttl_s=86400 * 35)
         except Exception:
             pass
 
@@ -17791,13 +17802,20 @@ def billing_usage_increment():
             "ai_coach": [(f"usage:{uid}:ai_coach:{month}", 86400 * 35)],
             "pdf":      [(f"usage:{uid}:pdf:{month}", 86400 * 35)],
         }
+        # Was a one-off `redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))`
+        # instead of this file's own rincr() helper (already used for this exact
+        # usage:{uid}:sessions:* key elsewhere in this file). Without REDIS_URL set
+        # — the deployment's actual, intended configuration, see
+        # ALLOW_INMEMORY_RATELIMIT — that connected to a nonexistent localhost
+        # Redis, threw, and was swallowed by the bare except, so the counter
+        # never incremented while this endpoint still answered {"ok": true}.
+        # rincr() has its own in-memory fallback and is what every other usage
+        # counter in this file already goes through.
         for key, ttl in keys.get(metric, []):
             try:
-                import redis as _redis_mod
-                r = _redis_mod.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-                r.incr(key)
-                r.expire(key, ttl)
-            except: pass
+                rincr(key, ttl_s=ttl)
+            except Exception as _e:
+                print(f"⚠️  usage increment failed for {key}: {_e}")
         return jsonify({"ok": True, "metric": metric})
     except Exception as e:
         return safe_error(e)
