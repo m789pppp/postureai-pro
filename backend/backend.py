@@ -308,7 +308,32 @@ def safe_error(e, msg="Internal server error", status=500):
             return _j({"error": msg}), status
         from flask import jsonify as _j
         return _j({"error": str(e), "trace": traceback.format_exc()}), status
-def register_error_handlers(app): pass
+def register_error_handlers(app):
+    # Same shadowing situation as safe_error above — this local def wins
+    # over the one imported from middleware.errors further up, but unlike
+    # safe_error this one was left as a bare `pass` instead of being made
+    # to match. Net effect: Flask's own default HTML error pages were
+    # served for 404/405/429/500 instead of the JSON this API's callers
+    # expect — a frontend fetch() hitting a typo'd route, a rate limit, or
+    # an unhandled crash got back `<!doctype html>...` and `res.json()`
+    # threw a SyntaxError instead of surfacing a clean error message.
+    # 429 in particular is live, active traffic: every @limiter.limit(...)
+    # route in this file can trip it.
+    from flask import jsonify as _j
+    @app.errorhandler(404)
+    def _not_found(e):
+        return _j({"error": "Endpoint not found", "status": 404}), 404
+    @app.errorhandler(405)
+    def _method_not_allowed(e):
+        return _j({"error": "Method not allowed", "status": 405}), 405
+    @app.errorhandler(429)
+    def _rate_limited(e):
+        return _j({"error": "Rate limit exceeded — please slow down", "status": 429}), 429
+    @app.errorhandler(500)
+    def _internal_error(e):
+        import traceback, sys
+        print(f"[500] Unhandled: {e}\n{traceback.format_exc()}", file=sys.stderr)
+        return _j({"error": "Internal server error", "status": 500}), 500
 
 
 # ── Firebase Firestore (lazy import) ─────────────────────────────
