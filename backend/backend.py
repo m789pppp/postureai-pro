@@ -8976,17 +8976,16 @@ def export_sessions():
         days   = min(90, max(1, int(request.args.get("days", 30))))
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        # Fetch sessions from Firestore
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", cutoff)
-                  .order_by("created_at", direction="DESCENDING")
-                  .limit(500)
-                  .stream())
+        # Fetch sessions from Firestore. Was a raw query needing a
+        # composite index (uid + created_at) that was never deployed —
+        # confirmed via a live FAILED_PRECONDITION crash on this same
+        # pattern elsewhere in this file. uid_range_docs() is this file's
+        # own established safe equivalent: degrades gracefully instead of
+        # 500ing when the index is missing.
+        docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500, desc=True)
 
         rows = []
-        for doc in docs:
-            d = doc.to_dict()
+        for d in docs:
             rows.append({
                 "date":         d.get("created_at", "").isoformat()[:10] if hasattr(d.get("created_at",""), "isoformat") else str(d.get("created_at",""))[:10],
                 "avg_score":    d.get("avg_score", ""),
@@ -9104,12 +9103,7 @@ def export_sessions_summary():
         uid  = getattr(g, "uid", "")
         days = min(90, max(1, int(request.args.get("days", 30))))
         cutoff = datetime.utcnow() - timedelta(days=days)
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", cutoff)
-                  .order_by("created_at", direction="DESCENDING")
-                  .limit(500).stream())
-        rows   = [d.to_dict() for d in docs]
+        rows   = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500, desc=True)
         scores = [r.get("avg_score") for r in rows if isinstance(r.get("avg_score"), (int,float))]
         return jsonify({
             "sessions":    len(rows),
@@ -9143,12 +9137,7 @@ def compare_sessions():
         lang = data.get("lang", "en")
 
         # Fetch last 2 sessions from Firestore
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .order_by("created_at", direction="DESCENDING")
-                  .limit(2)
-                  .stream())
-        sessions_list = [d.to_dict() for d in docs]
+        sessions_list = uid_range_docs("sessions", uid, "created_at", limit=2, desc=True)
 
         if len(sessions_list) < 2:
             return jsonify({"error": "Need at least 2 sessions to compare", "sessions_found": len(sessions_list)}), 400
@@ -9368,14 +9357,10 @@ def analytics_time_of_day():
         days = min(90, max(7, int(data.get("days", 30))))
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", cutoff)
-                  .limit(500).stream())
+        docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500)
 
         hour_buckets: dict = {}   # {hour: [scores]}
-        for doc in docs:
-            d = doc.to_dict()
+        for d in docs:
             sc = d.get("avg_score")
             ts = d.get("created_at")
             if not sc or not ts: continue
@@ -9432,14 +9417,10 @@ def analytics_anomaly():
         days   = min(90, max(7, int(data.get("days", 30))))
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", cutoff)
-                  .order_by("created_at").limit(500).stream())
+        docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500)
 
         daily: dict = {}
-        for doc in docs:
-            d = doc.to_dict()
+        for d in docs:
             sc = d.get("avg_score"); ts = d.get("created_at")
             if not sc or not ts: continue
             try:
@@ -9493,13 +9474,7 @@ def weekly_report():
         week_end = now - timedelta(days=now.weekday() + 7 * week_offset)
         week_start = week_end - timedelta(days=7)
 
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", week_start)
-                  .where("created_at", "<",  week_end)
-                  .order_by("created_at").limit(500).stream())
-
-        sessions_data = [d.to_dict() for d in docs]
+        sessions_data = uid_range_docs("sessions", uid, "created_at", start=week_start, end=week_end, limit=500)
         scores = [s.get("avg_score") for s in sessions_data if isinstance(s.get("avg_score"), (int,float))]
 
         if not scores:
@@ -9606,16 +9581,11 @@ def get_streak():
                 return jsonify({**_j.loads(cached), "cached": True})
 
         cutoff = datetime.utcnow() - timedelta(days=60)
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", cutoff)
-                  .order_by("created_at", direction="DESCENDING")
-                  .limit(200).stream())
+        docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=200, desc=True)
 
         # Build day → best_score map
         day_scores: dict = {}
-        for doc in docs:
-            d = doc.to_dict()
+        for d in docs:
             sc = d.get("avg_score"); ts = d.get("created_at")
             if not sc or not ts: continue
             try:
@@ -9716,14 +9686,9 @@ def check_streak():
 
         # Simple recalculation inline
         cutoff = datetime.utcnow() - timedelta(days=60)
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .where("created_at", ">=", cutoff)
-                  .order_by("created_at", direction="DESCENDING")
-                  .limit(200).stream())
+        docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=200, desc=True)
         day_scores: dict = {}
-        for doc in docs:
-            d = doc.to_dict()
+        for d in docs:
             sc = d.get("avg_score"); ts = d.get("created_at")
             if not sc or not ts: continue
             try:
@@ -9846,12 +9811,7 @@ def goals_progress():
 
         # Fetch recent sessions for progress calculation
         cutoff = datetime.utcnow() - timedelta(days=90)
-        sess_docs = (db.collection("sessions")
-                       .where("uid","==",uid)
-                       .where("created_at",">=",cutoff)
-                       .order_by("created_at",direction="DESCENDING")
-                       .limit(500).stream())
-        sessions_list = [d.to_dict() for d in sess_docs]
+        sessions_list = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500, desc=True)
         scores   = [s.get("avg_score",0) for s in sessions_list if s.get("avg_score")]
         best_sc  = max(scores) if scores else 0
         n_sess   = len(sessions_list)
@@ -10187,13 +10147,10 @@ def _compute_preferred_hour(uid):
     from their last 30 sessions. Falls back to 19:00 (7pm) with too little
     data to be meaningful — matches the old fixed-time behavior."""
     try:
-        docs = (db.collection("sessions")
-                  .where("uid", "==", uid)
-                  .order_by("created_at", direction="DESCENDING")
-                  .limit(30).stream())
+        docs = uid_range_docs("sessions", uid, "created_at", limit=30, desc=True)
         hours = []
         for d in docs:
-            ts = d.to_dict().get("created_at")
+            ts = d.get("created_at")
             if ts and hasattr(ts, "hour"):
                 hours.append(ts.hour)
         if len(hours) < 5:
@@ -10314,25 +10271,19 @@ def push_streak_reminder():
                     continue
 
             # Check if user already had a session today
-            today_sessions = (db.collection("sessions")
-                                .where("uid", "==", uid)
-                                .where("created_at", ">=", datetime.utcnow().replace(hour=0,minute=0,second=0))
-                                .limit(1).stream())
-            had_session_today = any(True for _ in today_sessions)
+            had_session_today = bool(uid_range_docs(
+                "sessions", uid, "created_at",
+                start=datetime.utcnow().replace(hour=0,minute=0,second=0), limit=1))
             if had_session_today:
                 reminders_skipped += 1
                 continue
 
             # Check current streak
             cutoff = datetime.utcnow() - timedelta(days=35)
-            sess_docs = (db.collection("sessions")
-                           .where("uid", "==", uid)
-                           .where("created_at", ">=", cutoff)
-                           .order_by("created_at", direction="DESCENDING")
-                           .limit(50).stream())
+            sess_docs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=50, desc=True)
             day_scores: dict = {}
-            for sd in sess_docs:
-                d = sd.to_dict(); sc = d.get("avg_score"); ts = d.get("created_at")
+            for d in sess_docs:
+                sc = d.get("avg_score"); ts = d.get("created_at")
                 if not sc or not ts: continue
                 try:
                     day = ts.strftime("%Y-%m-%d") if hasattr(ts,"strftime") else str(ts)[:10]
@@ -10725,11 +10676,23 @@ def company_dashboard():
         all_sessions = []
         for i in range(0, len(emp_uids), 10):
             batch = emp_uids[i:i+10]
-            docs  = (db.collection("sessions")
-                       .where("uid", "in", batch)
-                       .where("created_at", ">=", cutoff)
-                       .limit(2000).stream())
-            all_sessions.extend([d.to_dict() for d in docs])
+            # "in" + range needs its own composite index (uid IN + created_at),
+            # separate from the single-uid one uid_range_docs() covers — same
+            # missing-index risk confirmed live elsewhere in this file, so
+            # same graceful-degrade-instead-of-500 treatment here.
+            try:
+                docs = (db.collection("sessions")
+                          .where("uid", "in", batch)
+                          .where("created_at", ">=", cutoff)
+                          .limit(2000).stream())
+                all_sessions.extend([d.to_dict() for d in docs])
+            except Exception as e:
+                if not _is_missing_index_error(e):
+                    raise
+                print(f"[firestore] MISSING COMPOSITE INDEX for sessions(uid IN, created_at). "
+                      f"Serving from the un-indexed fallback. {e}", file=sys.stderr)
+                unindexed = (db.collection("sessions").where("uid", "in", batch).limit(5000).stream())
+                all_sessions.extend([d.to_dict() for d in unindexed if d.to_dict().get("created_at") and d.to_dict().get("created_at") >= cutoff])
 
         # ── Per-employee aggregation ───────────────────────────────
         emp_stats: dict = {uid: {
@@ -10945,11 +10908,8 @@ def company_alert_employees():
                 cutoff = datetime.utcnow() - timedelta(days=7)
                 uids   = []
                 for uid in all_uids:
-                    sess = (db.collection("sessions")
-                              .where("uid","==",uid)
-                              .where("created_at",">=",cutoff)
-                              .limit(20).stream())
-                    scores = [s.to_dict().get("avg_score",0) for s in sess]
+                    sess = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=20)
+                    scores = [s.get("avg_score",0) for s in sess]
                     if scores and sum(scores)/len(scores) < 55:
                         uids.append(uid)
             else:
@@ -10992,11 +10952,19 @@ def company_stats():
         all_sessions = []
         for i in range(0, len(emp_uids), 10):
             batch = emp_uids[i:i+10]
-            docs  = (db.collection("sessions")
-                       .where("uid","in",batch)
-                       .where("created_at",">=",cutoff)
-                       .limit(2000).stream())
-            all_sessions.extend([d.to_dict() for d in docs])
+            try:
+                docs = (db.collection("sessions")
+                          .where("uid","in",batch)
+                          .where("created_at",">=",cutoff)
+                          .limit(2000).stream())
+                all_sessions.extend([d.to_dict() for d in docs])
+            except Exception as e:
+                if not _is_missing_index_error(e):
+                    raise
+                print(f"[firestore] MISSING COMPOSITE INDEX for sessions(uid IN, created_at). "
+                      f"Serving from the un-indexed fallback. {e}", file=sys.stderr)
+                unindexed = (db.collection("sessions").where("uid","in",batch).limit(5000).stream())
+                all_sessions.extend([d.to_dict() for d in unindexed if d.to_dict().get("created_at") and d.to_dict().get("created_at") >= cutoff])
 
         scores     = [s.get("avg_score") for s in all_sessions if isinstance(s.get("avg_score"),(int,float))]
         avg        = round(sum(scores)/len(scores),1) if scores else None
@@ -11364,12 +11332,7 @@ def score_history():
         days        = {"7d":7,"30d":30,"90d":90}.get(period, 30)
         cutoff      = datetime.utcnow() - timedelta(days=days)
 
-        docs = (db.collection("sessions")
-                  .where("uid","==",uid)
-                  .where("created_at",">=",cutoff)
-                  .order_by("created_at").limit(500).stream())
-
-        sessions_list = [d.to_dict() for d in docs]
+        sessions_list = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500)
         if not sessions_list:
             return jsonify({"ok":True,"points":[],"summary":{}})
 
@@ -11448,12 +11411,7 @@ def personal_records():
     try:
         uid    = getattr(g, "uid", "")
         cutoff = datetime.utcnow() - timedelta(days=365)
-        docs   = (db.collection("sessions")
-                    .where("uid","==",uid)
-                    .where("created_at",">=",cutoff)
-                    .order_by("created_at",direction="DESCENDING")
-                    .limit(500).stream())
-        sessions_list = [d.to_dict() for d in docs]
+        sessions_list = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500, desc=True)
         if not sessions_list:
             return jsonify({"ok":True,"records":{},"message":"Complete your first session to unlock records!"})
 
@@ -11733,11 +11691,7 @@ def send_weekly_report_card():
 
                 # Get last 7 days sessions
                 cutoff = datetime.utcnow()-timedelta(days=7)
-                sdocs  = (db.collection("sessions")
-                            .where("uid","==",uid)
-                            .where("created_at",">=",cutoff)
-                            .limit(50).stream())
-                sl = [d.to_dict() for d in sdocs]
+                sl = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=50)
                 scores = [s.get("avg_score") for s in sl if s.get("avg_score")]
                 if not scores: continue
 
@@ -11748,12 +11702,8 @@ def send_weekly_report_card():
                     # Prior week's average, for the one-line comparison only.
                     prev_cutoff = datetime.utcnow()-timedelta(days=14)
                     try:
-                        pdocs = (db.collection("sessions")
-                                   .where("uid","==",uid)
-                                   .where("created_at",">=",prev_cutoff)
-                                   .where("created_at","<",cutoff)
-                                   .limit(50).stream())
-                        pscores = [d.to_dict().get("avg_score") for d in pdocs if d.to_dict().get("avg_score")]
+                        pdocs = uid_range_docs("sessions", uid, "created_at", start=prev_cutoff, end=cutoff, limit=50)
+                        pscores = [d.get("avg_score") for d in pdocs if d.get("avg_score")]
                     except Exception:
                         pscores = []
                     prev_avg = round(sum(pscores)/len(pscores),1) if pscores else None
@@ -16369,19 +16319,26 @@ def stress_correlation():
         days = min(90, max(7, int(request.args.get("days", 30))))
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        slogs = (db.collection("stress_logs")
-                   .where("uid", "==", uid)
-                   .where("updated_at", ">=", cutoff)
-                   .limit(200).stream())
-        stress_by_day = {d.to_dict().get("date"): d.to_dict().get("level") for d in slogs}
+        # Was two raw db.collection(...).where(...).where(...).stream() calls,
+        # with no fallback if the composite index they need (uid + the range
+        # field) isn't deployed — and it wasn't: this endpoint 500'd outright
+        # for every professional/elite user (trial or paid) who opened it,
+        # confirmed live via FAILED_PRECONDITION "The query requires an
+        # index" for both stress_logs(uid,updated_at) and
+        # sessions(uid,created_at). uid_range_docs() is this file's own
+        # established pattern for exactly this shape of query — it already
+        # degrades gracefully (slower, filtered in-memory) when the index is
+        # missing instead of crashing, and is what every symptom_logs read in
+        # this file already goes through. Switching both queries here to it
+        # fixes the crash regardless of whether those two indexes ever get
+        # deployed, and logs the missing-index link once if they're still
+        # absent rather than taking the feature down.
+        slogs = uid_range_docs("stress_logs", uid, "updated_at", start=cutoff, limit=200)
+        stress_by_day = {s.get("date"): s.get("level") for s in slogs}
 
-        sdocs = (db.collection("sessions")
-                   .where("uid", "==", uid)
-                   .where("created_at", ">=", cutoff)
-                   .limit(500).stream())
+        sdocs = uid_range_docs("sessions", uid, "created_at", start=cutoff, limit=500)
         score_by_day: dict = {}
-        for d in sdocs:
-            sd = d.to_dict()
+        for sd in sdocs:
             ts, sc = sd.get("created_at"), sd.get("avg_score")
             if not ts or not sc: continue
             try:
