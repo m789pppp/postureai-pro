@@ -3079,13 +3079,24 @@ export default function App(){
     setShowHealthConsent(false);
     if(user?.uid){
       // setDoc with merge so granting camera consent never clobbers a terms
-      // record written elsewhere.
-      setDoc(doc(db,...consentDocPath(user.uid)),{
-        uid: user.uid,
-        camera: makeConsentGrant(CAMERA_VERSION),
-        updated_at: new Date().toISOString(),
-      },{merge:true}).catch(e=>console.warn("consent record write failed",e?.code));
-      updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}).catch(()=>{});
+      // record written elsewhere. Not awaited — the camera starts right
+      // away regardless — but a failure here means the per-account consent
+      // record never lands, so the next session's read in the effect above
+      // finds nothing and silently re-prompts this exact modal again with
+      // no explanation why it's back.
+      Promise.allSettled([
+        setDoc(doc(db,...consentDocPath(user.uid)),{
+          uid: user.uid,
+          camera: makeConsentGrant(CAMERA_VERSION),
+          updated_at: new Date().toISOString(),
+        },{merge:true}),
+        updateDoc(doc(db,"users",user.uid),{healthDisclaimerAcceptedAt:new Date().toISOString()}),
+      ]).then(([a,b])=>{
+        if(a.status==="rejected"||b.status==="rejected"){
+          console.warn("consent record write failed",a.reason?.code,b.reason?.code);
+          addToast(isAr?"⚠️ حفظ الموافقة فشل — ممكن تُسأل تاني المرة الجاية":"⚠️ Consent didn't save — you may be asked again next time","warn");
+        }
+      });
     }
     startCamera();
   }
@@ -3217,7 +3228,15 @@ export default function App(){
           is_org_owner: onboardProfile?.acct_type === "company",
           company: onboardProfile?.company || p?.company || "",
         }):p);
-      }).catch(()=>{});
+      }).catch((e)=>{
+        // Was a bare catch(()=>{}) — the wizard still closed to "home" below
+        // regardless, so a failed write meant everything the user just
+        // filled in (name, account type, company, goals) never persisted,
+        // and the wizard would silently come back on the next login with
+        // no explanation why.
+        console.warn("onboard complete save failed",e);
+        addToast(isAr?"⚠️ حفظ معلومات الإعداد فشل — ممكن الشاشة دي ترجع تظهرلك":"⚠️ Setup info didn't save — this screen may reappear next time","warn");
+      });
     }
     setPage("home"); // FIX: go to home first, don't force camera
   },[user]);
@@ -5323,8 +5342,17 @@ export default function App(){
         setIsSavingSession(false);
         addToast(isAr?"✅ تم حفظ الجلسة":"✅ Session saved","success");
         // Refresh sessions list so the new session appears immediately
-        // without waiting for the user to re-login or navigate away.
-        if(user) getUserSessions(user.uid).then(setUserSessions).catch(()=>{});
+        // without waiting for the user to re-login or navigate away. The
+        // session itself is already safely saved at this point (the
+        // "✅ Session saved" toast above already fired) — if only this
+        // refresh fails, the dashboard just looks like the session is
+        // missing until the next reload, which is exactly what the user
+        // reports as "my session isn't showing up." Warn so it's clear
+        // that's a listing hiccup, not a lost session.
+        if(user) getUserSessions(user.uid).then(setUserSessions).catch(e=>{
+          console.warn("session list refresh failed",e?.code);
+          addToast(isAr?"⚠️ الجلسة محفوظة بس الداشبورد ممكن ياخد تحديث — رجّع الصفحة لو مش ظاهرة":"⚠️ Session saved, but the dashboard may need a refresh to show it","warn");
+        });
         // #9 Compute weekly pattern from this session's alert causes
         if(_alertsAtSave.length>=3){
           const causeCounts={};
@@ -6563,7 +6591,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
                       updated_at: serverTimestamp(),
                     });
                     setProfile(p=>({...p, ...roleFields, setup_complete:true}));
-                  }catch(e){ console.warn("setup save failed",e); }
+                  }catch(e){
+                    // Was a bare console.warn — the screen still advanced past
+                    // setup regardless, so a failed write (the exact Firestore
+                    // rules gap just fixed, or any future transient one) meant
+                    // setup_complete silently stayed false in Firestore while
+                    // the user believed they were done. Next reload would then
+                    // send them right back into this same setup screen with no
+                    // explanation why. Surface it so they know to retry.
+                    console.warn("setup save failed",e);
+                    addToast(isAr?"⚠️ حفظ الإعداد فشل — جرب تاني لو الشاشة دي رجعت تظهرلك":"⚠️ Setup didn't save — try again if this screen reappears","warn");
+                  }
                 }
                 const freshP=user?.uid?await getUserProfile(user.uid).catch(()=>null):null;
                 if(freshP){setProfile(freshP);if(freshP.tier)setTier(normalizeTier(freshP.tier));if(freshP.company_id)setCompanyId(freshP.company_id);}
@@ -6688,7 +6726,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
     <ErrorBoundary key="page-home">
       <ModalPortal>
       {/* ── ALL MODALS — shown on home page too ────────────────── */}
-      {showCompanyOnboard&&<ErrorBoundary key="companyonboard"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
+      {showCompanyOnboard&&<ErrorBoundary key="companyonboard"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));
+        // Was an empty catch{} with the "✅ Company created" toast fired
+        // UNCONDITIONALLY right after it — a failed write (same Firestore
+        // rules gap just fixed, or any future transient one) still told the
+        // HR admin their company was created. _saved tracks whether it
+        // actually was, so the toast says what happened.
+        let _coSaved=true;
+        if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){console.warn("company onboard save failed",e);_coSaved=false;}}
+        addToast(_coSaved?(isAr?"✅ تم إنشاء شركتك":"✅ Company created"):(isAr?"⚠️ الشركة اتعرضت بس الحفظ فشل — جرب تاني":"⚠️ Company set up locally but saving failed — please try again"),_coSaved?"success":"warn");}}/></ErrorBoundary>}
       {showOnboard&&<ErrorBoundary key="onboard"><OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
         setShowOnboard(false);
         // Persist skip so wizard never shows again on next login
@@ -6700,7 +6746,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
               updated_at:serverTimestamp(),
             });
             setProfile(p=>p?({...p,onboarding_done:["skipped"],setup_complete:true}):p);
-          }catch(e){ console.warn("skip onboard:",e?.code); }
+          }catch(e){
+            // Silently failing to persist "skipped" meant the wizard could
+            // reappear on the next login with no explanation why a choice
+            // the user already made didn't stick.
+            console.warn("skip onboard:",e?.code);
+            addToast(isAr?"⚠️ حفظ الإعداد فشل — ممكن الشاشة دي ترجع تظهرلك":"⚠️ Didn't save — this screen may reappear next time","warn");
+          }
         }
       }}/></ErrorBoundary>}
       {showBilling&&<ErrorBoundary key="billing"><BillingModal profile={profile} currentPlan={tier} cs={cs} lang={lang} onClose={()=>setShowBilling(false)} onSuccess={async(plan)=>{
@@ -6754,7 +6806,14 @@ async function downloadPDF(sessionOverride, isClinical=false){
         onSave={(next)=>{
           setCustomAlertRules(next);
           setProfile(p=>p?({...p,custom_alert_rules:next}):p);
-          if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch(()=>{});
+          // Was a bare .catch(()=>{}) — the panel closed showing the new
+          // rules as if saved, so a failed write meant the user's custom
+          // alert thresholds silently reverted to the old ones on next
+          // load with no indication why.
+          if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch((e)=>{
+            console.warn("custom alert rules save failed",e);
+            addToast(isAr?"⚠️ حفظ قواعد التنبيه فشل — جرب تاني":"⚠️ Alert rules didn't save — please try again","warn");
+          });
         }}
         onClose={()=>setShowCustomAlertRules(false)}/>}
       {showAdmin&&isAdmin&&<ErrorBoundary key="admin"><AdminDashboard adminProfile={profile} cs={cs} lang={lang} onBack={()=>setShowAdmin(false)} onOpenSecurityCenter={()=>setShowSecurityCenter(true)} onOpenFeatureFlags={()=>setShowFeatureFlags(true)} onOpenOnboardingAnalytics={()=>setShowOnboardingAnalytics(true)}/></ErrorBoundary>}
@@ -7022,7 +7081,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
       onSave={(next)=>{
         setCustomAlertRules(next);
         setProfile(p=>p?({...p,custom_alert_rules:next}):p);
-        if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch(()=>{});
+        // Same fix as the other CustomAlertRulesPanel instance above —
+        // was a bare .catch(()=>{}) with no feedback on failure.
+        if(user?.uid) updateUserProfile(user.uid,{custom_alert_rules:next}).catch((e)=>{
+          console.warn("custom alert rules save failed",e);
+          addToast(isAr?"⚠️ حفظ قواعد التنبيه فشل — جرب تاني":"⚠️ Alert rules didn't save — please try again","warn");
+        });
       }}
       onClose={()=>setShowCustomAlertRules(false)}/>}
     {showOnboard&&<ErrorBoundary key="onboard-live"><OnboardingWizard user={user} lang={lang} onComplete={handleOnboardComplete} onSkip={async()=>{
@@ -7035,10 +7099,22 @@ async function downloadPDF(sessionOverride, isClinical=false){
             updated_at:serverTimestamp(),
           });
           setProfile(p=>p?({...p,onboarding_done:["skipped"],setup_complete:true}):p);
-        }catch(e){ console.warn("skip onboard:",e?.code); }
+        }catch(e){
+          // Same fix as the "onboard" (home page) instance above — was a
+          // bare console.warn, so the wizard could silently reappear on
+          // the next login with no explanation why a choice the user
+          // already made didn't stick.
+          console.warn("skip onboard:",e?.code);
+          addToast(isAr?"⚠️ حفظ الإعداد فشل — ممكن الشاشة دي ترجع تظهرلك":"⚠️ Didn't save — this screen may reappear next time","warn");
+        }
       }
     }}/></ErrorBoundary>}
-    {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){}}addToast(isAr?"✅ تم إنشاء شركتك":"✅ Company created","success");}}/></ErrorBoundary>}
+    {showCompanyOnboard&&<ErrorBoundary key="companyonboard-live"><CompanyOnboarding profile={profile} cs={cs} lang={lang} addToast={addToast} onComplete={async(company)=>{setShowCompanyOnboard(false);setCompanyId(company?.id);setProfile(p=>({...p,company_id:company?.id,company:company?.name,is_org_owner:true,user_type:"hr_admin"}));
+      // Same fix as the "companyonboard" instance on the home page above —
+      // was an empty catch{} with the success toast fired unconditionally.
+      let _coSavedLive=true;
+      if(user?.uid&&company?.id){try{const{doc:_d,updateDoc:_u,serverTimestamp:_s}=await import("firebase/firestore");const{db:_db}=await import("./firebase.js");await _u(_d(_db,"users",user.uid),{company_id:company.id,company:company.name||"",is_org_owner:true,user_type:"hr_admin",setup_complete:true,updated_at:_s()});}catch(e){console.warn("company onboard save failed",e);_coSavedLive=false;}}
+      addToast(_coSavedLive?(isAr?"✅ تم إنشاء شركتك":"✅ Company created"):(isAr?"⚠️ الشركة اتعرضت بس الحفظ فشل — جرب تاني":"⚠️ Company set up locally but saving failed — please try again"),_coSavedLive?"success":"warn");}}/></ErrorBoundary>}
     <div dir={dir} style={{
       display:"grid",
       gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
