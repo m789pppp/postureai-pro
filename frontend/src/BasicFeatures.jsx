@@ -372,10 +372,10 @@ export function BasicDashboard({ profile, userSessions, cs, isAr, addToast, tier
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <HabitScoreCard profile={profile} userSessions={userSessions} cs={cs} isAr={isAr} />
-      <StreakFreezeButton profile={profile} cs={cs} isAr={isAr} addToast={addToast} />
-      {/* WhatsAppReminder moved to Settings — delivery is Coming Soon, so
-          it no longer needs a prime spot on the main dashboard. It's
-          rendered from PanelSettings in HomePage.jsx instead. */}
+      {/* StreakFreezeButton moved to the Progress & Achievements panel,
+          next to the streak display it protects — see Gamification.jsx.
+          WhatsAppReminder moved to Settings — delivery is Coming Soon, so
+          neither needs a prime spot on the main dashboard anymore. */}
     </div>
   );
 }
