@@ -6,7 +6,7 @@ this module provisions it end-to-end without manual steps.
 """
 import os, logging, requests as _req
 from datetime import datetime
-from flask import request, jsonify
+from flask import request, jsonify, g
 
 log = logging.getLogger("corvus.domains")
 
@@ -110,7 +110,18 @@ def register_domain_routes(app, require_auth, require_admin, db, audit):
         try:
             data   = request.get_json(force=True) or {}
             domain = data.get("domain","").lower().strip()
-            org_id = data.get("org_id","") or getattr(request.environ.get("g"), "company_id","")
+            # Was `getattr(request.environ.get("g"), "company_id","")` — g
+            # (Flask's request-local context object, set by @require_auth)
+            # is never stored in request.environ under a "g" key, so that
+            # lookup was always None and org_id silently fell back to "".
+            # Same bug as every request.environ.get("uid","") below: uid
+            # lives on g (g.uid), not in the WSGI environ, so those always
+            # resolved to "" too — every audit log entry and created_by
+            # field this route writes was attributed to nobody.
+            org_id = data.get("org_id","")
+            if not org_id:
+                caller_doc = db.collection("users").document(g.uid).get()
+                org_id = (caller_doc.to_dict() or {}).get("company_id","") if caller_doc.exists else ""
 
             if not domain:
                 return jsonify({"error": "domain required"}), 400
@@ -128,10 +139,10 @@ def register_domain_routes(app, require_auth, require_admin, db, audit):
                 "vercel_added": vercel_result.get("ok", False),
                 "verified":     False,
                 "created_at":   datetime.utcnow().isoformat(),
-                "created_by":   request.environ.get("uid",""),
+                "created_by":   g.uid,
             })
 
-            audit(request.environ.get("uid",""), "custom_domain_provisioned", "enterprise",
+            audit(g.uid, "custom_domain_provisioned", "enterprise",
                   {"domain": domain, "org_id": org_id})
 
             dns_instructions = get_dns_instructions(domain)
@@ -160,7 +171,7 @@ def register_domain_routes(app, require_auth, require_admin, db, audit):
                 "verified_at":  datetime.utcnow().isoformat() if result.get("verified") else None,
             })
             if result.get("verified"):
-                audit(request.environ.get("uid",""), "custom_domain_verified", "enterprise", {"domain": domain})
+                audit(g.uid, "custom_domain_verified", "enterprise", {"domain": domain})
             return jsonify({"ok": True, **result})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -186,7 +197,7 @@ def register_domain_routes(app, require_auth, require_admin, db, audit):
         try:
             result = remove_vercel_domain(domain)
             db.collection("custom_domains").document(domain.replace(".","_")).delete()
-            audit(request.environ.get("uid",""), "custom_domain_removed", "enterprise", {"domain": domain})
+            audit(g.uid, "custom_domain_removed", "enterprise", {"domain": domain})
             return jsonify({"ok": result.get("ok", False)})
         except Exception as e:
             return jsonify({"error": str(e)}), 500

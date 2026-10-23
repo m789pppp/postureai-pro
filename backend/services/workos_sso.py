@@ -4,7 +4,7 @@ Handles SAML 2.0, OIDC, Google Workspace, Azure AD, Okta, OneLogin
 WorkOS provides a unified SSO API so we don't implement each IdP separately.
 """
 import os, logging
-from flask import redirect, request, jsonify
+from flask import redirect, request, jsonify, g
 
 log = logging.getLogger("corvus.sso")
 
@@ -172,7 +172,11 @@ def register_workos_routes(app, require_auth, require_admin, firestore, audit, l
                 domains=data["domains"],
                 organization_id=data.get("org_id", ""),
             )
-            audit(request.environ.get("uid",""), "sso_connection_created", "enterprise",
+            # Same bug as custom_domains.py: g (set by @require_auth) isn't
+            # stored in request.environ under a "uid" key, so this always
+            # attributed the audit entry to an empty string instead of the
+            # admin who actually created the connection.
+            audit(g.uid, "sso_connection_created", "enterprise",
                   {"name": data["name"], "type": data["type"]})
             return jsonify({"ok": True, "connection": connection})
         except Exception as e:

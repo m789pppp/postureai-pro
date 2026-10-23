@@ -7585,12 +7585,18 @@ def trigger_drip_manual():
 
         try:
             from services.email_sequences import send_email as drip_send, EmailContext
-            drip_send(EmailContext(
+            # send_email() returns False (rather than raising) on an unknown
+            # template key or a SendGrid-side failure — the return value was
+            # never checked, so this admin testing tool reported "sent_to"
+            # even when nothing actually went out.
+            sent = drip_send(EmailContext(
                 to_email=email, to_name=name, user_id=uid,
                 plan=plan, template_key=template,
                 data={"admin_triggered": True},
             ))
-            audit(getattr(g,"uid","admin"), "drip_manual_triggered", "admin", {"target_uid": uid, "template": template})
+            audit(getattr(g,"uid","admin"), "drip_manual_triggered", "admin", {"target_uid": uid, "template": template, "sent": sent})
+            if not sent:
+                return jsonify({"ok": False, "error": "Email provider rejected the send — check SENDGRID_API_KEY and the template key", "template": template}), 502
             return jsonify({"ok": True, "sent_to": email, "template": template})
         except Exception as e:
             return safe_error(e, "Drip trigger failed")
