@@ -121,15 +121,19 @@ export default async function handler(req, res) {
           owner_uid:     null,
           owner_deleted: true,
           owner_deleted_at: new Date().toISOString(),
-        }).catch(() => {});
+        }).catch(e => console.error(`[Delete] owner_deleted flag failed for company ${userData.company_id}:`, e));
       }
-    } catch (_) {}
+    } catch (e) { console.error("[Delete] org-owner check failed:", e); }
 
     // 4. Delete the consent record. Neither implementation removed it, so a
     //    "fully deleted" account left a document keyed by uid recording when
     //    that person consented and from what device — personal data about a
-    //    subject who has asked to be erased.
-    await db.collection("user_consent").doc(uid).delete().catch(() => {});
+    //    subject who has asked to be erased. The silent catch() here meant a
+    //    failure to delete it left that record behind with no trace anywhere
+    //    that it happened, while the response below still unconditionally
+    //    claimed "Account and all data permanently deleted."
+    await db.collection("user_consent").doc(uid).delete()
+      .catch(e => console.error(`[Delete] consent record delete failed for ${uid}:`, e));
 
     // 5. Delete user doc and Firebase Auth account
     await userRef.delete();
