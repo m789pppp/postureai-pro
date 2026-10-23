@@ -109,6 +109,7 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
   const [filter, setFilter]         = useState("all");
   const [sortBy, setSortBy]         = useState("churnRisk");
   const [triggering, setTriggering] = useState(null);
+  const [triggerResult, setTriggerResult] = useState({}); // {customerId: "ok"|"error"}
   const [page, setPage]             = useState(0);
   const PAGE_SIZE = 50;
 
@@ -213,10 +214,17 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
       });
       // Enqueue a notification to HR
       const { useNotifications } = await import("./NotificationsHub.jsx").catch(() => ({ useNotifications: null }));
+      // Success and failure used to look identical — the button just went
+      // back to "▶ Playbook" either way, so a CS rep triggering a
+      // retention playbook for an at-risk customer had no way to tell
+      // whether it actually fired or silently failed.
+      setTriggerResult(p => ({ ...p, [customerId]: "ok" }));
     } catch (e) {
       console.error("[ChurnPrediction] Playbook trigger failed:", e.message);
+      setTriggerResult(p => ({ ...p, [customerId]: "error" }));
     } finally {
       setTriggering(null);
+      setTimeout(() => setTriggerResult(p => { const n = { ...p }; delete n[customerId]; return n; }), 3000);
     }
   };
 
@@ -399,11 +407,20 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
                       onClick={e => { e.stopPropagation(); triggerPlaybook(c.id, c.stage); }}
                       disabled={triggering === c.id}
                       style={{ padding:"7px 12px", borderRadius:8, fontSize:11, fontWeight:700,
-                        background: triggering===c.id ? CP_TOKENS.muted : `${STAGE_COLORS[c.stage]}22`,
-                        color:      triggering===c.id ? "#fff"  : STAGE_COLORS[c.stage],
+                        background: triggering===c.id ? CP_TOKENS.muted
+                          : triggerResult[c.id]==="error" ? "rgba(248,81,73,.18)"
+                          : triggerResult[c.id]==="ok" ? "rgba(63,185,80,.18)"
+                          : `${STAGE_COLORS[c.stage]}22`,
+                        color:      triggering===c.id ? "#fff"
+                          : triggerResult[c.id]==="error" ? "#f85149"
+                          : triggerResult[c.id]==="ok" ? "#3fb950"
+                          : STAGE_COLORS[c.stage],
                         border:`1px solid ${STAGE_COLORS[c.stage]}44`,
                         cursor: triggering===c.id ? "default" : "pointer" }}>
-                      {triggering===c.id ? "Sending…" : "▶ Playbook"}
+                      {triggering===c.id ? "Sending…"
+                        : triggerResult[c.id]==="error" ? "✗ Failed — retry"
+                        : triggerResult[c.id]==="ok" ? "✓ Sent"
+                        : "▶ Playbook"}
                     </button>
                   </div>
 

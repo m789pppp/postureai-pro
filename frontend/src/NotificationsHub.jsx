@@ -788,11 +788,26 @@ function IntegrationsTab({ orgId, isAr }) {
   const save = async (id) => {
     setSaving(id);
     const updated = { ...configs, [id]:{ ...(configs[id]||{}), enabled:true, connected_at:new Date().toISOString() } };
-    if (orgId) await setDoc(doc(db,"orgs",orgId,"settings","integrations"), updated, { merge:true }).catch(()=>{});
-    setConfigs(updated);
-    setStatuses(p => ({...p,[id]:"connected"}));
-    setSaving(null); setSaved(id);
-    setTimeout(() => setSaved(p => p===id ? null : p), 2500);
+    // Was a fire-and-forget .catch(()=>{}) with "Connected" + "Saved
+    // successfully" shown UNCONDITIONALLY right after — a failed write
+    // (permissions, offline, quota) still told the admin their API keys
+    // were saved and the integration was live, when nothing had actually
+    // persisted. It would silently show "disconnected" again on the next
+    // load with no explanation why.
+    let ok = true;
+    if (orgId) {
+      try { await setDoc(doc(db,"orgs",orgId,"settings","integrations"), updated, { merge:true }); }
+      catch(e) { ok = false; console.warn("integration save failed", e?.code || e); }
+    }
+    setSaving(null);
+    if (ok) {
+      setConfigs(updated);
+      setStatuses(p => ({...p,[id]:"connected"}));
+      setSaved(id);
+      setTimeout(() => setSaved(p => p===id ? null : p), 2500);
+    } else {
+      setStatuses(p => ({...p,[id]:"error"}));
+    }
   };
 
   const test = async (id) => {

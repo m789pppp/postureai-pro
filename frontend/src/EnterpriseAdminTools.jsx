@@ -184,16 +184,25 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
     }).catch(() => {});
   }, []);
 
+  const [flagError, setFlagError] = useState("");
   const toggleFlag = (id) => {
     const target = flags.find(f => f.id === id);
     if (!target) return;
     const nextEnabled = !target.enabled;
     const nextRollout  = nextEnabled ? 100 : 0;
     setFlags(p => p.map(f => f.id===id ? { ...f, enabled:nextEnabled, rollout:nextRollout } : f));
+    setFlagError("");
     // Persist: PATCH if the backend already knows this flag, otherwise POST to create it.
     updateDoc(doc(db, "feature_flags", id), { enabled: nextEnabled, rollout_pct: nextRollout, updated_at: new Date().toISOString() })
       .catch(() => setDoc(doc(db, "feature_flags", id), { enabled: nextEnabled, rollout_pct: nextRollout, updated_at: new Date().toISOString() }, { merge: true }))
-      .catch(e => console.warn("[FeatureFlags] update failed:", e.message));
+      .catch(e => {
+        // Was only a console.warn — the toggle switch stayed flipped in the
+        // UI regardless, so an admin could believe a flag was live for
+        // every user in production when neither write actually landed.
+        console.warn("[FeatureFlags] update failed:", e.message);
+        setFlags(p => p.map(f => f.id===id ? { ...f, enabled:target.enabled, rollout:target.rollout } : f));
+        setFlagError(`Couldn't save "${target.id}" — reverted. ${e.message||""}`);
+      });
   };
   const setRollout = (id, v) => setFlags(p => p.map(f => f.id===id ? { ...f, rollout:parseInt(v), enabled:parseInt(v)>0 } : f));
 
@@ -271,6 +280,11 @@ export function EnterpriseAdminTools({ profile, cs, lang, onClose }) {
                 <div style={{ fontWeight:700, color:cs.text, fontSize:16 }}>🚩 Feature Flags</div>
                 <div style={{ fontSize:12, color:cs.muted }}>{flags.filter(f=>f.enabled).length} active · {flags.filter(f=>!f.enabled).length} disabled</div>
               </div>
+              {flagError && (
+                <div style={{ fontSize:12, color:"#f85149", marginBottom:12, background:"rgba(248,81,73,.08)", border:"1px solid rgba(248,81,73,.2)", borderRadius:8, padding:"8px 12px" }}>
+                  ⚠️ {flagError}
+                </div>
+              )}
               <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                 {flags.map(f => (
                   <div key={f.id} style={{ background:cs.bg, borderRadius:12, padding:"14px 16px", border:`1px solid ${f.enabled?`${envColors[f.env]}44`:cs.border}`, display:"flex", alignItems:"center", gap:14 }}>
