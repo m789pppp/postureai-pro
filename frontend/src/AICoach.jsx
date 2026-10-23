@@ -203,8 +203,10 @@ function Bubble({ msg, isAr, index, onReact, onRegenerate }) {
         {isUser?"M":"✦"}
       </div>
 
-      {/* Bubble + actions */}
-      <div style={{ maxWidth:"77%",display:"flex",flexDirection:"column",gap:4,
+      {/* Bubble + actions. Pixel cap added alongside the percentage one —
+          the panel got wider (see the modal's own maxWidth), and 77% of
+          that read as unnaturally long lines of chat text. */}
+      <div style={{ maxWidth:"min(77%,560px)",display:"flex",flexDirection:"column",gap:4,
         alignItems: isUser?(isAr?"flex-start":"flex-end"):"flex-start" }}>
         <div style={{
           background: isUser ? T.userBg : T.aiBg,
@@ -727,7 +729,11 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
       `}</style>
 
       <div dir={dir} style={{
-        width:"100%",maxWidth:640,height:"min(700px,92dvh)",
+        // Was capped at 640px — noticeably smaller than the AI-centric
+        // product this is meant to showcase. Widened toward a near-fullscreen
+        // workspace feel instead of "a small chat bubble floating over the
+        // dashboard"; still a modal (Esc/backdrop-click close unchanged).
+        width:"100%",maxWidth:920,height:"min(880px,94dvh)",
         background:T.bg,
         border:`0.5px solid ${T.borderH}`,
         borderRadius:22,
