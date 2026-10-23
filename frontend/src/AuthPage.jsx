@@ -895,19 +895,37 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
                       {[
                         {id:"hr_admin", icon:"👔",
                           en:"Setting up my company", ar:"أنشئ حساب الشركة",
-                          sub:isAr?"HR Admin — أنشئ workspace وأدعو الفريق":"HR Admin — create workspace & invite team"},
+                          sub:isAr?"HR Admin — أنشئ workspace وأدعو الفريق":"HR Admin — create workspace & invite team",
+                          // Self-serve org creation is blocked server-side by
+                          // design (firestore.rules rejects a client-claimed
+                          // is_hr — org membership must be assigned
+                          // server-side) and the Admin SDK endpoint that
+                          // would do it safely doesn't exist yet. The form
+                          // still lets someone fill it in and only explains
+                          // this after they submit and it's deleted/rolled
+                          // back — flagging it here up front instead of
+                          // letting them discover it at the end.
+                          comingSoon:true},
                         {id:"employee", icon:"🧑‍💻",
                           en:"Joining my team", ar:"أنضم لفريقي",
                           sub:isAr?"عندي كود دعوة من HR":"I have an invite code from HR"},
                       ].map(r=>(
                         <button key={r.id} type="button" onClick={()=>{setCompanyRole(r.id);}}
                           style={{
+                            position:"relative",
                             padding:"14px 12px",borderRadius:12,cursor:"pointer",textAlign:isAr?"right":"left",
                             background:companyRole===r.id?"rgba(26,86,219,.1)":t.faint,
                             border:`1.5px solid ${companyRole===r.id?"rgba(26,86,219,.5)":t.border}`,
                             transition:"all .18s",fontFamily:"inherit",
                             boxShadow:companyRole===r.id?"0 0 0 3px rgba(26,86,219,.08)":"none",
                           }}>
+                          {r.comingSoon&&(
+                            <div style={{position:"absolute",top:8,insetInlineEnd:8,fontSize:9,fontWeight:800,
+                              padding:"2px 7px",borderRadius:99,background:"rgba(217,119,6,.15)",
+                              border:"1px solid rgba(217,119,6,.35)",color:"#d97706",letterSpacing:".03em"}}>
+                              {isAr?"قريباً":"COMING SOON"}
+                            </div>
+                          )}
                           <div style={{fontSize:20,marginBottom:6}}>{r.icon}</div>
                           <div style={{fontSize:13.5,fontWeight:700,color:companyRole===r.id?"#60a5fa":t.text,marginBottom:4,lineHeight:1.3}}>
                             {isAr?r.ar:r.en}
