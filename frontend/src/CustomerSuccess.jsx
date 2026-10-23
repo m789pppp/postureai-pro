@@ -152,6 +152,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
   const [submitComment, setSubmitComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
   const [chatOpen, setChatOpen]   = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [chatMsgs, setChatMsgs]   = useState([
@@ -210,6 +211,7 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
   const submitNPS = async () => {
     if (submitScore === null) return;
     setSubmitting(true);
+    setSubmitError(false);
     try {
       // Backend records it (rate-limited, authenticated)
       await fetch(`${API}/nps/submit`, {
@@ -230,7 +232,13 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
       setSubmitted(true);
       setTimeout(() => { setSubmitted(false); setSubmitScore(null); setSubmitComment(""); loadNPS(); }, 3000);
     } catch (e) {
+      // Was logged to console only — the button just went back to
+      // "Submit Feedback" with no error shown, so a failed submission
+      // (network, backend down, Firestore rules) looked identical to the
+      // user just not having clicked yet. They'd retype their comment and
+      // retry with no idea the first attempt silently went nowhere.
       console.error("[CS] NPS submit:", e);
+      setSubmitError(true);
     } finally {
       setSubmitting(false);
     }
@@ -386,6 +394,11 @@ export function CustomerSuccess({ profile, cs, lang, token, onClose }) {
                     }}>
                       {submitting ? "Submitting…" : "Submit Feedback"}
                     </button>
+                    {submitError && (
+                      <div style={{ marginTop:8, fontSize:12, color:"#f85149" }}>
+                        ⚠️ Couldn't submit — please try again.
+                      </div>
+                    )}
                   </>
                 )}
               </div>

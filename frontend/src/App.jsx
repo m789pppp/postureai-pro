@@ -3625,7 +3625,10 @@ export default function App(){
           // (login recency, 25% weight — the single biggest factor). Nothing
           // anywhere wrote this before, so every customer was scored as if
           // they hadn't logged in for 30 days, regardless of actual activity.
-          try { updateUserProfile(u.uid, { last_login_at: new Date().toISOString() }); } catch{}
+          // Not awaited, and a bare try/catch around an unawaited promise
+          // only catches a synchronous throw — a rejected promise here was
+          // an unhandled rejection the try{} did nothing about.
+          try { updateUserProfile(u.uid, { last_login_at: new Date().toISOString() }).catch(()=>{}); } catch{}
           // #5: persist returning-user flag so next visit skips the full landing page
           try { localStorage.setItem("corvus_was_logged", "1"); } catch {}
 

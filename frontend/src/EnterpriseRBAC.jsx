@@ -309,6 +309,7 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
   const [roleEdit,setRoleEdit]=useState("");
   const [customPerms,setCustomPerms]=useState([]);
   const [saving,setSaving]=useState(false);
+  const [saveError,setSaveError]=useState("");
   const [showCustom,setShowCustom]=useState(false);
   const [search,setSearch]=useState("");
 
@@ -321,6 +322,7 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
     setRoleEdit(m.role||"employee");
     setCustomPerms(m.permissions||ROLES[m.role||"employee"]?.scopes||[]);
     setShowCustom(false);
+    setSaveError("");
   };
 
   const save=async()=>{
@@ -336,10 +338,21 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
         ? "Grant this person full Org Owner control? This gives them access to everything, including billing and every other member's permissions."
         : "Revoke Security Admin from this person? They will lose access to security policies, SSO config, and audit logs."
     )) return;
-    setSaving(true);
+    setSaving(true); setSaveError("");
     const perms=showCustom?customPerms:ROLES[roleEdit]?.scopes||[];
-    await setUserRole(orgId,sel.uid||sel.id,roleEdit,perms,adminUid);
-    setSaving(false); setSel(null); onRefresh?.();
+    // Was an unguarded await — a thrown error (permission denied, offline)
+    // left setSaving(true) as the last thing that ran, so the "Saving..."
+    // button stayed stuck forever with no error and no way to tell this
+    // was a failure rather than a slow save. This is exactly the kind of
+    // "the sidebar/button just freezes" symptom reported elsewhere.
+    try{
+      await setUserRole(orgId,sel.uid||sel.id,roleEdit,perms,adminUid);
+      setSaving(false); setSel(null); onRefresh?.();
+    }catch(e){
+      console.warn("[RBAC] role save failed:",e);
+      setSaving(false);
+      setSaveError(isAr?"فشل حفظ الدور — حاول تاني":"Couldn't save the role — please try again");
+    }
   };
 
   const byGroup=ALL_PERMISSIONS.reduce((acc,p)=>{
@@ -456,6 +469,11 @@ function RoleManager({orgId,adminUid,isAr,members=[],onRefresh}) {
             </div>
           )}
 
+          {saveError && (
+            <div style={{fontSize:12,color:"#f85149",marginBottom:10,background:"rgba(248,81,73,.08)",border:"1px solid rgba(248,81,73,.2)",borderRadius:8,padding:"8px 12px"}}>
+              ⚠️ {saveError}
+            </div>
+          )}
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <Btn variant="ghost" onClick={()=>setSel(null)}>{isAr?"إلغاء":"Cancel"}</Btn>
             <Btn variant="primary" onClick={save} disabled={saving} icon="✓">
@@ -753,6 +771,7 @@ function SAMLConfig({orgId,adminUid,isAr}) {
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
+  const [saveError,setSaveError]=useState("");
   const [testResult,setTestResult]=useState(null);
 
   useEffect(()=>{
@@ -760,10 +779,20 @@ function SAMLConfig({orgId,adminUid,isAr}) {
   },[orgId]);
 
   const save=async()=>{
-    setSaving(true); setSaved(false);
-    await saveSSOConfig(orgId||"demo",config,adminUid||"admin");
-    setSaving(false); setSaved(true);
-    setTimeout(()=>setSaved(false),3000);
+    setSaving(true); setSaved(false); setSaveError("");
+    // Was an unguarded await — a thrown error left setSaving(true) as the
+    // last thing that ran, so the button stuck on "Saving..." forever
+    // with no indication the SAML config (including Enforce SSO, which
+    // can lock out password login) never actually persisted.
+    try{
+      await saveSSOConfig(orgId||"demo",config,adminUid||"admin");
+      setSaving(false); setSaved(true);
+      setTimeout(()=>setSaved(false),3000);
+    }catch(e){
+      console.warn("[SSO] save failed:",e);
+      setSaving(false);
+      setSaveError(isAr?"فشل حفظ إعدادات SSO — حاول تاني":"Couldn't save SSO settings — please try again");
+    }
   };
 
   // BUG FIX: this used to be labeled "Test Connection" / "Connection
@@ -905,6 +934,11 @@ function SAMLConfig({orgId,adminUid,isAr}) {
           </div>
 
           {/* Actions */}
+          {saveError && (
+            <div style={{fontSize:12,color:"#f85149",marginBottom:10,background:"rgba(248,81,73,.08)",border:"1px solid rgba(248,81,73,.2)",borderRadius:8,padding:"8px 12px"}}>
+              ⚠️ {saveError}
+            </div>
+          )}
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <Btn variant="primary" onClick={save} disabled={saving} icon={saved?"✓":"💾"}>
               {saving?(isAr?"جاري الحفظ...":"Saving..."):saved?(isAr?"تم الحفظ!":"Saved!"):(isAr?"حفظ الإعداد":"Save Config")}
@@ -930,6 +964,7 @@ function GDPRTools({orgId,adminUid,isAr}) {
   const [showForm,setShowForm]=useState(false);
   const [form,setForm]=useState({type:"access",subject_uid:"",subject_email:"",notes:""});
   const [submitting,setSubmitting]=useState(false);
+  const [submitError,setSubmitError]=useState("");
   const [dataRetention,setDataRetention]=useState({
     sessions_days:365,audit_days:730,video_store:false,anonymise_after:90,
   });
@@ -954,11 +989,21 @@ function GDPRTools({orgId,adminUid,isAr}) {
 
   const submit=async()=>{
     if(!form.subject_email) return;
-    setSubmitting(true);
-    const id=await submitGDPRRequest(orgId||"demo",form,adminUid||"admin");
-    setRequests(prev=>[{id,status:"pending",created_at:new Date().toISOString(),...form},...prev]);
-    setForm({type:"access",subject_uid:"",subject_email:"",notes:""});
-    setShowForm(false); setSubmitting(false);
+    setSubmitting(true); setSubmitError("");
+    // Was an unguarded await — a thrown error left setSubmitting(true) as
+    // the last thing that ran, so the form stuck on a disabled "Submit"
+    // forever with no error, and the request (a legally-tracked GDPR
+    // obligation) silently never got recorded.
+    try{
+      const id=await submitGDPRRequest(orgId||"demo",form,adminUid||"admin");
+      setRequests(prev=>[{id,status:"pending",created_at:new Date().toISOString(),...form},...prev]);
+      setForm({type:"access",subject_uid:"",subject_email:"",notes:""});
+      setShowForm(false); setSubmitting(false);
+    }catch(e){
+      console.warn("[GDPR] submit failed:",e);
+      setSubmitting(false);
+      setSubmitError(isAr?"فشل إرسال الطلب — حاول تاني":"Couldn't submit the request — please try again");
+    }
   };
 
   const STATUS={pending:{c:RBAC_TOKENS.amber,label:isAr?"في الانتظار":"Pending"},fulfilled:{c:RBAC_TOKENS.green,label:isAr?"منجز":"Fulfilled"},in_progress:{c:RBAC_TOKENS.blue,label:isAr?"قيد التنفيذ":"In Progress"},rejected:{c:RBAC_TOKENS.red,label:isAr?"مرفوض":"Rejected"}};
@@ -985,6 +1030,11 @@ function GDPRTools({orgId,adminUid,isAr}) {
           </div>
           <Input label={isAr?"ملاحظات":"Notes"} value={form.notes}
             onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder={isAr?"سبب الطلب...":"Reason for request..."}/>
+          {submitError && (
+            <div style={{fontSize:12,color:"#f85149",marginTop:10,background:"rgba(248,81,73,.08)",border:"1px solid rgba(248,81,73,.2)",borderRadius:8,padding:"8px 12px"}}>
+              ⚠️ {submitError}
+            </div>
+          )}
           <div style={{display:"flex",gap:8,marginTop:12,justifyContent:"flex-end"}}>
             <Btn variant="ghost" size="sm" onClick={()=>setShowForm(false)}>{isAr?"إلغاء":"Cancel"}</Btn>
             <Btn variant="success" size="sm" onClick={submit} disabled={submitting||!form.subject_email} icon="→">
