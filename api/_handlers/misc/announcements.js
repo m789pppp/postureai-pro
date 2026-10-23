@@ -9,7 +9,22 @@ export default async function handler(req, res) {
   // POST /api/announcements — admin creates announcement
   if (req.method === "POST") {
     try {
-      const { db } = initFirebaseAdmin();
+      const { db, auth } = initFirebaseAdmin();
+      // Was completely unauthenticated — anyone who found this URL could
+      // POST an announcement that every signed-in user would see on next
+      // load (GET below returns all active announcements to everyone,
+      // with no per-user filter). Gated the same way every other
+      // admin-only write in this codebase is (seed-flags.js,
+      // support/reply.js): a valid Firebase token whose own user doc has
+      // is_admin set.
+      const idToken = (req.headers.authorization || "").replace("Bearer ", "").trim();
+      if (!idToken) return res.status(401).json({ error: "Auth required" });
+      let decoded;
+      try { decoded = await auth.verifyIdToken(idToken); }
+      catch { return res.status(401).json({ error: "Invalid or expired token" }); }
+      const callerDoc = (await db.collection("users").doc(decoded.uid).get()).data();
+      if (!callerDoc?.is_admin) return res.status(403).json({ error: "Admin required" });
+
       const body = req.body || {};
       const doc = {
         title: body.title || "",
