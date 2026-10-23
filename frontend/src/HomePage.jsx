@@ -796,42 +796,6 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
         </button>
       </div>
 
-      {/* Developer API + Insurance Partnership entry cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <div style={{ background:cs.card, border:"1px dashed rgba(26,86,219,.3)",
-          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{fontSize:18}}>⚡</span>
-            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>Posture API</div>
-          </div>
-          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
-            {isAr?"ادمج تحليل الوضعية في أي تطبيق":"Integrate posture analysis into any app"}
-          </div>
-          <button onClick={()=>onDevPortal?.()}
-            style={{padding:"7px 0",background:"rgba(26,86,219,.12)",border:"1px solid rgba(26,86,219,.25)",
-              borderRadius:8,color:"#60a5fa",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
-            {isAr?"عرض التوثيق":"View Docs"}
-          </button>
-        </div>
-        <div style={{ background:cs.card, border:"1px dashed rgba(16,185,129,.25)",
-          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{fontSize:18}}>🤝</span>
-            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>
-              {isAr?"خصم التأمين":"Insurance Discount"}
-            </div>
-          </div>
-          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
-            {isAr?"وضعيتك الجيدة = خصم في تأمينك الصحي":"Good posture = health insurance discount"}
-          </div>
-          <button onClick={()=>onInsurance?.()}
-            style={{padding:"7px 0",background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.25)",
-              borderRadius:8,color:"#10b981",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
-            {isAr?"اعرف أكتر":"Learn More"}
-          </button>
-        </div>
-      </div>
-
       <BasicDashboard
         profile={profile}
         userSessions={userSessions}
@@ -881,6 +845,49 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
           action={isAr?"ابدأ الآن":"Start Now"}
           onAction={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}/>
       )}
+
+      {/* Developer API + Insurance Partnership entry cards — moved down
+          here, below the user's own data, instead of sitting near the top
+          mixed in with calibration/certificate. These are a dev-integration
+          doc link and a B2B insurance-partnership pitch, not personal
+          posture content; an individual user who wants either can still
+          find them, just not as the first thing competing for attention
+          with their own scores and streak. (Already have a proper home in
+          the HR/company "Management Tools" section too.) */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, opacity:.85 }}>
+        <div style={{ background:cs.card, border:"1px dashed rgba(26,86,219,.3)",
+          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{fontSize:18}}>⚡</span>
+            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>Posture API</div>
+          </div>
+          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+            {isAr?"ادمج تحليل الوضعية في أي تطبيق":"Integrate posture analysis into any app"}
+          </div>
+          <button onClick={()=>onDevPortal?.()}
+            style={{padding:"7px 0",background:"rgba(26,86,219,.12)",border:"1px solid rgba(26,86,219,.25)",
+              borderRadius:8,color:"#60a5fa",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
+            {isAr?"عرض التوثيق":"View Docs"}
+          </button>
+        </div>
+        <div style={{ background:cs.card, border:"1px dashed rgba(16,185,129,.25)",
+          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{fontSize:18}}>🤝</span>
+            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>
+              {isAr?"خصم التأمين":"Insurance Discount"}
+            </div>
+          </div>
+          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+            {isAr?"وضعيتك الجيدة = خصم في تأمينك الصحي":"Good posture = health insurance discount"}
+          </div>
+          <button onClick={()=>onInsurance?.()}
+            style={{padding:"7px 0",background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.25)",
+              borderRadius:8,color:"#10b981",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
+            {isAr?"اعرف أكتر":"Learn More"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
