@@ -38,12 +38,30 @@ except ImportError:
     TWILIO_OK = False
 
 
-# ── SMS code store (Redis-backed) ─────────────────────────────────
+# ── SMS code store (Redis-backed, in-memory fallback) ─────────────
+# Was `from services.redis_service import get_redis` — that name doesn't
+# exist in that module at all (get_redis() is a different, unrelated
+# connection-pool helper defined directly in backend.py, used by
+# flask-limiter's storage backend). The import always raised ImportError,
+# silently caught below, so _redis was unconditionally None — not just
+# when Redis is unconfigured (this deployment's actual, intentional
+# state), but always, everywhere, regardless of REDIS_URL.
+#
+# Net effect: send_sms_code() below skipped storing the code (its `if
+# _redis:` guard was always false) but still sent the real, Twilio-billed
+# SMS and returned True — "Code sent" — while verify_sms_code()'s `if
+# not _redis: return False` meant NO code could ever verify. SMS MFA was
+# 100% broken for every user who ever tried to set it up: real SMS sent,
+# guaranteed "Invalid or expired code" on entry, no way to succeed.
+#
+# rset/rget/rdel are this same services.redis_service module's own
+# helpers and already have an in-memory fallback when Redis itself isn't
+# configured — exactly what this needed instead of a raw client handle.
 try:
-    from services.redis_service import get_redis
-    _redis = get_redis()
+    from services.redis_service import rset as _rset, rget as _rget, rdel as _rdel
+    _SMS_STORE_OK = True
 except Exception:
-    _redis = None
+    _SMS_STORE_OK = False
 
 SMS_CODE_TTL = 600  # 10 minutes
 
@@ -74,13 +92,12 @@ def send_sms_code(phone: str, uid: str) -> bool:
     """Generate and send a 6-digit SMS verification code."""
     if not TWILIO_OK or not _twilio:
         return False
+    if not _SMS_STORE_OK:
+        # Sending a code nobody can ever verify is worse than not sending
+        # it — this used to still text the user and claim success here.
+        return False
     code = str(secrets.randbelow(900000) + 100000)
-    # Store in Redis with TTL
-    if _redis:
-        try:
-            _redis.setex(f"mfa:sms:{uid}", SMS_CODE_TTL, code)
-        except Exception:
-            pass
+    _rset(f"mfa:sms:{uid}", code, SMS_CODE_TTL)
     try:
         _twilio.messages.create(
             body=f"Your Corvus verification code: {code}. Expires in 10 minutes.",
@@ -91,19 +108,20 @@ def send_sms_code(phone: str, uid: str) -> bool:
     except Exception as e:
         import sys
         print(f"[mfa] Twilio error: {e}", file=sys.stderr)
+        _rdel(f"mfa:sms:{uid}")  # don't leave a code stored for a text that never sent
         return False
 
 
 def verify_sms_code(uid: str, code: str) -> bool:
-    """Verify the SMS code stored in Redis for this user."""
-    if not _redis:
+    """Verify the SMS code stored for this user."""
+    if not _SMS_STORE_OK:
         return False
-    stored = _redis.get(f"mfa:sms:{uid}")
+    stored = _rget(f"mfa:sms:{uid}")
     if not stored:
         return False
     ok = secrets.compare_digest(stored.decode() if isinstance(stored, bytes) else stored, code.strip())
     if ok:
-        _redis.delete(f"mfa:sms:{uid}")  # one-time use
+        _rdel(f"mfa:sms:{uid}")  # one-time use
     return ok
 
 
