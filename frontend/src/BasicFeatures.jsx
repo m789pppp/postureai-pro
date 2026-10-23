@@ -234,14 +234,23 @@ export function WhatsAppReminder({ profile, cs, isAr, addToast }) {
       addToast?.(isAr ? "أدخل رقم WhatsApp الأول" : "Enter your WhatsApp number first", "warn");
       return;
     }
+    // WhatsApp delivery (Twilio) isn't configured on this deployment yet —
+    // the backend always 503s here, and the old error message
+    // ("Check the number and internet connection") sent the user chasing
+    // their own phone/wifi for something that was never going to work,
+    // which looks broken rather than upcoming. Say plainly that delivery
+    // itself is coming soon instead of attempting a call we know will
+    // fail. The number/time are still saved via the Save button above, so
+    // nothing the user enters here is lost — it'll just start sending
+    // once WhatsApp delivery is live.
+    addToast?.(isAr
+      ? "📱 إرسال رسائل WhatsApp قريباً — بنركّز الأول على جانب العلاج الطبيعي. وقتك محفوظ وهيبدأ يوصلك أول ما نفعّلها."
+      : "📱 WhatsApp delivery is coming soon — we're focusing first on the physiotherapy side. Your time is saved and reminders will start once it's live.",
+      "info");
+    return;
+    // eslint-disable-next-line no-unreachable
     setTestSending(true);
     try {
-      // Was sent with no auth header at all — anyone who found this URL
-      // could POST any phone number and trigger a real, Twilio-billed
-      // WhatsApp send to it, with no rate limit or attribution. Now
-      // requires the caller's own Firebase token, matching every other
-      // endpoint in this codebase that can spend money or send to a
-      // third party.
       const token = await getAuthToken().catch(() => null);
       const res = await fetch("/api/habits/whatsapp-test", {
         method: "POST",
@@ -279,13 +288,18 @@ export function WhatsAppReminder({ profile, cs, isAr, addToast }) {
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
         <span style={{ fontSize: 22 }}>📱</span>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: cs.text }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: cs.text, display:"flex", alignItems:"center", gap:7 }}>
             {isAr ? "تذكير WhatsApp" : "WhatsApp Reminder"}
+            <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,
+              background:"rgba(217,119,6,.15)",border:"1px solid rgba(217,119,6,.35)",
+              color:"#d97706",letterSpacing:".03em"}}>
+              {isAr?"قريباً":"COMING SOON"}
+            </span>
           </div>
           <div style={{ fontSize: 11, color: cs.muted }}>
             {isAr
-              ? "في مصر والـ MENA، WhatsApp أقوى من أي إشعار تاني"
-              : "In Egypt & MENA, WhatsApp beats any push notification"}
+              ? "بنركّز الأول على جانب العلاج الطبيعي — إرسال الرسائل الفعلي هيتفعّل بعده"
+              : "Focusing first on the physiotherapy side — actual message delivery goes live after that"}
           </div>
         </div>
         {/* Enabled toggle */}
