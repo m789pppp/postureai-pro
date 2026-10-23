@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY,
-         whatsappActivationLink, activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
+         whatsappActivationLink, activationPromise, activateLabel, openWhatsapp } from "./lib/salesWhatsapp.js";
 
 
 // ═══════════════════════════════════════════════════════════════════
@@ -205,7 +205,14 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, l
       </div>
 
       <button
-        onClick={() => onSelect(plan.id)}
+        onClick={() => price == null
+          // Enterprise has no price to pay, so routing it through onSelect
+          // opened the individual Basic/Pro/Elite billing modal — a
+          // "Contact Sales" click that contacted no one and showed a payment
+          // screen for the wrong product. Go straight to the sales WhatsApp
+          // thread instead.
+          ? openWhatsapp({ kind: "b2b", planName: isAr ? plan.name.ar : plan.name.en, isAr })
+          : onSelect(plan.id)}
         disabled={isCurr}
         style={{
           width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
