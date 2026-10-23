@@ -137,18 +137,23 @@ export default async function handler(req, res) {
 
   const result = scorePosture(metrics);
 
-  // Track usage (async — don't await)
+  // Track usage (async — don't await, so a Firestore write never adds
+  // latency to this response). The response below reports calls_used as
+  // if this increment already landed, so a failure here was previously
+  // untraceable: the customer's own counter would quietly fall behind
+  // what they'd actually been told, with nothing in the logs to explain
+  // why their monthly limit never seemed to trip.
   const month = new Date().toISOString().slice(0, 7);
   db.collection("api_keys").doc(apiKey).update({
     calls_this_month: FieldValue.increment(1),
     [`calls_${month}`]: FieldValue.increment(1),
     last_used_at: new Date().toISOString(),
-  }).catch(() => {});
+  }).catch(e => console.error("[posture-api/analyze] usage counter update failed:", apiKey, e));
   db.collection("api_usage").add({
     api_key: apiKey, uid: keyData.uid,
     endpoint: "analyze", called_at: FieldValue.serverTimestamp(),
     score: result.score,
-  }).catch(() => {});
+  }).catch(e => console.error("[posture-api/analyze] usage log write failed:", apiKey, e));
 
   return res.status(200).json({
     ok: true,

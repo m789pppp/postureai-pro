@@ -185,8 +185,18 @@ def stripe_webhook():
 
     except Exception as e:
         logger.error("Webhook handler error for %s: %s", event_type, e, exc_info=True)
-        # Return 200 to prevent Stripe retries for non-signature errors
-        return jsonify({"status": "error", "message": str(e)}), 200
+        # Was a 200 "to prevent Stripe retries" — but every handler below
+        # (checkout.session.completed, subscription updates, invoices) just
+        # sets state to whatever Stripe's event object already says, via
+        # idempotent upserts/updates keyed by the Stripe id, so a retry of
+        # the SAME event is safe to replay. Swallowing the error as 200
+        # instead meant a real payment could hit a transient failure here
+        # (a Supabase write, a Stripe API call) and silently never update
+        # the user's tier, with no retry and nothing but a log line to show
+        # it happened — same class of bug already fixed in the Kashier
+        # webhook. Stripe's own retry schedule (with backoff) now gets a
+        # real chance to recover a transient failure instead.
+        return jsonify({"status": "error", "message": str(e)}), 500
 
     return jsonify({"status": "ok"})
 
