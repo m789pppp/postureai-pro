@@ -85,7 +85,6 @@ export default async function handler(req, res) {
     const data = { ok: true, alerts_sent: alertsSent, users_checked: usersSnap.size };
     console.log("[cron] symptom-pattern-alerts:", data);
     return res.status(200).json(data);
-    return res.status(200).json(data);
   } catch (e) {
     console.error("[cron relay] symptom-pattern-alerts error:", e);
     return res.status(500).json({ error: String(e) });

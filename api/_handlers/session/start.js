@@ -105,51 +105,63 @@ export default async function handler(req, res) {
     return res.status(200).json({ session_id: "local_" + randomBytes(4).toString("hex"), tier });
   }
 
-  // Check session limits for free tier — skip if Firebase unavailable
-  if (["free","standard"].includes(tier)) {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const dayStart   = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  // Everything above this point falls back to a local session on any
+  // Firebase/Firestore failure (init, token verify, profile read) — this
+  // block didn't: an unhandled rejection from the limit-check queries or
+  // the session-doc write (Firestore quota, a transient outage) crashed
+  // the function instead of degrading the same way, inconsistent with
+  // every other failure path in this handler and surfacing to the
+  // frontend as a bare 500 instead of a usable session.
+  try {
+    // Check session limits for free tier — skip if Firebase unavailable
+    if (["free","standard"].includes(tier)) {
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const dayStart   = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-    const [monthSnap, daySnap] = await Promise.all([
-      db.collection("users").doc(uid).collection("sessions")
-        .where("created_at",">=",monthStart).count().get(),
-      db.collection("users").doc(uid).collection("sessions")
-        .where("created_at",">=",dayStart).count().get(),
-    ]);
+      const [monthSnap, daySnap] = await Promise.all([
+        db.collection("users").doc(uid).collection("sessions")
+          .where("created_at",">=",monthStart).count().get(),
+        db.collection("users").doc(uid).collection("sessions")
+          .where("created_at",">=",dayStart).count().get(),
+      ]);
 
-    const monthCount = monthSnap.data().count;
-    const dayCount   = daySnap.data().count;
+      const monthCount = monthSnap.data().count;
+      const dayCount   = daySnap.data().count;
 
-    if (monthCount >= 5) {
-      return res.status(403).json({
-        error:"session_limit_reached",
-        upgrade: true,
-        used_monthly: monthCount, limit_monthly: 5,
-        used_daily: dayCount, limit_daily: 3,
-        message:"Free plan: 5 sessions/month. Upgrade to continue.",
-      });
+      if (monthCount >= 5) {
+        return res.status(403).json({
+          error:"session_limit_reached",
+          upgrade: true,
+          used_monthly: monthCount, limit_monthly: 5,
+          used_daily: dayCount, limit_daily: 3,
+          message:"Free plan: 5 sessions/month. Upgrade to continue.",
+        });
+      }
+      if (dayCount >= 3) {
+        return res.status(403).json({
+          error:"session_limit_reached",
+          upgrade: true,
+          used_monthly: monthCount, limit_monthly: 5,
+          used_daily: dayCount, limit_daily: 3,
+          message:"Free plan: 3 sessions/day. Try again tomorrow.",
+        });
+      }
     }
-    if (dayCount >= 3) {
-      return res.status(403).json({
-        error:"session_limit_reached",
-        upgrade: true,
-        used_monthly: monthCount, limit_monthly: 5,
-        used_daily: dayCount, limit_daily: 3,
-        message:"Free plan: 3 sessions/day. Try again tomorrow.",
-      });
-    }
+
+    const session_id = "sess_" + randomBytes(6).toString("hex");
+    const mode = req.body?.mode || "laptop";
+
+    // Create session doc
+    await db.collection("users").doc(uid).collection("sessions").doc(session_id).set({
+      session_id, uid, mode, tier, status:"active",
+      created_at: new Date().toISOString(),
+      server_ts: FieldValue.serverTimestamp(),
+    });
+
+    return res.status(200).json({ session_id, tier, mode });
+  } catch (e) {
+    console.warn("[session/start] limit check / session doc failed, falling back to local:", e.message?.slice(0,120));
+    return res.status(200).json({ session_id: "local_" + randomBytes(4).toString("hex"), tier, mode: req.body?.mode || "laptop", source: "local_fallback" });
   }
-
-  const session_id = "sess_" + randomBytes(6).toString("hex");
-  const mode = req.body?.mode || "laptop";
-
-  // Create session doc
-  await db.collection("users").doc(uid).collection("sessions").doc(session_id).set({
-    session_id, uid, mode, tier, status:"active",
-    created_at: new Date().toISOString(),
-    server_ts: FieldValue.serverTimestamp(),
-  });
-
-  return res.status(200).json({ session_id, tier, mode });
 }
