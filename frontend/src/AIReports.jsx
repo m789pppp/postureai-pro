@@ -9,6 +9,7 @@ import {
   weekWindows, lifetimeSessions, readingReliability,
 } from "./lib/clinicalMetrics.js";
 import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
+import { getCached, setCache, getCachedAsync, setFirestoreCache } from "./aiPreloader.js";
 import { getLocalAIStatus } from "./localAI.js";
 import { featureTier, qualityFor } from "./lib/tierQuality.js";
 import { exportPDFReport } from "./lib/pdfReports.js";
@@ -290,15 +291,46 @@ This user score: ${avgScore}/100
   };
 
   const loadReport = useCallback(async (key) => {
-    if (aiText[key]) return; // cached
+    if (aiText[key]) return; // already loaded this mount
     if (!sessions.length && key !== "department") return;
+
+    // Persistent cache (mirrors AIInsights.jsx/PredictiveAI.jsx's own
+    // aiPreloader.js usage) — this component's own `aiText` state was the
+    // ONLY cache here, which lives only as long as the panel stays
+    // mounted. Closing and reopening AI Reports (every `onClose` here
+    // unmounts it) reset `aiText` to {} and re-ran a fresh, several-
+    // second LLM call for a report that had not changed at all — the
+    // other two AI panels already solved this exact problem and this one
+    // never got the fix. cacheTabKey is prefixed so these reports don't
+    // collide with AIInsights'/PredictiveAI's own cache entries for the
+    // same uid/lang/session-count.
+    const cacheTabKey = `reports_${key}`;
+    const memCached = uid ? getCached(uid, cacheTabKey, lang, sessions.length) : null;
+    if (memCached) { setAiText(prev => ({ ...prev, [key]: memCached })); return; }
+
     setLoading(true); setError("");
+
+    if (uid) {
+      try {
+        const fsCached = await getCachedAsync(uid, cacheTabKey, lang, sessions.length);
+        if (fsCached) {
+          setAiText(prev => ({ ...prev, [key]: fsCached }));
+          setLoading(false);
+          return; // served from Firestore -- no AI call needed
+        }
+      } catch {}
+    }
+
     try {
       const text = await callGemini(prompts[key]?.() || "", system, 1200);
       setAiText(prev => ({ ...prev, [key]: text }));
+      if (text && uid) {
+        setCache(uid, cacheTabKey, lang, text, sessions.length);
+        try { await setFirestoreCache(uid, cacheTabKey, lang, text, sessions.length); } catch {}
+      }
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [sessions, avgScore, weekAvg, allUsers, lang]);
+  }, [sessions, avgScore, weekAvg, allUsers, lang, uid]);
 
   useEffect(() => { loadReport(tab); }, [tab]);
 
