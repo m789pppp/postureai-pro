@@ -16,7 +16,7 @@ import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI, FamilyAPI }
 import VoiceCoachSettings from "./VoiceCoachSettings.jsx";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
-import { BasicDashboard } from "./BasicFeatures.jsx";
+import { BasicDashboard, WhatsAppReminder } from "./BasicFeatures.jsx";
 import { WeeklyIntelligenceButton, WeeklyIntelligenceModal } from "./WeeklyIntelligence.jsx";
 // One icon language for the whole product. The sidebar was built out of emoji
 // (🏆 🤖 🧠 🔮 🩺 next to a geometric ⊞), so a single nav column mixed flat
@@ -2833,6 +2833,13 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
       {tab==="notifications"&&(
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           <PushNotificationSettings cs={cs} isAr={isAr} addToast={addToast} />
+          {/* Moved here from the main dashboard — WhatsApp delivery is
+              Coming Soon, so it doesn't need a top-of-dashboard slot; this
+              is where someone configuring their notification prefs would
+              look for it anyway. */}
+          {tierAtLeast(tier,"basic") && (
+            <WhatsAppReminder profile={profile} cs={cs} isAr={isAr} addToast={addToast} />
+          )}
           {tierAtLeast(tier,"elite") ? (
             <VoiceCoachSettings cs={cs} isAr={isAr} lang={lang} addToast={addToast} />
           ) : (
