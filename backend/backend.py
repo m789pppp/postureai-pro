@@ -14184,17 +14184,29 @@ def emr_patient_summary(patient_uid):
         days = min(int(request.args.get("days", 30)), 365)
         cutoff = datetime.utcnow() - timedelta(days=days)
 
-        # Authorization: self or org HR admin
-        if caller_uid != patient_uid:
-            caller_snap = db.collection("users").document(caller_uid).get()
-            caller_data = caller_snap.to_dict() or {} if caller_snap.exists else {}
-            if caller_data.get("user_type") not in ("hr_admin","platform_admin"):
-                return jsonify({"error":"Forbidden — only the patient or their HR admin can request this","code":403}), 403
-
         # Fetch patient profile
         patient_snap = db.collection("users").document(patient_uid).get()
         patient_data = patient_snap.to_dict() if patient_snap.exists else {}
         patient_name = patient_data.get("name","Unknown")
+
+        # Authorization: self, a platform admin, or specifically an HR admin
+        # of THIS patient's own company. The docstring already says "HR
+        # admin of their org" — the check only verified user_type=="hr_admin"
+        # and never actually compared company_id, so any HR admin at any
+        # company could pull another company's employee's FHIR health
+        # summary (diagnoses-adjacent posture/pain data) just by knowing
+        # their uid. platform_admin is a real cross-org role and is exempt.
+        if caller_uid != patient_uid:
+            caller_snap = db.collection("users").document(caller_uid).get()
+            caller_data = caller_snap.to_dict() or {} if caller_snap.exists else {}
+            caller_type = caller_data.get("user_type")
+            if caller_type == "platform_admin":
+                pass
+            elif caller_type == "hr_admin" and caller_data.get("company_id") and \
+                 caller_data.get("company_id") == patient_data.get("company_id"):
+                pass
+            else:
+                return jsonify({"error":"Forbidden — only the patient or their own company's HR admin can request this","code":403}), 403
 
         # Fetch sessions
         sessions_query = (
@@ -14326,15 +14338,22 @@ def emr_webhook_receiver():
         import hmac, hashlib
         secret = os.getenv("EMR_WEBHOOK_SECRET","")
         sig_header = request.headers.get("X-Corvus-Signature","")
-        if secret:
-            body_bytes = request.get_data()
-            expected   = "sha256=" + hmac.new(
-                secret.encode(), body_bytes, hashlib.sha256
-            ).hexdigest()
-            if not hmac.compare_digest(sig_header, expected):
-                return jsonify({"error":"Invalid signature"}), 401
-        else:
-            body_bytes = request.get_data()
+        # Same fail-open bug already fixed for the PayMob and Stripe
+        # webhooks above (see their comments): `if secret:` meant an
+        # unset EMR_WEBHOOK_SECRET skipped verification ENTIRELY instead
+        # of refusing the request, so anyone could POST arbitrary data
+        # into emr_webhooks (queued for "async processing") with no
+        # signature at all whenever this integration isn't configured —
+        # the same state as every other optional secret in this
+        # deployment. Reject outright instead of silently trusting it.
+        if not secret:
+            return jsonify({"error":"EMR_WEBHOOK_SECRET not configured"}), 503
+        body_bytes = request.get_data()
+        expected   = "sha256=" + hmac.new(
+            secret.encode(), body_bytes, hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(sig_header, expected):
+            return jsonify({"error":"Invalid signature"}), 401
 
         payload = request.get_json(force=True) or {}
         event_type = payload.get("type","unknown")
