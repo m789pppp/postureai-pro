@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
+import { StreakFreezeButton } from "./BasicFeatures.jsx";
 const API = API_BASE_URL;
 
 // ── Client-side gamification fallback ─────────────────────────────
@@ -709,7 +710,7 @@ export function Leaderboard({ companyName, cs, lang = "en" }) {
 }
 
 // ── Main Gamification Panel ───────────────────────────────────────
-export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", tier = "standard", onAchievementsUpdate, onClose }) {
+export function GamificationPanel({ profile, sessions, calibration, employees, cs, lang = "en", tier = "standard", onAchievementsUpdate, onClose, addToast }) {
   useBodyScrollLock();
   const [gamData, setGamData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -861,6 +862,12 @@ export function GamificationPanel({ profile, sessions, calibration, employees, c
               <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
                 {gamData && <XPBar xp={gamData.xp} level={gamData.level} xpCurrent={gamData.xp_current} xpNext={gamData.xp_to_next} levelLabel={gamData.level_label} cs={DARK} lang={lang} />}
                 <StreakDisplay streak={profile?.streak_days || 0} cs={DARK} lang={lang} />
+              </div>
+              {/* Was on the main dashboard, disconnected from the streak it
+                  protects — which lives right here, next to the streak
+                  display above. */}
+              <div style={{ marginBottom: 16 }}>
+                <StreakFreezeButton profile={profile} cs={DARK} isAr={lang === "ar"} addToast={addToast} />
               </div>
               <WeeklyChallengeCard wc={gamData?.weekly_challenge} cs={DARK} lang={lang} />
               {/* Daily Goal */}

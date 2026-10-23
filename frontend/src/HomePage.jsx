@@ -663,11 +663,11 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
         <SessionUsageBar used={Math.max(realMonthUsage ?? 0, month)} limit={FREE_MONTHLY_SESSION_LIMIT} isAr={isAr} cs={cs} onUpgrade={onBilling}/>
       )}
 
-      {/* Was gated to isFreeTier — the inverse of every other gate in the app.
-          "Where does it hurt?" is the single highest-signal thing a user can
-          tell the coach, and paying users could not answer it at all. */}
-      <PainAreaSelfReport isAr={isAr} cs={cs} initial={profile?.pain_area||null}
-        onSave={(areaId)=> user?.uid ? updateUserProfile(user.uid,{pain_area:areaId}) : undefined}/>
+      {/* PainAreaSelfReport ("Where does it hurt?") removed from the
+          dashboard — redundant next to Symptom Log, which asks the same
+          thing with more detail. profile.pain_area still feeds the AI
+          Coach's context when set; it just no longer has a standalone
+          dashboard card prompting for it. */}
 
       {pro && (
         <>
@@ -862,48 +862,13 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
           onAction={()=>{setPage("live");setTimeout(()=>startCamera?.(),200)}}/>
       )}
 
-      {/* Developer API + Insurance Partnership entry cards — moved down
-          here, below the user's own data, instead of sitting near the top
-          mixed in with calibration/certificate. These are a dev-integration
-          doc link and a B2B insurance-partnership pitch, not personal
-          posture content; an individual user who wants either can still
-          find them, just not as the first thing competing for attention
-          with their own scores and streak. (Already have a proper home in
-          the HR/company "Management Tools" section too.) */}
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, opacity:.85 }}>
-        <div style={{ background:cs.card, border:"1px dashed rgba(26,86,219,.3)",
-          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{fontSize:18}}>⚡</span>
-            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>Posture API</div>
-          </div>
-          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
-            {isAr?"ادمج تحليل الوضعية في أي تطبيق":"Integrate posture analysis into any app"}
-          </div>
-          <button onClick={()=>onDevPortal?.()}
-            style={{padding:"7px 0",background:"rgba(26,86,219,.12)",border:"1px solid rgba(26,86,219,.25)",
-              borderRadius:8,color:"#60a5fa",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
-            {isAr?"عرض التوثيق":"View Docs"}
-          </button>
-        </div>
-        <div style={{ background:cs.card, border:"1px dashed rgba(16,185,129,.25)",
-          borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{fontSize:18}}>🤝</span>
-            <div style={{fontSize:12,fontWeight:700,color:cs.text}}>
-              {isAr?"خصم التأمين":"Insurance Discount"}
-            </div>
-          </div>
-          <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
-            {isAr?"وضعيتك الجيدة = خصم في تأمينك الصحي":"Good posture = health insurance discount"}
-          </div>
-          <button onClick={()=>onInsurance?.()}
-            style={{padding:"7px 0",background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.25)",
-              borderRadius:8,color:"#10b981",fontSize:11,fontWeight:700,cursor:"pointer",marginTop:"auto"}}>
-            {isAr?"اعرف أكتر":"Learn More"}
-          </button>
-        </div>
-      </div>
+      {/* Developer API + Insurance Partnership entry cards used to live
+          here. Moved to Settings > Subscription — a dev-integration doc
+          link and a B2B insurance pitch aren't things a user looks for on
+          their own posture dashboard; someone already thinking about their
+          account/plan is the one who'd go looking for "what else does this
+          unlock". (Already have a proper home in the HR/company
+          "Management Tools" section too.) */}
     </div>
   );
 }
@@ -1938,7 +1903,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
   onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA, onChangePassword, onHelp,
-  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount }) {
+  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount, onDevPortal, onInsurance }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
   // Was document.querySelector('input[type=file]') — grabs the FIRST file
@@ -2523,6 +2488,47 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             </span>
             <span style={{ color:cs.muted }}>›</span>
           </button>
+
+          {/* Developer API + Insurance Partnership — used to sit near the
+              top of the main dashboard, which is the one place a user is
+              trying to look at their OWN posture data. Moved here: this is
+              where someone already thinking about their account/plan would
+              look for "what else does this account unlock". */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:10, marginBottom:16 }}>
+            <div style={{ background:cs.card, border:"1px dashed rgba(26,86,219,.3)",
+              borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:7 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{fontSize:16}}>⚡</span>
+                <div style={{fontSize:12,fontWeight:700,color:cs.text}}>Posture API</div>
+              </div>
+              <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+                {isAr?"ادمج تحليل الوضعية في أي تطبيق":"Integrate posture analysis into any app"}
+              </div>
+              <button onClick={()=>onDevPortal?.()}
+                style={{padding:"6px 0",background:"rgba(26,86,219,.12)",border:"1px solid rgba(26,86,219,.25)",
+                  borderRadius:7,color:"#60a5fa",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {isAr?"عرض التوثيق":"View Docs"}
+              </button>
+            </div>
+            <div style={{ background:cs.card, border:"1px dashed rgba(16,185,129,.25)",
+              borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:7 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{fontSize:16}}>🤝</span>
+                <div style={{fontSize:12,fontWeight:700,color:cs.text}}>
+                  {isAr?"خصم التأمين":"Insurance Discount"}
+                </div>
+              </div>
+              <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+                {isAr?"وضعيتك الجيدة = خصم في تأمينك الصحي":"Good posture = health insurance discount"}
+              </div>
+              <button onClick={()=>onInsurance?.()}
+                style={{padding:"6px 0",background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.25)",
+                  borderRadius:7,color:"#10b981",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {isAr?"اعرف أكتر":"Learn More"}
+              </button>
+            </div>
+          </div>
+
           {!isPro(tier)&&(
             <>
               {/* ── Upgrade Plans ── */}
@@ -3908,7 +3914,8 @@ export default function HomePage({
       onHelp={()=>setShowHelp?.(true)}
       onChangePassword={()=>setShowChangePw?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
-      AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}/>
+      AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}
+      onDevPortal={onDevPortal} onInsurance={onInsurance}/>
   ) : null;
 
   const content = useMemo(()=>{

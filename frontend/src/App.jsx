@@ -6816,7 +6816,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
       }} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
       {showDashboard&&<ErrorBoundary key="dashboard"><Suspense fallback={null}><AnalyticsDashboard uid={profile?.uid} profile={profile} sessions={userSessions} cs={cs} lang={lang} onBack={()=>setShowDashboard(false)}/></Suspense></ErrorBoundary>}
       {showCoach&&<ErrorBoundary key="aicoach"><AICoach profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={()=>setShowCoach(false)}/></ErrorBoundary>}
-      {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} employees={allUsers} cs={cs} lang={lang} tier={effectiveTier} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense></ErrorBoundary>}
+      {showGamification&&<ErrorBoundary key="gamification"><Suspense fallback={null}><GamificationPanel profile={profile} sessions={userSessions} calibration={calibData} employees={allUsers} cs={cs} lang={lang} tier={effectiveTier} addToast={addToast} onAchievementsUpdate={(achievements)=>setProfile(p=>p?({...p,achievements}):p)} onClose={()=>setShowGamification(false)}/></Suspense></ErrorBoundary>}
       {showCustomAlertRules&&<CustomAlertRulesPanel isAr={isAr} cs={cs} rules={customAlertRules}
         onSave={(next)=>{
           setCustomAlertRules(next);
@@ -6836,7 +6836,13 @@ async function downloadPDF(sessionOverride, isClinical=false){
       {showHelp&&<ErrorBoundary key="help"><Suspense fallback={null}><HelpCenter cs={cs} lang={lang} onClose={()=>setShowHelp(false)}/></Suspense></ErrorBoundary>}
       {showChangelog&&isAdmin&&<ErrorBoundary key="changelog"><APIChangelog cs={cs} onClose={()=>setShowChangelog(false)}/></ErrorBoundary>}
       {showAIInsights&&<ErrorBoundary key="aiinsights"><Suspense fallback={null}><AIInsights profile={profile} sessions={userSessions} calibration={calibData} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowAIInsights(false)}/></Suspense></ErrorBoundary>}
-      {showSymptomCorrelation&&<ErrorBoundary key="symptom"><SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/></ErrorBoundary>}
+      {/* Was the only lazy modal in this file rendered without its own
+          Suspense boundary — every sibling modal wraps its lazy import in
+          <Suspense fallback={null}>, but this one didn't, so the first
+          click (before the chunk is cached) threw up to whatever Suspense
+          boundary sits higher in the tree and blanked the whole dashboard
+          instead of just this modal, which read as the site hanging. */}
+      {showSymptomCorrelation&&<ErrorBoundary key="symptom"><Suspense fallback={null}><SymptomCorrelation cs={cs} lang={lang} onClose={()=>setShowSymptomCorrelation(false)}/></Suspense></ErrorBoundary>}
       {showPredictiveAI&&<ErrorBoundary key="predictiveai"><Suspense fallback={null}><PredictiveAI profile={profile} sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowPredictiveAI(false)}/></Suspense></ErrorBoundary>}
       {showAIReports&&<ErrorBoundary key="aireports"><Suspense fallback={null}><AIReports profile={profile} sessions={userSessions} allUsers={allUsers} cs={cs} lang={lang} effectiveTier={effectiveTier} uid={user?.uid} onClose={()=>setShowAIReports(false)}/></Suspense></ErrorBoundary>}
       {showSessionComparison&&<ErrorBoundary key="sessioncomparison"><SessionComparison sessions={userSessions} cs={cs} lang={lang} effectiveTier={effectiveTier} onUpgrade={()=>setShowBilling(true)} onClose={()=>setShowSessionComparison(false)}/></ErrorBoundary>}
