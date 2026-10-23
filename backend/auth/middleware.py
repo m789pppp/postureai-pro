@@ -319,6 +319,44 @@ def _get_user_role(uid: str) -> dict:
                     except Exception as _exp_err:
                         print(f"[auth] subscription_expiry parse error for {uid}: {_exp_err}", file=sys.stderr)
 
+                # ── Trial-tier elevation ────────────────────────────────
+                # frontend/src/firebase.js's createUserProfile() sets
+                # is_trial/trial_tier/trial_expires_at at signup so every
+                # new account experiences Professional for 7 days. Nothing
+                # here ever read trial_tier — g.tier (what every single
+                # @require_tier(...) check on this server reads) stayed at
+                # the raw stored tier ("standard") for the entire trial, so
+                # every backend-enforced Professional/Elite feature 403'd
+                # for a trial user the whole time they were supposed to be
+                # experiencing it, while the frontend (which does read
+                # trial_tier directly in a few places) showed them as
+                # "Pro" regardless — the exact gap this function's own
+                # elite-elevation block below already fixed once for
+                # institutional domains, just not for trials.
+                # Same "only ever go up" rule as elite-elevation: never
+                # downgrades a user who already has an equal-or-higher
+                # tier some other way.
+                if role_data["is_trial"]:
+                    trial_tier_raw = data.get("trial_tier")
+                    trial_expires_raw = data.get("trial_expires_at")
+                    trial_active = True
+                    if trial_expires_raw:
+                        try:
+                            trial_expiry_dt = datetime.fromisoformat(str(trial_expires_raw).replace("Z", "+00:00"))
+                            if trial_expiry_dt.tzinfo is None:
+                                trial_expiry_dt = trial_expiry_dt.replace(tzinfo=timezone.utc)
+                            trial_active = trial_expiry_dt >= datetime.now(timezone.utc)
+                        except Exception as _trial_exp_err:
+                            print(f"[auth] trial_expires_at parse error for {uid}: {_trial_exp_err}", file=sys.stderr)
+                    if trial_active and trial_tier_raw:
+                        trial_tier_norm = _normalize_tier(trial_tier_raw)
+                        if TIER_ORDER.get(trial_tier_norm, 0) > TIER_ORDER.get(role_data["tier"], 0):
+                            role_data["tier"] = trial_tier_norm
+                    elif not trial_active:
+                        # Trial window has passed — don't keep reporting
+                        # is_trial:true for a trial that's actually over.
+                        role_data["is_trial"] = False
+
                 # ── Domain / email auto-elevation ──────────────────────
                 # Elevate to elite if the user's email qualifies.
                 # Uses TIER_ORDER so we only ever go UP, never downgrade
