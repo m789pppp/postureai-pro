@@ -2062,11 +2062,23 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
   const[open,setOpen]=useState(false);
   const ref=useRef(null);
   const initial=(profile?.name||user?.email||"U")[0].toUpperCase();
-  const tierColor=profile?.tier==="elite"?"#4FAE8E":profile?.tier==="professional"?"#0ea5e9":"#6366f1";
+  // Was profile?.tier directly — the raw, un-elevated Firestore tier
+  // ("standard" for every brand-new trial account), while every other
+  // tier badge on this page (sidebar, dashboard, AI Coach limit) already
+  // shows the trial-elevated tier. This one spot showed "STANDARD" for a
+  // user the rest of the UI was correctly calling "Pro".
+  const displayTier = profile?.is_trial && profile?.trial_tier ? profile.trial_tier : profile?.tier;
+  const tierColor=displayTier==="elite"?"#4FAE8E":displayTier==="professional"?"#0ea5e9":"#6366f1";
 
-  // Trial days remaining
+  // Trial days remaining. Was `a?.() || 0 - Date.now()` — `||` binds looser
+  // than `-`, so this parsed as `a?.() || (0 - Date.now())`, not
+  // `(a?.() || 0) - Date.now()`. Since getTime() is a real, non-zero
+  // timestamp, the `||` always short-circuited to it directly — the
+  // subtraction never ran — so this divided the raw expiry timestamp
+  // itself (milliseconds since epoch) by ms-per-day, showing something
+  // like "20757 days left" instead of the actual ~7.
   const trialDaysLeft = profile?.is_trial && profile?.trial_expires_at
-    ? Math.max(0, Math.ceil((profile.trial_expires_at.toDate?.()?.getTime?.() || 0 - Date.now()) / 86400000))
+    ? Math.max(0, Math.ceil(((profile.trial_expires_at.toDate?.()?.getTime?.() || 0) - Date.now()) / 86400000))
     : null;
 
   useEffect(()=>{
@@ -2110,7 +2122,7 @@ function NavAvatarDropdown({user,profile,cs,lang,isAr,isAdmin,isHRAdmin,onProfil
           <div style={{padding:"12px 14px",borderBottom:`0.5px solid ${cs.border}`}}>
             <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{profile?.name || profile?.email?.split("@")[0] || user?.email?.split("@")[0] || "User"}</div>
             <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{user?.email}</div>
-            {profile?.tier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{profile.tier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
+            {displayTier&&<div style={{display:"inline-block",marginTop:5,background:`${tierColor}18`,border:`0.5px solid ${tierColor}40`,borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700,color:tierColor}}>{displayTier.toUpperCase()}{profile.is_trial?" ⏱":""}</div>}
             {profile?.is_trial&&trialDaysLeft!==null&&(
               <div style={{marginTop:4,fontSize:9.5,color:"#D6A24C",fontWeight:600}}>
                 {isAr?`${trialDaysLeft} يوم متبقي`:`${trialDaysLeft} days left`}
