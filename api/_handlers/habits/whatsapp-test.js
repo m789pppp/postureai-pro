@@ -3,11 +3,36 @@
  * Sends a test WhatsApp reminder via Twilio
  * Body: { phone, name, lang }
  */
+import { initializeApp, getApps, cert } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+
+function getAdminAuth() {
+  if (!getApps().length) {
+    initializeApp({ credential: cert({
+      projectId:   process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey:  (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+    }) });
+  }
+  return getAuth();
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+  // Was completely unauthenticated — this sends a real, Twilio-billed
+  // WhatsApp message to whatever phone number is in the request body,
+  // which the caller fully controls. Anyone who found this URL could
+  // spam arbitrary numbers at the business's expense with no rate limit
+  // or attribution. Require a valid Firebase token, same as every other
+  // endpoint in this codebase that spends money or messages a third party.
+  const idToken = (req.headers.authorization || "").replace("Bearer ", "").trim();
+  if (!idToken) return res.status(401).json({ error: "Authentication required" });
+  try { await getAdminAuth().verifyIdToken(idToken); }
+  catch { return res.status(401).json({ error: "Invalid or expired token" }); }
 
   const { phone, name = "User", lang = "en" } = req.body || {};
   if (!phone) return res.status(400).json({ error: "phone required" });

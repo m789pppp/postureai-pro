@@ -9,7 +9,7 @@
  * 3. WhatsAppReminder   — session reminder via WhatsApp
  */
 import React, { useState, useEffect, useCallback } from "react";
-import { updateUserProfile } from "./firebase.js";
+import { updateUserProfile, getAuthToken } from "./firebase.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -236,9 +236,19 @@ export function WhatsAppReminder({ profile, cs, isAr, addToast }) {
     }
     setTestSending(true);
     try {
+      // Was sent with no auth header at all — anyone who found this URL
+      // could POST any phone number and trigger a real, Twilio-billed
+      // WhatsApp send to it, with no rate limit or attribution. Now
+      // requires the caller's own Firebase token, matching every other
+      // endpoint in this codebase that can spend money or send to a
+      // third party.
+      const token = await getAuthToken().catch(() => null);
       const res = await fetch("/api/habits/whatsapp-test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           phone: phone.trim(),
           name: profile?.name || "User",
