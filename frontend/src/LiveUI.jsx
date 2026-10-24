@@ -195,6 +195,7 @@ export function Icon({ name, size = 18, color = "currentColor", strokeWidth = 1.
     case "user": return <svg {...c}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg>;
     case "trend": return <svg {...c}><polyline points="3 17 9 11 13 15 21 6" /><polyline points="15 6 21 6 21 12" /></svg>;
     case "angle": return <svg {...c}><polyline points="4 4 4 20 20 20" /><path d="M4 13a7 7 0 0 1 7 7" /></svg>;
+    case "flame": return <svg {...c}><path d="M12 2.5c2.8 3.2 1.4 5.3.3 6.8-1 1.4-1.7 2.6-.3 4.2.7-1.6 1.6-2.2 2.4-2.6.8 2 .4 3.7-.6 5-1.3 1.7-3.6 2.5-5.6 1.7-2.2-.9-3.6-3.3-3-5.8.5-2.1 2.2-3.4 3-5.4.5-1.3.4-2.6-.2-3.9 1.4.2 2.7.8 4 2z" /></svg>;
     case "skeleton": return (
       <svg {...c}>
         <circle cx="12" cy="5" r="2.4" />
