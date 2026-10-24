@@ -14907,8 +14907,33 @@ CONVERSATION STYLE:
         _temperature = 0.3 if _is_report_req else 0.55
         _max_tok = _quality_coach["max_tokens"]
 
+        # ── Gemini / Groq first — this was the one caller in the backend
+        # that skipped straight past both of them to Ollama/LLM7.io, even
+        # with real GEMINI_API_KEY/GROQ_API_KEY configured. call_ai() (the
+        # "unified AI call entry point for this entire backend", per its own
+        # docstring) documents exactly this Gemini→Groq→Ollama order for
+        # every OTHER AI feature — session analysis, reports, insights —
+        # but Dr. Corvus chat, the one feature a user actually talks to,
+        # had its own separate, older fallback chain that never grew the
+        # Gemini/Groq branches when they were added elsewhere. The result:
+        # every coach_chat reply came from either a local Ollama instance
+        # (unset in this deployment) or an anonymous third-party gateway,
+        # never from the two paid-tier-quality providers this product is
+        # actually configured with. call_gemini/call_groq accept the same
+        # [{role,content},...] shape already built above as ollama_msgs.
+        if GEMINI_API_KEY:
+            try:
+                text = call_gemini(ollama_msgs, max_tokens=_max_tok, temperature=_temperature)
+            except Exception as _ge:
+                log_event("coach_gemini_error", meta={"error": str(_ge)[:80]})
+        if text is None and GROQ_API_KEY:
+            try:
+                text = call_groq(ollama_msgs, max_tokens=_max_tok, temperature=_temperature)
+            except Exception as _qe:
+                log_event("coach_groq_error", meta={"error": str(_qe)[:80]})
+
         # ── Local Ollama (multi-turn via OpenAI messages format) ─────────
-        if OLLAMA_URL:
+        if text is None and OLLAMA_URL:
             try:
                 resp_local = req.post(
                     OLLAMA_URL.rstrip("/") + "/v1/chat/completions",

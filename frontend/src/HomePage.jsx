@@ -750,52 +750,28 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
         </div>
       )}
 
-      {/* Calibrate + Certificate — two quick-action cards side by side on
-          wider screens instead of two full-width rows stacked on top of
-          each other; collapses back to one column automatically below
-          ~560px per card via auto-fit, same pattern as the stat tiles above. */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
-        <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12,
-          padding:"16px 18px", display:"flex", alignItems:"center", gap:16 }}>
-          <div style={{ width:46, height:46, borderRadius:10, flexShrink:0,
-            background:"rgba(16,185,129,.12)", display:"flex", alignItems:"center",
-            justifyContent:"center" }}><NavIcon name="target" size={22} color="#10b981"/></div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
-              {isAr?"معايرة الكاميرا":"Camera Calibration"}
-            </div>
-            <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
-              {isAr?"اضبط موضع الكاميرا للحصول على دقة أعلى":"Align your camera for accurate posture tracking"}
-            </div>
+      {/* Certificate card moved to Settings > Subscription, next to Posture
+          API/Insurance — a LinkedIn badge purchase isn't something a user
+          looks for on their day-to-day posture dashboard. */}
+      <div style={{ background:cs.card, border:`1px solid ${cs.border}`, borderRadius:12,
+        padding:"16px 18px", display:"flex", alignItems:"center", gap:16 }}>
+        <div style={{ width:46, height:46, borderRadius:10, flexShrink:0,
+          background:"rgba(16,185,129,.12)", display:"flex", alignItems:"center",
+          justifyContent:"center" }}><NavIcon name="target" size={22} color="#10b981"/></div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:cs.text }}>
+            {isAr?"معايرة الكاميرا":"Camera Calibration"}
           </div>
-          <button onClick={()=>setShowCalibWizard(true)}
-            style={{ padding:"8px 16px", background:"rgba(16,185,129,.15)",
-              border:"1px solid rgba(16,185,129,.3)", borderRadius:8,
-              color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
-            {isAr?"ابدأ المعايرة":"Calibrate"}
-          </button>
-        </div>
-
-        <div style={{ background:cs.card, border:profile?.has_cert?"1px solid rgba(245,158,11,.3)":"1px dashed rgba(245,158,11,.25)",
-          borderRadius:14, padding:"16px 18px", display:"flex", alignItems:"center", gap:14 }}>
-          <span style={{fontSize:26}}>🏅</span>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:cs.text}}>
-              {isAr?"شهادة إرجونوميكس Corvus":"Corvus Ergonomist Certificate"}
-            </div>
-            <div style={{fontSize:11,color:cs.muted,marginTop:2}}>
-              {profile?.has_cert
-                ?(isAr?"✅ شهادتك صالحة · "+profile.cert_id:"✅ Valid · "+profile.cert_id)
-                :(isAr?"أثبت بيئة عملك الصحية على LinkedIn · ١٥٠ جنيه مرة واحدة":"Prove healthy workspace on LinkedIn · 150 EGP one-time")}
-            </div>
+          <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>
+            {isAr?"اضبط موضع الكاميرا للحصول على دقة أعلى":"Align your camera for accurate posture tracking"}
           </div>
-          <button onClick={()=>setShowCertModal?.(true)}
-            style={{padding:"8px 16px",background:"linear-gradient(135deg,#f59e0b,#d97706)",
-              border:"none",borderRadius:9,color:"#fff",fontSize:12,fontWeight:700,
-              cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}>
-            {profile?.has_cert?(isAr?"تحميل":"Download"):(isAr?"احصل عليها":"Get Badge")}
-          </button>
         </div>
+        <button onClick={()=>setShowCalibWizard(true)}
+          style={{ padding:"8px 16px", background:"rgba(16,185,129,.15)",
+            border:"1px solid rgba(16,185,129,.3)", borderRadius:8,
+            color:"#10b981", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>
+          {isAr?"ابدأ المعايرة":"Calibrate"}
+        </button>
       </div>
 
       {/* Analytics section — inline rich view */}
@@ -1606,14 +1582,16 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
         ].map(m=>(
           <div key={m.label} style={{ background:cs.card, border:`1px solid ${cs.border}`,
             borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
-            <div style={{ fontSize:18, fontWeight:800, color:m.col }}>{m.val}</div>
+            <div style={{ fontSize:18, fontWeight:800, color:m.col,
+              textShadow: m.val!=="—" ? `0 0 14px ${m.col}50` : "none" }}>{m.val}</div>
             <div style={{ fontSize:10, color:cs.muted, marginTop:2 }}>{m.label}</div>
           </div>
         ))}
       </div>
 
       {/* Action buttons row */}
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+      <SectionHead title={isAr?"التقارير والتصدير":"Reports & Export"} cs={cs}/>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:-6 }}>
         {isProTier ? (
           <button onClick={()=>handlePDF(userSessions[0], totalSessions, false, "toolbar")}
             disabled={pdfLoading==="toolbar"}
@@ -1773,7 +1751,8 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
       </div>
 
       {/* Sessions list */}
-      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+      <SectionHead title={isAr?"كل الجلسات":"All Sessions"} cs={cs}/>
+      <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:-6 }}>
         {userSessions.map((s,i)=>{
           const d   = s.created_at?.toDate?.() ?? new Date(s.created_at||0);
           const sc  = s.avg_score||0;
@@ -1789,7 +1768,8 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
               {/* Score circle */}
               <div style={{ width:44, height:44, borderRadius:8, flexShrink:0,
                 background:`${col}18`, display:"flex", alignItems:"center",
-                justifyContent:"center", fontSize:16, fontWeight:800, color:col }}>
+                justifyContent:"center", fontSize:16, fontWeight:800, color:col,
+                textShadow: sc ? `0 0 12px ${col}60` : "none" }}>
                 {sc||"—"}
               </div>
               {/* Info */}
@@ -1903,7 +1883,7 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
   onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA, onChangePassword, onHelp,
-  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount, onDevPortal, onInsurance }) {
+  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount, onDevPortal, onInsurance, setShowCertModal }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
   // Was document.querySelector('input[type=file]') — grabs the FIRST file
@@ -2525,6 +2505,27 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 style={{padding:"6px 0",background:"rgba(16,185,129,.1)",border:"1px solid rgba(16,185,129,.25)",
                   borderRadius:7,color:"#10b981",fontSize:11,fontWeight:700,cursor:"pointer"}}>
                 {isAr?"اعرف أكتر":"Learn More"}
+              </button>
+            </div>
+
+            {/* Certificate badge — also moved out of the main dashboard. */}
+            <div style={{ background:cs.card, border:profile?.has_cert?"1px solid rgba(245,158,11,.3)":"1px dashed rgba(245,158,11,.25)",
+              borderRadius:12, padding:"12px 14px", display:"flex", flexDirection:"column", gap:7 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{fontSize:16}}>🏅</span>
+                <div style={{fontSize:12,fontWeight:700,color:cs.text}}>
+                  {isAr?"شهادة Corvus":"Corvus Certificate"}
+                </div>
+              </div>
+              <div style={{fontSize:10.5,color:cs.muted,lineHeight:1.5}}>
+                {profile?.has_cert
+                  ?(isAr?"✅ شهادتك صالحة · "+profile.cert_id:"✅ Valid · "+profile.cert_id)
+                  :(isAr?"أثبت بيئة عملك الصحية على LinkedIn":"Prove healthy workspace on LinkedIn")}
+              </div>
+              <button onClick={()=>setShowCertModal?.(true)}
+                style={{padding:"6px 0",background:"rgba(245,158,11,.12)",border:"1px solid rgba(245,158,11,.3)",
+                  borderRadius:7,color:"#f59e0b",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {profile?.has_cert?(isAr?"تحميل":"Download"):(isAr?"احصل عليها":"Get Badge")}
               </button>
             </div>
           </div>
@@ -3375,8 +3376,9 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
       id: "care",
       header: { en:"Care", ar:"الرعاية" },
       items: [
-        { id:"t-marketplace", icon:"🩺", ico:"stethoscope", en:"Find a Physiotherapist", ar:"أخصائيو العلاج الطبيعي",
-          onClick:()=>setPage("marketplace") },
+        // Find a Physiotherapist removed from the nav — booking is Coming
+        // Soon and already listed on the Roadmap below; a sidebar link that
+        // leads to a "not live yet" page reads as broken navigation.
         { id:"t-roadmap", icon:"🗺️", en:"What's Coming", ar:"قريباً على Corvus",
           onClick:()=>setShowRoadmap(true) },
       ],
@@ -3883,8 +3885,6 @@ export default function HomePage({
       onClick:()=>isPro_&&setShowAIReports?.(true) },
     { id:"t-security", icon:"🔒", ico:"lock", en:"Security",    ar:"الأمان",
       onClick:()=>setShowSecurityCenter?.(true) },
-    { id:"t-marketplace", icon:"🩺", ico:"stethoscope", en:"Find a Physio", ar:"أخصائي علاج طبيعي",
-      onClick:()=>setPage("marketplace") },
     { id:"t-symptoms", icon:"🩹", ico:"heartPulse", en:"Symptom Log", ar:"سجل الأعراض",
       onClick:()=>setShowSymptomCorrelation?.(true) },
     ...(isAdmin ? [
@@ -3915,7 +3915,7 @@ export default function HomePage({
       onChangePassword={()=>setShowChangePw?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}
-      onDevPortal={onDevPortal} onInsurance={onInsurance}/>
+      onDevPortal={onDevPortal} onInsurance={onInsurance} setShowCertModal={setShowCertModal}/>
   ) : null;
 
   const content = useMemo(()=>{
