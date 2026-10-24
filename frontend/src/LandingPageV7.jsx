@@ -754,9 +754,15 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 <button key={m.id} onClick={()=>setMode(m.id)} style={{
                   padding:"8px 18px", borderRadius:99, border:"none",
                   fontSize:13.5, fontWeight:600, cursor:"pointer",
-                  background: mode===m.id ? LPV7_TOKENS.gHero : "transparent",
+                  // Was the full 3-stop hero gradient on a small toggle button
+                  // — the same treatment reserved for the headline and primary
+                  // CTA, reused here for a secondary control. A solid fill
+                  // reads as a deliberate choice; the gradient everywhere
+                  // reads as a theme applied uniformly rather than designed
+                  // per element.
+                  background: mode===m.id ? LPV7_TOKENS.blue : "transparent",
                   color: mode===m.id ? "#06121f" : LPV7_TOKENS.sub,
-                  boxShadow: mode===m.id ? "0 2px 12px rgba(34,211,238,.25)" : "none",
+                  boxShadow: mode===m.id ? "0 2px 12px rgba(79,124,249,.3)" : "none",
                   transition:"background .25s, color .25s, box-shadow .25s",
                 }}>
                   {ar ? m.ar : m.en}
@@ -765,21 +771,12 @@ function Hero({ lang, onCTA, mode, setMode }) {
             </div>
           </Reveal>
 
-          <Reveal delay={40}>
-            <div style={{
-              display:"inline-flex", alignItems:"center", gap:9,
-              background:"rgba(79,124,249,.1)", border:"1px solid rgba(79,124,249,.25)",
-              borderRadius:100, padding:"7px 16px", marginBottom:28,
-              fontSize:13.5, color:LPV7_TOKENS.indigo, fontWeight:500,
-            }}>
-              <span style={{
-                width:6, height:6, borderRadius:"50%", background:LPV7_TOKENS.green,
-                boxShadow:`0 0 8px ${LPV7_TOKENS.green}`,
-                animation:"lp-pulse 1.5s ease-in-out infinite", willChange:"opacity, transform",
-              }}/>
-              {ar ? "متاح الآن · ابدأ مجاناً" : "Now Available · Free to Start"}
-            </div>
-          </Reveal>
+          {/* "Now Available · Free to Start" pill removed — a second rounded
+              badge stacked directly above the headline, saying nothing the
+              CTA button and the trust checkmarks below don't already say.
+              Two badges in a row before the headline even starts is the
+              generic-template beat; cutting straight to the toggle, then the
+              headline, reads more deliberate. */}
 
           <Reveal delay={80}>
             <h1 style={{
@@ -1058,25 +1055,14 @@ function Hero({ lang, onCTA, mode, setMode }) {
               </div>
             </div>
 
-            {/* Floating card — top. Was top:-12, right:-18 — pushed the
-                badge outside the demo card's own box, and at realistic
-                desktop widths (confirmed at both 1440px and narrower) that
-                put it partly past the page's right edge, visibly clipped —
-                the first broken-looking thing on the page. Pulled back to
-                sit just inside the card's corner instead of overflowing it. */}
-            <motion.div {...float(0, 9)} style={{ willChange:"transform",
-              position:"absolute", top:8, [ar?"left":"right"]:8,
-              background:"rgba(8,18,32,.92)",
-              border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
-              padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
-              display:"flex", alignItems:"center", gap:10, zIndex:2,
-            }}>
-              <span style={{ fontSize:20 }}>📉</span>
-              <div>
-                <div style={{ fontSize:15, fontWeight:800, color:LPV7_TOKENS.green, fontFamily:FONT_MONO, lineHeight:1 }}>-47%</div>
-                <div style={{ fontSize:10.5, color:LPV7_TOKENS.muted, marginTop:2 }}>{ar ? "إجازات مرضية" : "sick leave"}</div>
-              </div>
-            </motion.div>
+            {/* The top floating "-47%" card was removed — the demo mockup
+                already carries a browser-chrome bar, a LIVE badge, a score
+                overlay, an alert badge AND two floating external cards: six
+                overlapping UI pieces on one visual, and this one repeated a
+                stat the page states properly (with its research-average
+                attribution) in the Social Proof section just below the
+                fold. One floating card reads as a deliberate highlight;
+                two reads as decoration for its own sake. */}
 
             {/* Floating card — bottom */}
             <motion.div {...float(1.4, 8)} style={{ willChange:"transform",
