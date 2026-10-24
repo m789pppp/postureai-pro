@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";
+import { Icon } from "./LiveUI.jsx";
 
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
@@ -28,7 +29,7 @@ function Reveal({ children, delay=0, y=24 }) {
 
 const FEATURES = [
   {
-    icon:"🎯", color:"#4f7cf9",
+    icon:"target", color:"#4f7cf9",
     title:"Precision AI Posture Analysis",
     badge:"Core Engine",
     // "~96% accuracy — comparable to clinical-grade ergonomic assessments" was
@@ -39,7 +40,7 @@ const FEATURES = [
     bullets:["Forward head posture detection (Hansraj 2014)","Shoulder asymmetry & neck tilt","OSHA-compliant elbow angle monitoring","Fatigue curve scoring (Richter 2011)"],
   },
   {
-    icon:"📊", color:"#22d3ee",
+    icon:"barChart", color:"#22d3ee",
     title:"Smart HR Dashboard",
     badge:"For HR Admins",
     desc:"Real-time workforce health visibility across every department. From individual risk flags to company-wide trends — all in one view with weekly auto-reports.",
@@ -47,7 +48,7 @@ const FEATURES = [
     bullets:["Live posture scores per employee","Risk heatmaps by department","Weekly auto-generated PDF reports","Custom alert thresholds per team"],
   },
   {
-    icon:"🤖", color:"#10d9a0",
+    icon:"sparkle", color:"#10d9a0",
     title:"AI Coach — Powered by Groq",
     badge:"AI Layer",
     desc:"Every employee gets a personal AI physiotherapy coach. Evidence-based recommendations backed by scientific citations, delivered in under 2 seconds.",
@@ -55,7 +56,7 @@ const FEATURES = [
     bullets:["Session-aware therapeutic advice","Scientific citation support","Personalised stretch programs","Progressive overload tracking"],
   },
   {
-    icon:"🔗", color:"#818cf8",
+    icon:"plug", color:"#818cf8",
     title:"Enterprise Integrations",
     badge:"For IT Teams",
     desc:"Plug into your existing stack. REST API and webhooks, a Slack integration, and Microsoft Teams, Zapier, Make and Google Sheets in beta. HR-system rollouts are handled per-customer over SCIM rather than a product-specific connector.",
@@ -63,7 +64,7 @@ const FEATURES = [
     bullets:["Auto-provision users from HR system","Real-time Slack/Teams risk alerts","Jira ticket creation for ergonomic issues","Full audit log via webhooks"],
   },
   {
-    icon:"🛡️", color:"#f59e0b",
+    icon:"shield", color:"#f59e0b",
     title:"Enterprise Security",
     badge:"Compliance",
     desc:"On-device AI means video never leaves the employee's machine. AES-256 encryption, SAML SSO on Enterprise, 4-tier RBAC, and full audit trails.",
@@ -240,10 +241,10 @@ export default function ProductPage() {
                     display:"flex", alignItems:"center", gap:14,
                   }}>
                     <div style={{
-                      width:52, height:52, borderRadius:14, fontSize:24,
+                      width:52, height:52, borderRadius:14,
                       display:"flex", alignItems:"center", justifyContent:"center",
                       background:`${f.color}12`, border:`1px solid ${f.color}22`, flexShrink:0,
-                    }}>{f.icon}</div>
+                    }}><Icon name={f.icon} size={24} color={f.color} strokeWidth={1.7}/></div>
                     <div>
                       <div style={{ fontSize:11.5, color:f.color, fontWeight:700, fontFamily:FM, marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>
                         Technical Specs
