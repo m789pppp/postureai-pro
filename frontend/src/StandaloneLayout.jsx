@@ -295,22 +295,17 @@ export function SharedFooter({ lang }) {
                   ? "منصة ذكاء اصطناعي لمراقبة وضعية الجسم في بيئات العمل."
                   : "AI-powered workplace posture monitoring for healthier, more productive teams."}
               </p>
-              {/* Trust badges */}
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {/* "ISO 27001" sat here as an earned trust badge. There is no audit,
-                    certificate or statement of applicability behind it, and a badge
-                    row is exactly where a reader takes a claim at face value.
-                    Replaced with capabilities that are actually true of the build. */}
-                {[["📷","On-device AI"],["🔒","AES-256"],["✅","GDPR"]].map(([icon,label])=>(
-                  <div key={label} style={{
-                    display:"flex", alignItems:"center", gap:5,
-                    background:"rgba(79,124,249,.06)", border:"1px solid rgba(79,124,249,.14)",
-                    borderRadius:8, padding:"5px 10px",
-                  }}>
-                    <span style={{fontSize:11}}>{icon}</span>
-                    <span style={{fontSize:10.5, color:"#4f7cf9", fontWeight:600, fontFamily:FM}}>{label}</span>
-                  </div>
-                ))}
+              {/* Trust line — was 3 bordered pill badges (📷🔒✅), the same
+                  repeated-badge-row pattern already simplified on the main
+                  landing page's footer to one plain-text line. Kept as
+                  "ISO 27001" once sat here as an earned trust badge with no
+                  audit, certificate or statement of applicability behind
+                  it; this lists capabilities that are actually true of the
+                  build instead. */}
+              <div style={{ fontSize:11.5, color:"#8896ac", fontFamily:FM }}>
+                {ar
+                  ? "On-device AI · AES-256 · جاهز لـGDPR"
+                  : "On-device AI · AES-256 · GDPR-ready"}
               </div>
             </div>
 

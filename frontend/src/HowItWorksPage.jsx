@@ -1,6 +1,13 @@
 import React, { useState, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";
+// Same hand-rolled stroke-icon set used on the landing page and the rest
+// of the authenticated app. This page's steps/time-badges/stack cards
+// used raw platform emoji (📋👥📷📊🤖⚡🧠🔥) instead — the landing
+// page's own How It Works section was already converted for the same
+// reason (emoji render inconsistently per OS/browser and read as a
+// generic template), and this standalone page was missed.
+import { Icon } from "./LiveUI.jsx";
 
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
@@ -26,7 +33,7 @@ function Reveal({ children, delay=0, y=24 }) {
 }
 
 const STEPS = [
-  { n:"01", icon:"📋", color:"#4f7cf9", time:"5 min", title:"Create your organisation",
+  { n:"01", icon:"fileText", color:"#4f7cf9", time:"5 min", title:"Create your organisation",
     desc:"Sign up, choose your plan, and create your company workspace. Add your logo, set your timezone, and configure your department structure.",
     details:["Choose Individual or Company plan","Set up department hierarchy","Configure notification preferences","Invite your IT admin for SSO setup"],
     // Was a fabricated "POST /api/v1/org/invite" — that path doesn't exist.
@@ -37,7 +44,7 @@ POST /api/hr/import-employees
 Content-Type: multipart/form-data
 file: team.csv`,
   },
-  { n:"02", icon:"👥", color:"#22d3ee", time:"10 min", title:"Onboard your team",
+  { n:"02", icon:"users", color:"#22d3ee", time:"10 min", title:"Onboard your team",
     desc:"Send invite links or upload a CSV. Employees get a 2-minute onboarding flow — no training sessions, no IT tickets.",
     details:["Bulk invite via CSV upload","Individual invite links","SCIM auto-provisioning (Enterprise)","Mobile-friendly onboarding flow"],
     // Was a fabricated "POST /api/v1/employees/bulk" with a JSON body shape
@@ -48,7 +55,7 @@ POST /api/org/send-invite
 { "email": "jane@company.com",
   "invite_url": "https://app.corvus.io/invite/abc123" }`,
   },
-  { n:"03", icon:"📷", color:"#10d9a0", time:"2 min/day", title:"Employees run daily check-ins",
+  { n:"03", icon:"camera", color:"#10d9a0", time:"2 min/day", title:"Employees run daily check-ins",
     desc:"Each employee opens Corvus in their browser, enables their webcam for 60 seconds, and gets an instant posture score. No app install. No hardware.",
     details:["Browser-based — no install","60-second daily session","33-landmark pose analysis","Instant score + coaching tips"],
     code:`// On-device analysis (no upload)
@@ -57,7 +64,7 @@ mediapipe.analyze(webcamFrame)
     advice: "Raise monitor 4cm",
     fatigue: "low" }`,
   },
-  { n:"04", icon:"📊", color:"#818cf8", time:"Automated", title:"HR reviews weekly reports",
+  { n:"04", icon:"barChart", color:"#818cf8", time:"Automated", title:"HR reviews weekly reports",
     desc:"Every Monday, HR admins receive an auto-generated PDF with department risk scores, trending issues, and recommended interventions.",
     details:["Auto PDF every Monday 8am","Department risk heatmap","Individual risk flags","ROI calculation vs sick leave"],
     code:`// Webhook on high-risk detection
@@ -67,7 +74,7 @@ POST your-endpoint
   "issue": "forward_head_posture",
   "recommended_action": "ergonomic_review" }`,
   },
-  { n:"05", icon:"🤖", color:"#f59e0b", time:"Always on", title:"AI Coach works in the background",
+  { n:"05", icon:"sparkle", color:"#f59e0b", time:"Always on", title:"AI Coach works in the background",
     desc:"Corvus' AI coach monitors trends, sends nudges, and adapts recommendations based on each employee's history. Like a physio in their pocket.",
     details:["Personalised stretch programs","Progress tracking over time","Evidence-based recommendations","Arabic and English support"],
     code:`// AI Coach response (Groq)
@@ -134,13 +141,13 @@ export default function HowItWorksPage() {
           {/* Time badges */}
           <Reveal delay={.2}>
             <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
-              {[["⚡","Setup","~15 min"],["📷","Per session","60 sec"],["📊","Reports","Weekly auto"],["🤖","AI Coach","Always on"]].map(([icon,label,val])=>(
+              {[["clock","Setup","~15 min"],["camera","Per session","60 sec"],["barChart","Reports","Weekly auto"],["sparkle","AI Coach","Always on"]].map(([icon,label,val])=>(
                 <div key={label} style={{
                   display:"flex", alignItems:"center", gap:8,
                   padding:"9px 16px", borderRadius:99,
                   background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.08)",
                 }}>
-                  <span style={{ fontSize:14 }}>{icon}</span>
+                  <Icon name={icon} size={14} color={T.indigo} strokeWidth={1.8}/>
                   <span style={{ fontSize:12.5, color:T.muted }}>{label}:</span>
                   <span style={{ fontSize:12.5, color:T.text, fontWeight:600, fontFamily:FM }}>{val}</span>
                 </div>
@@ -168,7 +175,7 @@ export default function HowItWorksPage() {
                   display:"flex", alignItems:"center", justifyContent:"center",
                   flexDirection:"column", gap:2,
                 }}>
-                  <span style={{ fontSize:22 }}>{step.icon}</span>
+                  <Icon name={step.icon} size={26} color={step.color} strokeWidth={1.7}/>
                 </div>
                 <div style={{ fontSize:11, color:step.color, fontWeight:700, fontFamily:FM,
                   marginTop:10, textAlign:"center", letterSpacing:".04em" }}>
@@ -225,14 +232,14 @@ export default function HowItWorksPage() {
           </Reveal>
           <div className="hiw-stack-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
             {[
-              { icon:"📡", color:"#4f7cf9", title:"On-device AI", desc:"MediaPipe Pose runs entirely in the browser. 33 body landmarks, 13 posture metrics, zero video upload." },
-              { icon:"🧠", color:"#22d3ee", title:"Groq LLM", desc:"llama-3.1-8b-instant powers the AI coach. Responses in < 2 seconds with scientific citation support." },
-              { icon:"🔥", color:"#10d9a0", title:"Firebase + Flask", desc:"Auth, Firestore, and a Python backend for score storage, HR reports, and webhook delivery." },
+              { icon:"target", color:"#4f7cf9", title:"On-device AI", desc:"MediaPipe Pose runs entirely in the browser. 33 body landmarks, 13 posture metrics, zero video upload." },
+              { icon:"brain", color:"#22d3ee", title:"Groq LLM", desc:"llama-3.1-8b-instant powers the AI coach. Responses in < 2 seconds with scientific citation support." },
+              { icon:"plug", color:"#10d9a0", title:"Firebase + Flask", desc:"Auth, Firestore, and a Python backend for score storage, HR reports, and webhook delivery." },
             ].map((item,i) => (
               <Reveal key={item.title} delay={i*.08}>
                 <div style={{ background:T.card, border:`1px solid ${item.color}18`,
                   borderRadius:16, padding:"24px 22px", borderTop:`2px solid ${item.color}` }}>
-                  <div style={{ fontSize:28, marginBottom:12 }}>{item.icon}</div>
+                  <div style={{ marginBottom:12 }}><Icon name={item.icon} size={26} color={item.color} strokeWidth={1.7}/></div>
                   <div style={{ fontSize:15, fontWeight:700, color:T.text, marginBottom:8, fontFamily:FD }}>{item.title}</div>
                   <p style={{ fontSize:13.5, color:T.muted, lineHeight:1.65, margin:0 }}>{item.desc}</p>
                 </div>
