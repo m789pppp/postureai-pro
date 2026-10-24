@@ -435,7 +435,13 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
   ];
 
   return (
+    // Mounted as {showAdmin && <AdminDashboard/>} inside the already-rendered
+    // app tree, not as its own page/route — same missing position:fixed bug
+    // as BillingDashboard.jsx (see its own fix for the full explanation):
+    // without it this just appended a 100dvh block below whatever the
+    // caller already had on screen instead of covering it like a modal.
     <div style={{
+      position:"fixed", inset:0, zIndex:1000, overflowY:"auto",
       minHeight:"100dvh",
       background:TOKENS.bg,
       fontFamily:"'IBM Plex Sans Arabic', 'DM Sans', system-ui, sans-serif",

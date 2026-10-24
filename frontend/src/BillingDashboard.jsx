@@ -354,7 +354,17 @@ export function BillingDashboard({ profile, user, payments:initialPayments=[], i
   })();
 
   return (
-    <div style={{ minHeight:"100dvh", background:TOKENS.bg, color:TOKENS.text,
+    // Was `minHeight:"100dvh"` with no position set — meant to fill the
+    // screen, but every caller mounts this as a plain child inside the
+    // existing page (Settings, the live-session sidebar, etc.), not as a
+    // route of its own. With default static positioning that just inserted
+    // a 100dvh-tall block into normal document flow, appended BELOW
+    // whatever the caller already had on screen — reported as "an invoice
+    // shows up at the bottom and breaks [the page]". This has always
+    // behaved like a modal (a "← Back" button that calls onClose, opened
+    // from a button click) without actually being positioned as one.
+    <div style={{ position:"fixed", inset:0, zIndex:1000, overflowY:"auto",
+      minHeight:"100dvh", background:TOKENS.bg, color:TOKENS.text,
       fontFamily:"'IBM Plex Sans Arabic','DM Sans',system-ui,sans-serif",
       direction:isAr_?"rtl":"ltr" }}>
       <style>{GLOBAL_CSS}</style>
