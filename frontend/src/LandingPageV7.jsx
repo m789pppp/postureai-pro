@@ -1805,6 +1805,9 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
   const [priceVis, setPriceVis] = useState(true);
   const toggleBilling = (b) => { setPriceVis(false); setTimeout(() => { setBilling(b); setPriceVis(true); }, 140); };
   const [localMode, setLocalMode] = useState(modeProp || "company");
+  // Which plan's column the mobile card view shows — null means "default
+  // to whichever column is marked popular", resolved once COLS exists.
+  const [mobileCol, setMobileCol] = useState(null);
 
   // Sync if parent changes mode (e.g. nav toggle)
   // Only sync from parent when parent explicitly changes (not on initial render)
@@ -2333,18 +2336,71 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                 </p>
               </div>
 
-              {/* Mobile swipe hint — the table below scrolls horizontally on
-                  narrow screens (minWidth:580 vs. a ~340px viewport), but
-                  nothing said so: no partial next-column peeking through, no
-                  scrollbar (mobile browsers auto-hide it), nothing. A phone
-                  visitor saw only the Feature + Free columns, with Basic/
-                  Pro/Elite silently off-screen — reads as a broken table,
-                  not a comparison of 4 plans. */}
-              <div className="lp-cmp-hint" style={{display:"none",alignItems:"center",justifyContent:"center",gap:6,marginBottom:10,fontSize:12,color:LPV7_TOKENS.indigo,fontFamily:FONT_MONO}}>
-                <span>{ar?"⟷ اسحب يميناً لرؤية باقي الباقات":"⟷ Swipe to see Basic, Pro & Elite"}</span>
-              </div>
+              {/* A 580px-minWidth table in a scrollable div, on a ~340px
+                  viewport, with no visible scrollbar and nothing peeking in
+                  from the next column, read as a broken single-plan table —
+                  not a comparison of 4. A "swipe to scroll" hint fixed the
+                  discoverability but not the actual experience: scrubbing a
+                  dense data table sideways on a phone is still a bad way to
+                  compare plans. Replaced on mobile with the pattern this
+                  actually calls for — pick one plan, read its full feature
+                  list top to bottom, switch plans with a tap. The table
+                  itself still renders on wider screens, where there's room
+                  for all 4 columns side by side and it works fine. */}
+              {(() => {
+                const activeKey = mobileCol || COLS.find(c => c.popular)?.key || COLS[0].key;
+                const activeC = COLS.find(c => c.key === activeKey) || COLS[0];
+                return (
+                  <div className="lp-cmp-cards" style={{ display:"none" }}>
+                    <div style={{ display:"flex", gap:6, overflowX:"auto", WebkitOverflowScrolling:"touch", padding:"2px 2px 10px", marginBottom:6 }}>
+                      {COLS.map(c => (
+                        <button key={c.key} onClick={() => setMobileCol(c.key)} style={{
+                          flexShrink:0, display:"flex", alignItems:"center", gap:6,
+                          padding:"9px 16px", borderRadius:10, cursor:"pointer",
+                          fontSize:13.5, fontWeight:700, fontFamily:FONT_MONO, whiteSpace:"nowrap",
+                          background: c.key===activeKey ? c.color : "rgba(255,255,255,.05)",
+                          color: c.key===activeKey ? "#fff" : LPV7_TOKENS.sub,
+                          border: `1px solid ${c.key===activeKey ? c.color : LPV7_TOKENS.border}`,
+                        }}>
+                          {c.label}
+                          {c.popular && <span style={{
+                            fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:99,
+                            background: c.key===activeKey ? "rgba(255,255,255,.25)" : `${c.color}22`,
+                            color: c.key===activeKey ? "#fff" : c.color,
+                          }}>{ar?"الأشهر":"TOP"}</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ borderRadius:16, border:`1px solid ${activeC.color}35`, background:LPV7_TOKENS.card, overflow:"hidden" }}>
+                      {GROUPS.map((g, gi) => (
+                        <div key={`mgrp${gi}`}>
+                          <div style={{
+                            padding:"10px 16px 6px", fontSize:10.5, fontWeight:700, color:LPV7_TOKENS.muted,
+                            letterSpacing:".08em", textTransform:"uppercase",
+                            background:"rgba(255,255,255,.025)",
+                            borderTop: gi>0 ? `1px solid ${LPV7_TOKENS.border}` : "none",
+                          }}>
+                            {ar?g.ar:g.en}
+                          </div>
+                          {g.rows.map((row, ri) => (
+                            <div key={`${gi}-${ri}`} style={{
+                              display:"flex", alignItems:"center", justifyContent:"space-between", gap:12,
+                              padding:"11px 16px",
+                              borderBottom:`1px solid rgba(255,255,255,.04)`,
+                              background: ri%2===1 ? "rgba(255,255,255,.018)" : "transparent",
+                            }}>
+                              <span style={{ fontSize:13.5, color:LPV7_TOKENS.sub, textAlign:ar?"right":"left" }}>{ar?row.ar:row.en}</span>
+                              {cell(row[activeKey], activeC.color)}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
-              {/* scrollable wrapper for mobile */}
+              {/* Desktop/tablet table — hidden below 768px, see .lp-cmp-cards above */}
               <div className="lp-cmp-scroll" style={{position:"relative",overflowX:"auto",WebkitOverflowScrolling:"touch",borderRadius:18,border:`1px solid ${LPV7_TOKENS.border}`}}>
                 <table style={{width:"100%",minWidth:580,borderCollapse:"collapse",background:LPV7_TOKENS.card}}>
                   {/* sticky header */}
@@ -2360,16 +2416,24 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                       </th>
                       {COLS.map(c=>(
                         <th key={c.key} style={{
-                          padding:"16px 12px",textAlign:"center",
-                          fontSize:13,fontWeight:700,color:c.color,
+                          padding: c.popular ? "10px 12px 14px" : "16px 12px",
+                          textAlign:"center",
+                          fontSize:14,fontWeight:700,color:c.color,
                           background: c.popular ? `${c.color}12` : LPV7_TOKENS.card,
                           borderBottom:`1px solid ${LPV7_TOKENS.border}`,
                           borderInlineStart: c.popular ? `2px solid ${c.color}55` : "none",
                           borderInlineEnd:   c.popular ? `2px solid ${c.color}55` : "none",
                           whiteSpace:"nowrap",
                         }}>
-                          {c.popular && <div style={{fontSize:9,fontWeight:700,color:c.color,letterSpacing:".05em",marginBottom:3,opacity:.8}}>
-                            {ar?"الأكثر شيوعاً":"POPULAR"}
+                          {/* Was a plain 9px uppercase label stacked directly on
+                              top of the plan name with only 3px of gap — read
+                              as two mismatched text sizes crammed together
+                              rather than a deliberate "most popular" callout. */}
+                          {c.popular && <div style={{marginBottom:6}}>
+                            <span style={{fontSize:9,fontWeight:700,color:"#fff",letterSpacing:".05em",
+                              background:c.color,borderRadius:99,padding:"2.5px 9px",whiteSpace:"nowrap"}}>
+                              {ar?"الأكثر شيوعاً":"POPULAR"}
+                            </span>
                           </div>}
                           {c.label}
                         </th>
@@ -2426,14 +2490,6 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                     ))}
                   </tbody>
                 </table>
-                {/* Right-edge fade — only shown on mobile (CSS below), hints
-                    there is more table to the right without needing JS
-                    scroll-position tracking. */}
-                <div className="lp-cmp-fade" aria-hidden="true" style={{
-                  display:"none",position:"absolute",top:0,bottom:0,[ar?"left":"right"]:0,width:28,
-                  background:`linear-gradient(${ar?"90deg":"270deg"},${LPV7_TOKENS.card},transparent)`,
-                  pointerEvents:"none",
-                }}/>
               </div>
 
               {/* CTA under table */}
@@ -2460,9 +2516,9 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
         @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
         .lp-pricing-grid > div > div{transform:none!important}}
         .lp-pricing-card{contain:layout style;}
-        @media(max-width:640px){
-          .lp-cmp-hint{display:flex!important}
-          .lp-cmp-fade{display:block!important}
+        @media(max-width:768px){
+          .lp-cmp-cards{display:block!important}
+          .lp-cmp-scroll{display:none!important}
         }
       `}</style>
     </section>
