@@ -1183,13 +1183,16 @@ function Stats({ lang }) {
   // Corvus result. They are kept for exactly that reason — the sourcing line
   // is not decoration, it is what makes the figure honest, and it renders
   // directly beneath the number.
+  // Icons were raw platform emoji (🏥💰⚙) — the one section on the page
+  // that was missed when the rest of the emoji icons (Features,
+  // HowItWorks, Schools) were converted to the shared SVG set.
   const stats = ar
-    ? [["-47%","تقليل الإجازات المرضية","متوسط من أبحاث الإرغونوميا — مش نتيجتنا","🏥"],
-       ["3.2×","عائد استثمار تقديري","نموذج حسابي لتكاليف الغياب — مش نتيجة مقاسة","💰"],
-       ["على جهازك","المعالجة بالكامل","الفيديو مايغادرش الجهاز أبداً","⚙"]]
-    : [["-47%","Reduction in sick leave","Ergonomics research average — not our result","🏥"],
-       ["3.2×","Modelled ROI in year 1","An absence-cost model, not a measured outcome","💰"],
-       ["On-device","processing","Video never leaves the device","⚙"]];
+    ? [["-47%","تقليل الإجازات المرضية","متوسط من أبحاث الإرغونوميا — مش نتيجتنا","heartPulse"],
+       ["3.2×","عائد استثمار تقديري","نموذج حسابي لتكاليف الغياب — مش نتيجة مقاسة","wallet"],
+       ["على جهازك","المعالجة بالكامل","الفيديو مايغادرش الجهاز أبداً","settings"]]
+    : [["-47%","Reduction in sick leave","Ergonomics research average — not our result","heartPulse"],
+       ["3.2×","Modelled ROI in year 1","An absence-cost model, not a measured outcome","wallet"],
+       ["On-device","processing","Video never leaves the device","settings"]];
   return (
     <section id="stats" className="lp-section">
       <div className="lp-wrap">
@@ -1214,8 +1217,8 @@ function Stats({ lang }) {
                 width:44, height:44, borderRadius:12, margin:"0 auto 16px",
                 background:`${col}14`, border:`1px solid ${col}28`,
                 display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:22, position:"relative",
-              }}>{icon}</div>
+                position:"relative",
+              }}><Icon name={icon} size={20} color={col} strokeWidth={1.8}/></div>
               <div style={{
                 fontSize:"clamp(30px,3vw,48px)", fontWeight:700, letterSpacing:"-.02em",
                 color:col, lineHeight:1, marginBottom:10,
