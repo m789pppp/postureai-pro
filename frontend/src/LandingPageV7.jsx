@@ -10,6 +10,12 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ContactModal } from "./ContactModal.jsx";
 import { LegalModal } from "./LegalCompliance.jsx";
 import { ONLINE_PAYMENT_LIVE, whatsappActivationLink, activateLabel, activationPromise } from "./lib/salesWhatsapp.js";
+// Same hand-rolled stroke-icon set used throughout the authenticated app
+// (sidebar, dashboard). The Features/How-It-Works sections here used raw
+// platform emoji (🎯🔮🔥🤖) as their icon language instead — emoji render
+// differently per OS/browser and read as a generic template rather than a
+// designed product, right in the section meant to show off the product.
+import { Icon } from "./LiveUI.jsx";
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || `mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com"}?subject=Demo%20Request%20—%20Corvus%20PostureAI&body=Hi%2C%20I%27d%20like%20to%20book%20a%20demo.%0A%0ACompany%3A%0ATeam%20size%3A%0ACountry%3A`;
@@ -1252,7 +1258,7 @@ function Features({ lang }) {
 
   const FEAT = [
     {
-      icon:"🎯", accentColor:"#4f7cf9",
+      icon:"target", accentColor:"#4f7cf9",
       badge:{ en:"All Plans", ar:"كل الخطط" }, badgeC:"#10b981",
       title:{ en:"Posture Score Engine", ar:"محرك درجة الوضعية" },
       sub:{ en:"33 body landmarks · 13 posture metrics · ~20 fps on-device", ar:"33 نقطة جسم · 13 مقياس وضعية · ~20 إطار/ثانية على الجهاز" },
@@ -1281,7 +1287,7 @@ function Features({ lang }) {
       mock:"score",
     },
     {
-      icon:"🔮", accentColor:"#8b5cf6",
+      icon:"crystal", accentColor:"#8b5cf6",
       badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
       title:{ en:"Pain Prediction AI", ar:"ذكاء توقع الألم" },
       sub:{ en:"Predicts pain zones 48 hrs before they peak", ar:"يتوقع مناطق الألم قبل 48 ساعة من ذروتها" },
@@ -1303,7 +1309,7 @@ function Features({ lang }) {
       mock:"pain",
     },
     {
-      icon:"🔥", accentColor:"#f59e0b",
+      icon:"flame", accentColor:"#f59e0b",
       badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
       title:{ en:"Habits & Streaks", ar:"العادات والسلاسل" },
       sub:{ en:"Daily check-ins · weekly challenge · 1× freeze/month", ar:"تسجيل يومي · تحدي أسبوعي · تجميد مرة/شهر" },
@@ -1323,7 +1329,7 @@ function Features({ lang }) {
       mock:"streak",
     },
     {
-      icon:"🤖", accentColor:"#6366f1",
+      icon:"sparkle", accentColor:"#6366f1",
       badge:{ en:"Basic → Elite", ar:"Basic → Elite" }, badgeC:"#6366f1",
       title:{ en:"Dr. Corvus AI Coach", ar:"مدرب AI — د. كورفوس" },
       sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 ← 30 ← غير محدود رسالة/شهر · عربي وإنجليزي" },
@@ -1342,7 +1348,7 @@ function Features({ lang }) {
       mock:"coach",
     },
     {
-      icon:"📱", accentColor:"#25d366",
+      icon:"chat", accentColor:"#25d366",
       badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
       title:{ en:"WhatsApp Reminders", ar:"تذكيرات واتساب" },
       sub:{ en:"Smart nudges in your time window · Cairo UTC+3", ar:"تنبيهات ذكية في نافذة وقتك · القاهرة UTC+3" },
@@ -1361,7 +1367,7 @@ function Features({ lang }) {
       mock:"whatsapp",
     },
     {
-      icon:"📊", accentColor:"#10b981",
+      icon:"barChart", accentColor:"#10b981",
       badge:{ en:"B2B", ar:"B2B" }, badgeC:"#10b981",
       title:{ en:"HR Intelligence Dashboard", ar:"لوحة HR الذكية" },
       sub:{ en:"Team posture analytics for HR managers", ar:"تحليلات وضعية الفريق لمدراء الموارد البشرية" },
@@ -1381,7 +1387,7 @@ function Features({ lang }) {
       mock:"hr",
     },
     {
-      icon:"🛡️", accentColor:"#f59e0b",
+      icon:"shield", accentColor:"#f59e0b",
       badge:{ en:"Enterprise", ar:"Enterprise" }, badgeC:"#f59e0b",
       title:{ en:"Enterprise Security", ar:"أمان المستوى المؤسسي" },
       sub:{ en:"SSO · RBAC · AES-256 · Audit logs · GDPR", ar:"SSO · RBAC · AES-256 · سجلات تدقيق · GDPR" },
@@ -1578,7 +1584,9 @@ function Features({ lang }) {
                   flexDirection: ar ? "row-reverse" : "row",
                 }}>
                   <div style={{ width:3, height:32, borderRadius:99, flexShrink:0, background: isActive ? item.accentColor : "transparent", transition:"background .2s" }}/>
-                  <span style={{ width:36, height:36, borderRadius:10, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, background: isActive ? `${item.accentColor}22` : "rgba(255,255,255,.05)", border: isActive ? `1px solid ${item.accentColor}44` : "1px solid transparent", transition:"background .2s,border-color .2s" }}>{item.icon}</span>
+                  <span style={{ width:36, height:36, borderRadius:10, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background: isActive ? `${item.accentColor}22` : "rgba(255,255,255,.05)", border: isActive ? `1px solid ${item.accentColor}44` : "1px solid transparent", transition:"background .2s,border-color .2s" }}>
+                    <Icon name={item.icon} size={17} color={isActive ? item.accentColor : LPV7_TOKENS.sub} strokeWidth={1.8}/>
+                  </span>
                   <div style={{ minWidth:0 }}>
                     <div style={{ fontSize:13.5, fontWeight:600, color: isActive ? LPV7_TOKENS.text : LPV7_TOKENS.sub, lineHeight:1.3 }}>{ar ? item.title.ar : item.title.en}</div>
                     {/* was color:"transparent" when inactive — visually hidden
@@ -1598,7 +1606,9 @@ function Features({ lang }) {
             style={{ display:"flex", flexDirection:"column", gap:0, ...card(true), padding:0, overflow:"hidden" }}>
             <div style={{ background:`linear-gradient(135deg, ${f.accentColor}18 0%, transparent 70%)`, padding:"26px 28px 20px", borderBottom:"1px solid rgba(255,255,255,.07)" }}>
               <div style={{ display:"flex", alignItems:"flex-start", gap:14, marginBottom:14 }}>
-                <span style={{ width:52, height:52, borderRadius:14, fontSize:24, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:`${f.accentColor}22`, border:`1.5px solid ${f.accentColor}44` }}>{f.icon}</span>
+                <span style={{ width:52, height:52, borderRadius:14, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center", background:`${f.accentColor}22`, border:`1.5px solid ${f.accentColor}44` }}>
+                  <Icon name={f.icon} size={25} color={f.accentColor} strokeWidth={1.7}/>
+                </span>
                 <div style={{ flex:1 }}>
                   <span style={{ display:"inline-block", fontSize:10, fontWeight:700, letterSpacing:".06em", padding:"3px 10px", borderRadius:99, marginBottom:6, background:`${f.badgeC}18`, border:`1px solid ${f.badgeC}40`, color:f.badgeC }}>{ar ? f.badge.ar : f.badge.en}</span>
                   <h3 style={{ fontSize:22, fontWeight:800, color:LPV7_TOKENS.text, margin:0, fontFamily:FONT_DISPLAY, lineHeight:1.2 }}>{ar ? f.title.ar : f.title.en}</h3>
@@ -1640,13 +1650,13 @@ function Features({ lang }) {
 function HowItWorks({ lang }) {
   const ar = lang === "ar";
   const steps = ar ? [
-    { n:"01", title:"الإعداد السريع", desc:"أضف موظفيك بالCSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة.", time:"~15 دقيقة", icon:"🚀" },
-    { n:"02", title:"التحليل الفوري", desc:"يستخدم الموظفون الكاميرا للتحليل. لا يلزم أي جهاز خاص.", time:"~2 دقيقة/موظف", icon:"📡" },
-    { n:"03", title:"رؤى قابلة للتنفيذ", desc:"احصل على تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية.", time:"تلقائي · أسبوعياً", icon:"📊" },
+    { n:"01", title:"الإعداد السريع", desc:"أضف موظفيك بالCSV أو رابط الدعوة. الإعداد الكامل في 15 دقيقة.", time:"~15 دقيقة", icon:"rocket" },
+    { n:"02", title:"التحليل الفوري", desc:"يستخدم الموظفون الكاميرا للتحليل. لا يلزم أي جهاز خاص.", time:"~2 دقيقة/موظف", icon:"camera" },
+    { n:"03", title:"رؤى قابلة للتنفيذ", desc:"احصل على تقارير HR أسبوعية وتنبيهات فورية للمخاطر المهنية.", time:"تلقائي · أسبوعياً", icon:"barChart" },
   ] : [
-    { n:"01", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes.", time:"~15 min", icon:"🚀" },
-    { n:"02", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed.", time:"~2 min/employee", icon:"📡" },
-    { n:"03", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks.", time:"Automated · Weekly", icon:"📊" },
+    { n:"01", title:"Quick Setup", desc:"Add your team via CSV or invite link. Full onboarding in 15 minutes.", time:"~15 min", icon:"rocket" },
+    { n:"02", title:"Instant Analysis", desc:"Employees use their webcam for analysis. No special hardware needed.", time:"~2 min/employee", icon:"camera" },
+    { n:"03", title:"Actionable Insights", desc:"Get weekly HR reports and real-time alerts for occupational risks.", time:"Automated · Weekly", icon:"barChart" },
   ];
 
   return (
@@ -1682,7 +1692,9 @@ function HowItWorks({ lang }) {
                     position:"relative",
                   }}>{s.n}</div>
                   {/* Icon */}
-                  <div style={{ fontSize:28, marginBottom:14 }}>{s.icon}</div>
+                  <div style={{ display:"flex", justifyContent:"center", marginBottom:14 }}>
+                    <Icon name={s.icon} size={26} color={col} strokeWidth={1.6}/>
+                  </div>
                   <h3 style={{ ...TYPE.h3, color:LPV7_TOKENS.text, margin:"0 0 10px", fontFamily:FONT_DISPLAY }}>
                     {s.title}
                   </h3>
