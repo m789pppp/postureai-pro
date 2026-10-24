@@ -1919,52 +1919,66 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               {ar ? "تجربة مجانية 7 أيام · لا بطاقة ائتمان" : "7-day free trial · No credit card required"}
             </p>
 
-            {/* Individual / Company toggle */}
-            <div style={{
-              display:"inline-flex", alignItems:"center", gap:4,
-              background:"rgba(255,255,255,.06)", borderRadius:12,
-              padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
-              marginBottom:20,
-            }}>
-              {[
-                { id:"individual", icon:"👤", en:"Individual", ar:"فرد" },
-                { id:"company",    icon:"🏢", en:"Company / HR", ar:"شركة / HR" },
-              ].map(seg => (
-                <button key={seg.id} onClick={() => switchLocalMode(seg.id)} style={{
-                  background: localMode === seg.id
-                    ? (seg.id === "company" ? LPV7_TOKENS.indigo : LPV7_TOKENS.blue)
-                    : "transparent",
-                  color: localMode === seg.id ? "#fff" : LPV7_TOKENS.muted,
-                  border:"none", borderRadius:9,
-                  padding:"9px 22px",
-                  cursor:"pointer", fontWeight:600, fontSize:14,
-                  transition:"background .18s,color .18s",
-                  whiteSpace:"nowrap",
-                }}>
-                  {seg.icon} {ar ? seg.ar : seg.en}
-                </button>
-              ))}
-            </div>
+            {/* Individual/Company and Monthly/Yearly used to sit side by
+                side with identical pill styling and no label or divider —
+                two independent controls that read as one confusing 4-way
+                toggle ("Individual / Company / Monthly / Yearly?"). Stacked
+                with a label on the second control so each one's job is
+                unambiguous at a glance. */}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:18 }}>
+              {/* Individual / Company toggle */}
+              <div style={{
+                display:"inline-flex", alignItems:"center", gap:4,
+                background:"rgba(255,255,255,.06)", borderRadius:12,
+                padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
+              }}>
+                {[
+                  { id:"individual", icon:"users", en:"Individual", ar:"فرد" },
+                  { id:"company",    icon:"building", en:"Company / HR", ar:"شركة / HR" },
+                ].map(seg => (
+                  <button key={seg.id} onClick={() => switchLocalMode(seg.id)} style={{
+                    display:"inline-flex", alignItems:"center", gap:7,
+                    background: localMode === seg.id
+                      ? (seg.id === "company" ? LPV7_TOKENS.indigo : LPV7_TOKENS.blue)
+                      : "transparent",
+                    color: localMode === seg.id ? "#fff" : LPV7_TOKENS.muted,
+                    border:"none", borderRadius:9,
+                    padding:"9px 22px",
+                    cursor:"pointer", fontWeight:600, fontSize:14,
+                    transition:"background .18s,color .18s",
+                    whiteSpace:"nowrap",
+                  }}>
+                    <Icon name={seg.icon} size={15} color={localMode===seg.id?"#fff":LPV7_TOKENS.muted} strokeWidth={1.8}/>
+                    {ar ? seg.ar : seg.en}
+                  </button>
+                ))}
+              </div>
 
-            {/* Monthly / Yearly toggle */}
-            <div style={{
-              display:"inline-flex", alignItems:"center",
-              background:"rgba(255,255,255,.05)", borderRadius:100,
-              padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
-            }}>
-              {["monthly","yearly"].map(b => (
-                <button key={b} onClick={() => toggleBilling(b)} style={{
-                  background: billing === b ? LPV7_TOKENS.blue : "transparent",
-                  color: billing === b ? "#fff" : LPV7_TOKENS.sub,
-                  border:"none", borderRadius:100, padding:"10px 22px",
-                  cursor:"pointer", fontWeight:500, fontSize:14.5,
-                  transition:"background .2s,color .2s",
+              {/* Monthly / Yearly toggle */}
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:8 }}>
+                <div style={{ fontSize:11, fontWeight:700, color:LPV7_TOKENS.muted, letterSpacing:".08em", textTransform:"uppercase", fontFamily:FONT_MONO }}>
+                  {ar ? "دورة الفوترة" : "Billing cycle"}
+                </div>
+                <div style={{
+                  display:"inline-flex", alignItems:"center",
+                  background:"rgba(255,255,255,.05)", borderRadius:100,
+                  padding:4, border:`1px solid ${LPV7_TOKENS.border}`,
                 }}>
-                  {b === "monthly"
-                    ? (ar ? "شهري" : "Monthly")
-                    : (ar ? `سنوي (وفّر ${yearlyDiscountPct}%)` : `Yearly (save ${yearlyDiscountPct}%)`)}
-                </button>
-              ))}
+                  {["monthly","yearly"].map(b => (
+                    <button key={b} onClick={() => toggleBilling(b)} style={{
+                      background: billing === b ? LPV7_TOKENS.blue : "transparent",
+                      color: billing === b ? "#fff" : LPV7_TOKENS.sub,
+                      border:"none", borderRadius:100, padding:"10px 22px",
+                      cursor:"pointer", fontWeight:500, fontSize:14.5,
+                      transition:"background .2s,color .2s",
+                    }}>
+                      {b === "monthly"
+                        ? (ar ? "شهري" : "Monthly")
+                        : (ar ? `سنوي (وفّر ${yearlyDiscountPct}%)` : `Yearly (save ${yearlyDiscountPct}%)`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div style={{ marginTop:16, fontSize:13, color:LPV7_TOKENS.muted }}>
@@ -2306,8 +2320,19 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                 </p>
               </div>
 
+              {/* Mobile swipe hint — the table below scrolls horizontally on
+                  narrow screens (minWidth:580 vs. a ~340px viewport), but
+                  nothing said so: no partial next-column peeking through, no
+                  scrollbar (mobile browsers auto-hide it), nothing. A phone
+                  visitor saw only the Feature + Free columns, with Basic/
+                  Pro/Elite silently off-screen — reads as a broken table,
+                  not a comparison of 4 plans. */}
+              <div className="lp-cmp-hint" style={{display:"none",alignItems:"center",justifyContent:"center",gap:6,marginBottom:10,fontSize:12,color:LPV7_TOKENS.indigo,fontFamily:FONT_MONO}}>
+                <span>{ar?"⟷ اسحب يميناً لرؤية باقي الباقات":"⟷ Swipe to see Basic, Pro & Elite"}</span>
+              </div>
+
               {/* scrollable wrapper for mobile */}
-              <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",borderRadius:18,border:`1px solid ${LPV7_TOKENS.border}`}}>
+              <div className="lp-cmp-scroll" style={{position:"relative",overflowX:"auto",WebkitOverflowScrolling:"touch",borderRadius:18,border:`1px solid ${LPV7_TOKENS.border}`}}>
                 <table style={{width:"100%",minWidth:580,borderCollapse:"collapse",background:LPV7_TOKENS.card}}>
                   {/* sticky header */}
                   <thead>
@@ -2388,6 +2413,14 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
                     ))}
                   </tbody>
                 </table>
+                {/* Right-edge fade — only shown on mobile (CSS below), hints
+                    there is more table to the right without needing JS
+                    scroll-position tracking. */}
+                <div className="lp-cmp-fade" aria-hidden="true" style={{
+                  display:"none",position:"absolute",top:0,bottom:0,[ar?"left":"right"]:0,width:28,
+                  background:`linear-gradient(${ar?"90deg":"270deg"},${LPV7_TOKENS.card},transparent)`,
+                  pointerEvents:"none",
+                }}/>
               </div>
 
               {/* CTA under table */}
@@ -2413,7 +2446,12 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       <style>{`
         @media(max-width:600px){.lp-pricing-grid{grid-template-columns:1fr!important}
         .lp-pricing-grid > div > div{transform:none!important}}
-        .lp-pricing-card{contain:layout style;}`}</style>
+        .lp-pricing-card{contain:layout style;}
+        @media(max-width:640px){
+          .lp-cmp-hint{display:flex!important}
+          .lp-cmp-fade{display:block!important}
+        }
+      `}</style>
     </section>
   );
 }
@@ -2434,85 +2472,12 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
 // in the page body where <Testimonials/> used to sit.
 
 
-// ── FAQ ───────────────────────────────────────────────────────────
-function FAQItem({ q, a, isOpen, onToggle, ar, idx }) {
-  // Collapsed answers were hidden only by height:0 + overflow:hidden, so every
-  // answer stayed in the accessibility tree and was read aloud regardless of
-  // state. inert/aria-hidden closes that, and aria-controls/id pairs the
-  // button with the panel it actually toggles.
-  const panelId = `faq-panel-${idx}`;
-  const btnId   = `faq-btn-${idx}`;
-  return (
-    <div style={{
-      background:LPV7_TOKENS.card, border:`1px solid ${isOpen ? "rgba(79,124,249,.35)" : LPV7_TOKENS.border}`,
-      borderRadius:16, overflow:"hidden", transition:"border-color .25s",
-    }}>
-      <button id={btnId} onClick={onToggle} aria-expanded={isOpen} aria-controls={panelId} style={{
-        width:"100%", padding:"20px 22px", background:"transparent",
-        border:"none", cursor:"pointer",
-        display:"flex", justifyContent:"space-between", alignItems:"center", gap:16,
-        textAlign: ar ? "right" : "left",
-      }}>
-        <span style={{ fontWeight:600, color:LPV7_TOKENS.text, fontSize:15.5, flex:1, fontFamily:FONT_DISPLAY }}>{q}</span>
-        <span style={{
-          width:28, height:28, borderRadius:"50%", flexShrink:0,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          background: isOpen ? "rgba(79,124,249,.18)" : "rgba(255,255,255,.05)",
-          color:LPV7_TOKENS.blue, fontSize:17,
-          transform: isOpen ? "rotate(45deg)" : "none",
-          transition:"transform .25s, background .25s",
-        }}>+</span>
-      </button>
-      <motion.div
-        id={panelId} role="region" aria-labelledby={btnId} aria-hidden={!isOpen}
-        initial={false}
-        animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
-        transition={{ duration:.28, ease:[0.22,1,0.36,1] }}
-        style={{ overflow:"hidden" }}>
-        <p style={{ color:LPV7_TOKENS.sub, fontSize:15, lineHeight:1.7, margin:0, padding:"0 22px 20px" }}>{a}</p>
-      </motion.div>
-    </div>
-  );
-}
-
-function FAQ({ lang }) {
-  const ar = lang === "ar";
-  const [open, setOpen] = useState(null);
-  const items = ar ? [
-    ["هل أحتاج كاميرا خاصة؟","لا. بيشتغل مع أي كاميرا لابتوب أو ويب كام عادية. مفيش أجهزة إضافية مطلوبة."],
-    ["هل بيانات الفيديو بتاعتي بتتحفظ؟","لأ. التحليل بيحصل محلياً في المتصفح بتاعك. مش بنحفظ صور أو فيديو — بس إحداثيات الوضعية المجهولة."],
-    ["هل بيشتغل على Mac وWindows؟","أيوه، بيشتغل على أي متصفح حديث — Chrome وSafari وFirefox وEdge — على Mac وWindows وLinux."],
-    ["إيه الفرق بين المجاني والمدفوع؟","المجاني يديك 7 أيام كاملة من أي tier. بعدين Basic مجاناً للأبد. Pro وElite بتضيفوا AI Coach وتقارير PDF وتحليل متقدم."],
-    ["هل يحتاج الموظفون لأجهزة خاصة؟","لا. بيشتغل على أي كاميرا ويب عادية على اللابتوب أو الموبايل. مفيش أجهزة إضافية."],
-    ["ما وقت الإعداد المتوقع؟","15 دقيقة للأفراد. يوم واحد للفرق الكبيرة +500 موظف مع دعمنا الكامل."],
-    ["هل متوافق مع SAP HR وWorkday؟","أيوه. عندنا API مفتوح ووثائق تكامل كاملة مع أشهر أنظمة HR."],
-  ] : [
-    ["Do I need a special camera?","No. Works with any built-in laptop camera or standard webcam. No additional hardware required."],
-    ["Is my video data stored?","Never. Analysis runs locally in your browser. We don't store images or video — only anonymized posture coordinates."],
-    ["Does it work on Mac and Windows?","Yes, it works in any modern browser — Chrome, Safari, Firefox, Edge — on Mac, Windows, and Linux."],
-    ["What's the difference between free and paid?","Free gives you a full 7-day trial of any tier. After that, Basic is free forever. Pro and Elite add AI Coach, PDF reports, and advanced analytics."],
-    ["Do employees need special hardware?","No. Works with any standard webcam on laptop or smartphone. No additional devices required."],
-    ["What's the expected setup time?","15 minutes for individuals. One business day for 500+ employee teams with our full support."],
-    ["Does it integrate with SAP HR and Workday?","Yes. We have an open API and complete integration documentation for major HR systems."],
-  ];
-
-  return (
-    <section id="faq" className="lp-section" style={{ background:LPV7_TOKENS.bg1 }}>
-      <div className="lp-wrap">
-        <div style={{ maxWidth:740, margin:"0 auto" }}>
-          <SectionHead title={ar ? "أسئلة شائعة" : "Frequently asked questions"} />
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {items.map(([q, a], i) => (
-              <Reveal key={i} delay={i * 50} y={16}>
-                <FAQItem q={q} a={a} ar={ar} idx={i} isOpen={open===i} onToggle={() => setOpen(open===i ? null : i)}/>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+// ── FAQ — REMOVED from the landing page on the owner's instruction ──
+// The embedded FAQ section (7 Q&As, same content as the standalone /faq
+// page linked from every page's nav) is gone from here; the dedicated
+// FAQPage.jsx is still reachable from the nav for anyone who wants it,
+// this just stops repeating it inline before the final CTA.
+// FAQItem/FAQ used to live here if this needs restoring later.
 
 // ── Mid-page CTA
 function MidCTA({ lang, onCTA, variant="features" }) {
@@ -2695,7 +2660,7 @@ function Footer({ lang }) {
       { label:"المميزات",       href:"#features",     anchor:true },
       { label:"كيف يعمل",      href:"#how",          anchor:true },
       { label:"الأسعار",       href:"#pricing",      anchor:true },
-      { label:"الأسئلة الشائعة", href:"#faq",         anchor:true },
+      { label:"الأسئلة الشائعة", href:"/faq" },
     ]},
     { title:"الحلول", links:[
       { label:"فرق HR",          href:"#casestudies",  anchor:true },
@@ -2723,7 +2688,7 @@ function Footer({ lang }) {
       { label:"Features",     href:"#features",     anchor:true },
       { label:"How it works", href:"#how",          anchor:true },
       { label:"Pricing",      href:"#pricing",      anchor:true },
-      { label:"FAQ",          href:"#faq",          anchor:true },
+      { label:"FAQ",          href:"/faq" },
     ]},
     { title:"Solutions", links:[
       { label:"HR Teams",         href:"#casestudies", anchor:true },
@@ -2954,8 +2919,7 @@ export default function LandingPage({ onNavigate, lang: langProp, setLang: setLa
       <HowItWorks lang={lang}/>
       <CaseStudies lang={lang}/>
       <Pricing lang={lang} onCTA={handleCTA} mode={mode} onModeChange={setMode} isEgypt={isEgypt} setCurrencyOverride={setOverride}/>
-      {/* <Testimonials/> removed — see the note at its former definition. */}
-      <FAQ lang={lang}/>
+      {/* <Testimonials/> and <FAQ/> removed — see the notes at their former definitions. */}
       {/* BUG FIX: was routing "Book a Demo for Your Institution" straight
           to self-serve signup, same as every other CTA on the page —
           every OTHER "Book a Demo" button on this page correctly opens
