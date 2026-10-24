@@ -1152,25 +1152,17 @@ function SocialProof({ lang }) {
                 {ar ? "مرحلة مبكرة · قبل الإطلاق" : "Early stage · pre-launch"}
               </span>
             </div>
-            <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-              {/* second line of each badge was hardcoded English in Arabic too */}
-              {(ar
-                // ISO 27001 dropped — see the footer note. Replaced with the
-                // on-device claim, which is the genuinely strong one here and
-                // is verifiable by watching the network tab.
-                ? [["🔒","AES-256","تشفير"],["✅","GDPR","جاهز"],["📷","AI على الجهاز","بدون فيديو"],["🚫","بدون تثبيت","من المتصفح"]]
-                : [["🔒","AES-256","Encryption"],["✅","GDPR","Ready"],["📷","On-device AI","No Video"],["🚫","No install","Browser only"]]
-              ).map(([icon,t1,t2])=>(
-                <div key={t1} style={{ display:"flex", alignItems:"center", gap:7,
-                  background:"rgba(59,130,246,.07)", border:"1px solid rgba(59,130,246,.18)",
-                  borderRadius:10, padding:"7px 13px" }}>
-                  <span style={{ fontSize:14 }}>{icon}</span>
-                  <div>
-                    <div style={{ fontSize:11.5, color:"#60a5fa", fontWeight:700, lineHeight:1.2, fontFamily:FONT_MONO }}>{t1}</div>
-                    <div style={{ fontSize:10, color:"#3b82f6", lineHeight:1.2 }}>{t2}</div>
-                  </div>
-                </div>
-              ))}
+            {/* Was 4 separate bordered pill-badges (AES-256 / GDPR /
+                On-device AI / No install), each its own boxed element —
+                right below 4 stat cards that already say "on-device" and
+                "0 video stored". Eight boxed chips in one section before
+                the fold is noise, not information. One line of plain text
+                keeps every fact, costs far less visual weight, and doesn't
+                compete with the stat cards for the same attention. */}
+            <div style={{ fontSize:12, color:LPV7_TOKENS.muted, fontFamily:FONT_MONO }}>
+              {ar
+                ? "AES-256 · جاهز لـGDPR · بدون تثبيت — كله من المتصفح"
+                : "AES-256 · GDPR-ready · No install — runs entirely in the browser"}
             </div>
           </div>
         </div>
@@ -2633,17 +2625,17 @@ function SchoolsSection({ lang, onCTA }) {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:20, marginBottom:48 }}>
           {[
-            { icon:"⭐", en:"Full Pro features", ar:"كل مميزات Pro" },
-            { icon:"🏫", en:"Academic dashboard", ar:"لوحة إدارة أكاديمية" },
-            { icon:"📊", en:"Periodic wellness reports", ar:"تقارير صحية دورية" },
-            { icon:"🏅", en:"Certificates for graduates", ar:"شهادات للخريجين" },
-            { icon:"🤖", en:"AI Coach for students", ar:"Dr. Corvus للطلاب" },
-            { icon:"📱", en:"WhatsApp support", ar:"دعم WhatsApp مخصص" },
+            { icon:"star", en:"Full Pro features", ar:"كل مميزات Pro" },
+            { icon:"building", en:"Academic dashboard", ar:"لوحة إدارة أكاديمية" },
+            { icon:"barChart", en:"Periodic wellness reports", ar:"تقارير صحية دورية" },
+            { icon:"trophy", en:"Certificates for graduates", ar:"شهادات للخريجين" },
+            { icon:"sparkle", en:"AI Coach for students", ar:"Dr. Corvus للطلاب" },
+            { icon:"chat", en:"WhatsApp support", ar:"دعم WhatsApp مخصص" },
           ].map(f => (
             <div key={f.en} style={{ background:"rgba(255,255,255,.03)",
               border:"1px solid rgba(255,255,255,.07)",
               borderRadius:12, padding:"18px 16px", display:"flex", alignItems:"center", gap:12 }}>
-              <span style={{ fontSize:22 }}>{f.icon}</span>
+              <Icon name={f.icon} size={19} color="#a5b4fc" strokeWidth={1.7}/>
               <span style={{ fontSize:13, color:"#8896ac" }}>{ar ? f.ar : f.en}</span>
             </div>
           ))}
