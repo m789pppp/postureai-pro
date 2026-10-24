@@ -1058,9 +1058,14 @@ function Hero({ lang, onCTA, mode, setMode }) {
               </div>
             </div>
 
-            {/* Floating card — top */}
+            {/* Floating card — top. Was top:-12, right:-18 — pushed the
+                badge outside the demo card's own box, and at realistic
+                desktop widths (confirmed at both 1440px and narrower) that
+                put it partly past the page's right edge, visibly clipped —
+                the first broken-looking thing on the page. Pulled back to
+                sit just inside the card's corner instead of overflowing it. */}
             <motion.div {...float(0, 9)} style={{ willChange:"transform",
-              position:"absolute", top:-12, [ar?"left":"right"]:-18,
+              position:"absolute", top:8, [ar?"left":"right"]:8,
               background:"rgba(8,18,32,.92)",
               border:`1px solid ${LPV7_TOKENS.borderM}`, borderRadius:16,
               padding:"12px 16px", boxShadow:"0 12px 32px rgba(0,0,0,.4)",
