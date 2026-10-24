@@ -29,20 +29,24 @@ const STEPS = [
   { n:"01", icon:"📋", color:"#4f7cf9", time:"5 min", title:"Create your organisation",
     desc:"Sign up, choose your plan, and create your company workspace. Add your logo, set your timezone, and configure your department structure.",
     details:["Choose Individual or Company plan","Set up department hierarchy","Configure notification preferences","Invite your IT admin for SSO setup"],
-    code:`// Invite your team via CSV
-POST /api/v1/org/invite
-{ "emails": ["team@company.com"],
-  "role": "employee",
-  "department": "Engineering" }`,
+    // Was a fabricated "POST /api/v1/org/invite" — that path doesn't exist.
+    // Bulk roster upload is a real endpoint (api/hr/import-employees,
+    // multipart CSV upload) — shown as it actually works.
+    code:`// Upload your team roster
+POST /api/hr/import-employees
+Content-Type: multipart/form-data
+file: team.csv`,
   },
   { n:"02", icon:"👥", color:"#22d3ee", time:"10 min", title:"Onboard your team",
     desc:"Send invite links or upload a CSV. Employees get a 2-minute onboarding flow — no training sessions, no IT tickets.",
     details:["Bulk invite via CSV upload","Individual invite links","SCIM auto-provisioning (Enterprise)","Mobile-friendly onboarding flow"],
-    code:`// Bulk import employees
-POST /api/v1/employees/bulk
-{ "file": "team.csv",
-  "send_invite": true,
-  "default_role": "employee" }`,
+    // Was a fabricated "POST /api/v1/employees/bulk" with a JSON body shape
+    // that endpoint never accepted. The real invite endpoint
+    // (api/org/send-invite) sends one invite email at a time.
+    code:`// Send an invite link
+POST /api/org/send-invite
+{ "email": "jane@company.com",
+  "invite_url": "https://app.corvus.io/invite/abc123" }`,
   },
   { n:"03", icon:"📷", color:"#10d9a0", time:"2 min/day", title:"Employees run daily check-ins",
     desc:"Each employee opens Corvus in their browser, enables their webcam for 60 seconds, and gets an instant posture score. No app install. No hardware.",
