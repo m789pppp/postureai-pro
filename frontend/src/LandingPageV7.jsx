@@ -2696,7 +2696,7 @@ function Footer({ lang }) {
     ]},
     { title:"الحلول", links:[
       { label:"فرق HR",          href:"#casestudies",  anchor:true },
-      { label:"نتائج العملاء",   href:"#casestudies",  anchor:true },
+      { label:"أين نحن الآن",    href:"#casestudies",  anchor:true },
       { label:"التسعير المؤسسي", href:"#pricing",      anchor:true },
       // the #schools section renders in both languages, but only the English
       // footer had a link to it
@@ -2704,7 +2704,7 @@ function Footer({ lang }) {
       { label:"احجز عرضاً",     href:CALENDLY_URL },
     ]},
     { title:"الموارد", links:[
-      { label:"دراسات الحالة",  href:"#casestudies",  anchor:true },
+      { label:"حالة التجربة الميدانية", href:"#casestudies",  anchor:true },
       { label:"تواصل معنا",     modal:"contact" },
       { label:"الدعم الفني",    href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
     ]},
@@ -2724,13 +2724,13 @@ function Footer({ lang }) {
     ]},
     { title:"Solutions", links:[
       { label:"HR Teams",         href:"#casestudies", anchor:true },
-      { label:"Customer Results", href:"#casestudies", anchor:true },
+      { label:"Where We Are",     href:"#casestudies", anchor:true },
       { label:"Enterprise Plans", href:"#pricing",     anchor:true },
       { label:"For Schools",      href:"#schools",     anchor:true },
       { label:"Book a Demo",      href:CALENDLY_URL },
     ]},
     { title:"Resources", links:[
-      { label:"Case Studies",  href:"#casestudies",  anchor:true },
+      { label:"Pilot Status",  href:"#casestudies",  anchor:true },
       { label:"Contact us",    modal:"contact" },
       { label:"Support",       href:`mailto:${SUPPORT_EMAIL}?subject=Support` },
     ]},
@@ -2787,9 +2787,15 @@ function Footer({ lang }) {
 
             {/* Tagline */}
             <p style={{ fontSize:13, color:"#8896ac", lineHeight:1.8, maxWidth:200, margin:"0 0 20px" }}>
+              {/* Was an unqualified "Cut sick leave 47%" with no attribution —
+                  sitting in the footer, far from the Stats section's own
+                  "Ergonomics research average — not our result" disclaimer.
+                  A reader who scrolls straight to the footer sees it as a flat
+                  claim with nothing to the contrary. Rewritten to match the
+                  site's actual, honest positioning. */}
               {ar
-                ? "قلّل إجازات الأمراض وارفع إنتاجية فريقك. مبني لفرق MENA."
-                : "Cut sick leave 47% and boost team productivity. Built for MENA teams."}
+                ? "منصة ذكاء اصطناعي لمراقبة وضعية الجسم في بيئات العمل. مبني لفرق MENA."
+                : "AI-powered workplace posture monitoring for healthier, more productive teams."}
             </p>
 
             {/* Social icons removed — see note above socials declaration */}
