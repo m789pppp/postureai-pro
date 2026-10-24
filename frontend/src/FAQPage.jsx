@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";
+// Same hand-rolled stroke-icon set used elsewhere — the category tabs
+// below used raw platform emoji (💬🔒💳🏢) instead.
+import { Icon } from "./LiveUI.jsx";
 
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
@@ -14,7 +17,7 @@ const FM = "'IBM Plex Mono','Segoe UI',monospace";
 
 const CATEGORIES = [
   {
-    id:"general", label:"General", icon:"💬", color:"#4f7cf9",
+    id:"general", label:"General", icon:"chat", color:"#4f7cf9",
     faqs:[
       ["What is Corvus PostureAI?","Corvus is an AI-powered workplace posture monitoring platform. It uses your webcam to analyse body posture in real time — no special hardware needed. It's designed for HR teams and individual employees who want to reduce musculoskeletal risk and improve workplace health."],
       ["Who is Corvus for?","Corvus has two audiences: HR admins who manage teams of 10–5,000+ employees and want company-wide ergonomic visibility; and individuals who want to monitor and improve their own posture independently."],
@@ -23,7 +26,7 @@ const CATEGORIES = [
     ],
   },
   {
-    id:"privacy", label:"Privacy & Security", icon:"🔒", color:"#10d9a0",
+    id:"privacy", label:"Privacy & Security", icon:"lock", color:"#10d9a0",
     faqs:[
       ["Does Corvus record or store video?","No. This is a core design principle. All video processing happens on the employee's device using on-device AI (MediaPipe). Only numerical posture scores are transmitted — no video, no images, ever."],
       ["Is employee data private from managers?","Yes. Individual scores are visible to the employee and HR admins. Managers see aggregated team data only, not individual sessions. Employees can also pause tracking at any time."],
@@ -57,7 +60,7 @@ const CATEGORIES = [
     ],
   },
   {
-    id:"pricing", label:"Pricing & Plans", icon:"💳", color:"#f59e0b",
+    id:"pricing", label:"Pricing & Plans", icon:"wallet", color:"#f59e0b",
     faqs:[
       // 7 days, not 14 — the real trial length is set in firebase.js
       // (trialExpires.setDate(+7)) and every other surface says 7.
@@ -69,7 +72,7 @@ const CATEGORIES = [
     ],
   },
   {
-    id:"hr", label:"For HR Teams", icon:"🏢", color:"#22d3ee",
+    id:"hr", label:"For HR Teams", icon:"building", color:"#22d3ee",
     faqs:[
       ["How do I add employees?","Three ways: (1) Send individual invite links by email, (2) Upload a CSV with employee names and emails, (3) Auto-provision over SCIM if your identity provider is connected."],
       ["Can I set up departments and teams?","Yes. The HR dashboard supports unlimited department hierarchies. You can assign managers, set department-level alert thresholds, and compare performance across teams."],
@@ -223,7 +226,7 @@ export default function FAQPage() {
                       color: activeCategory===cat.id ? T.text : T.muted,
                       fontSize:13.5, fontWeight: activeCategory===cat.id ? 600 : 500,
                     }}>
-                    <span style={{ fontSize:16 }}>{cat.icon}</span>
+                    <Icon name={cat.icon} size={15} color={activeCategory===cat.id ? cat.color : T.muted} strokeWidth={1.8}/>
                     {cat.label}
                     <span style={{ marginLeft:"auto", fontSize:11.5, color:T.muted,
                       background:"rgba(255,255,255,.05)", borderRadius:99, padding:"2px 7px" }}>
@@ -251,10 +254,10 @@ export default function FAQPage() {
             <div>
               <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28,
                 paddingBottom:20, borderBottom:"1px solid rgba(148,163,184,.07)" }}>
-                <div style={{ width:40, height:40, borderRadius:10, fontSize:20,
+                <div style={{ width:40, height:40, borderRadius:10,
                   display:"flex", alignItems:"center", justifyContent:"center",
                   background:`${activeCat.color}12`, border:`1px solid ${activeCat.color}25` }}>
-                  {activeCat.icon}
+                  <Icon name={activeCat.icon} size={19} color={activeCat.color} strokeWidth={1.7}/>
                 </div>
                 <div>
                   <div style={{ fontSize:18, fontWeight:700, color:T.text, fontFamily:FD }}>{activeCat.label}</div>

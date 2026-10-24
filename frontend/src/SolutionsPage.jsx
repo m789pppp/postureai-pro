@@ -1,6 +1,11 @@
 import React, { useState, useRef } from "react";
 import { motion, useInView } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";
+// Same hand-rolled stroke-icon set used throughout the landing page and
+// authenticated app — the industry tabs/detail panel below used raw
+// platform emoji instead (🏦💻📞🏥), same inconsistency already fixed
+// elsewhere.
+import { Icon } from "./LiveUI.jsx";
 
 const T = {
   bg:"#030b14", bg1:"#040d18", card:"#0d1f33",
@@ -30,25 +35,25 @@ function Reveal({ children, delay=0, y=24 }) {
 }
 
 const INDUSTRIES = [
-  { icon:"🏦", name:"Banking & Finance", color:"#4f7cf9",
+  { icon:"building", name:"Banking & Finance", color:"#4f7cf9",
     problem:"Compliance teams and analysts spend 10+ hours/day at screens. Back and neck conditions are the #1 cause of sick leave.",
     solution:"Corvus monitors all desk-based staff silently, generates weekly ergonomic compliance reports, and flags high-risk employees before claims arise.",
     results:[["13","Weighted posture metrics"],["Weekly","Automated PDF reports"],["0","Video frames stored"]],
     clients:"Built for desk-based compliance, analyst and back-office teams",
   },
-  { icon:"💻", name:"Technology & SaaS", color:"#22d3ee",
+  { icon:"laptop", name:"Technology & SaaS", color:"#22d3ee",
     problem:"Remote and hybrid engineers often work in non-ergonomic home setups. Burnout compounds posture neglect.",
     solution:"Deploy Corvus company-wide in 20 minutes via invite link. Engineers get an AI coach in their workflow — no meetings, no friction.",
     results:[["0","Apps to install — runs in the browser"],["AR/EN","Fully bilingual interface"],["1 link","Invite-based team rollout"]],
     clients:"Built for remote and hybrid engineering teams",
   },
-  { icon:"📞", name:"Telecoms & BPO", color:"#10d9a0",
+  { icon:"chat", name:"Telecoms & BPO", color:"#10d9a0",
     problem:"Call center agents sit for 8-hour shifts in fixed positions. Turnover is high — and poor ergonomics is a hidden driver.",
     solution:"Corvus integrates with shift management. HR sees real-time posture scores by team, with automatic break recommendations when fatigue is detected.",
     results:[["Live","Team posture feed by shift"],["Custom","Alert rules and break timers"],["CSV","Raw data export for HR"]],
     clients:"Built for shift-based contact centre floors",
   },
-  { icon:"🏥", name:"Healthcare & Clinics", color:"#818cf8",
+  { icon:"stethoscope", name:"Healthcare & Clinics", color:"#818cf8",
     problem:"Clinicians and admin staff experience some of the highest rates of work-related musculoskeletal disorders globally.",
     solution:"Corvus tracks posture during documentation sessions and flags dangerous patterns. Integrates with occupational health protocols.",
     results:[["On-device","AI — no video upload"],["90-day","Activity and trend history"],["Audit","Full activity log per user"]],
@@ -61,19 +66,19 @@ const INDUSTRIES = [
 ];
 
 const PERSONAS = [
-  { role:"HR Director", icon:"👩‍💼", color:"#4f7cf9",
+  { role:"HR Director", icon:"users", color:"#4f7cf9",
     needs:["Company-wide risk visibility","Automated compliance reports","Legal audit trail for injury claims","ROI data for board reporting"],
     gets:"Full HR dashboard with department heatmaps, weekly PDF reports, custom risk thresholds, and 90-day trend data.",
   },
-  { role:"Team Manager", icon:"🧑‍💻", color:"#22d3ee",
+  { role:"Team Manager", icon:"barChart", color:"#22d3ee",
     needs:["Know which team members are at risk","Trigger interventions early","No added management overhead"],
     gets:"Real-time team posture feed, automatic Slack/Teams alerts when someone hits a risk threshold.",
   },
-  { role:"Individual Employee", icon:"🙋", color:"#10d9a0",
+  { role:"Individual Employee", icon:"heartPulse", color:"#10d9a0",
     needs:["Fix my back pain","Understand my posture habits","Get coaching without seeing a physio"],
     gets:"Personal AI coach, daily posture score, personalised stretch programs, and weekly progress reports.",
   },
-  { role:"IT / Security", icon:"🔐", color:"#818cf8",
+  { role:"IT / Security", icon:"shield", color:"#818cf8",
     needs:["Zero video storage","SSO integration","GDPR compliance","Simple deployment"],
     gets:"On-device AI (no video leaves the machine), Google/Microsoft sign-in on every plan with SAML SSO on Enterprise, AES-256 encryption, full audit logs.",
   },
@@ -155,11 +160,11 @@ export default function SolutionsPage() {
                 style={{
                   padding:"18px 24px", fontSize:14, fontWeight:500,
                   color: activeIndustry===i ? T.text : T.muted,
-                  background:"transparent",
+                  background:"transparent", display:"inline-flex", alignItems:"center", gap:8,
                   borderBottom: activeIndustry===i ? `2px solid ${ind.color}` : "2px solid transparent",
                   whiteSpace:"nowrap",
                 }}>
-                {ind.icon} {ind.name}
+                <Icon name={ind.icon} size={16} color={activeIndustry===i ? ind.color : T.muted} strokeWidth={1.8}/> {ind.name}
               </button>
             ))}
           </div>
@@ -177,7 +182,7 @@ export default function SolutionsPage() {
 
           {/* Left */}
           <div>
-            <div style={{ fontSize:48, marginBottom:20 }}>{ind.icon}</div>
+            <div style={{ marginBottom:20 }}><Icon name={ind.icon} size={44} color={ind.color} strokeWidth={1.5}/></div>
             <h2 style={{ fontSize:"clamp(24px,2.5vw,36px)", fontWeight:800, color:T.text,
               margin:"0 0 8px", fontFamily:FD, letterSpacing:"-.02em" }}>
               {ind.name}
@@ -262,7 +267,7 @@ export default function SolutionsPage() {
                 <div style={{ background:T.card, border:`1px solid ${p.color}18`,
                   borderRadius:18, padding:"28px 24px", height:"100%",
                   borderTop:`2px solid ${p.color}` }}>
-                  <div style={{ fontSize:32, marginBottom:14 }}>{p.icon}</div>
+                  <div style={{ marginBottom:14 }}><Icon name={p.icon} size={28} color={p.color} strokeWidth={1.6}/></div>
                   <div style={{ fontSize:16, fontWeight:700, color:T.text, marginBottom:6, fontFamily:FD }}>{p.role}</div>
                   <div style={{ fontSize:11, color:p.color, fontWeight:600, fontFamily:FM,
                     textTransform:"uppercase", letterSpacing:".06em", marginBottom:18 }}>
