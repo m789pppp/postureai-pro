@@ -33,10 +33,22 @@ export default async function handler(req, res) {
   const data = snap.data();
   const month = new Date().toISOString().slice(0,7);
 
-  // Last 7 days usage
-  const usageSnap = await db.collection("api_usage")
-    .where("api_key","==",apiKey)
-    .orderBy("called_at","desc").limit(100).get();
+  // Last 7 days usage. Same missing-composite-index risk as
+  // billing-payments.js (declared in firestore.indexes.json, never
+  // actually deployed) — this had no try/catch at all, so a developer
+  // calling their own usage endpoint got an unhandled 500 instead of
+  // their stats. Degrade to an unindexed query instead of crashing.
+  let usageSnap;
+  try {
+    usageSnap = await db.collection("api_usage")
+      .where("api_key","==",apiKey)
+      .orderBy("called_at","desc").limit(100).get();
+  } catch (e) {
+    console.error("[posture-api/usage] composite query failed, falling back to unindexed:", e.message);
+    usageSnap = await db.collection("api_usage")
+      .where("api_key","==",apiKey)
+      .limit(300).get();
+  }
 
   const daily = {};
   usageSnap.docs.forEach(d => {

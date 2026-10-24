@@ -53,7 +53,17 @@ export default async function handler(req, res) {
     const city = req.query.city;
     let q = db.collection("therapists").where("status","==","active");
     if (city) q = q.where("city","==",city);
-    const snap = await q.orderBy("rating","desc").limit(20).get();
+    // where(status[,city]) + orderBy(rating) needs a composite index that
+    // isn't even declared in firestore.indexes.json, let alone deployed —
+    // same missing-index crash pattern found in billing-payments.js and
+    // posture-api/usage.js. Degrade to unsorted instead of a hard 500.
+    let snap;
+    try {
+      snap = await q.orderBy("rating","desc").limit(20).get();
+    } catch (e) {
+      console.error("[marketplace-therapists] list query failed, falling back to unindexed:", e.message);
+      snap = await q.limit(20).get();
+    }
 
     if (snap.empty) {
       // Seed default therapists on first use
@@ -61,6 +71,9 @@ export default async function handler(req, res) {
     }
 
     const therapists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Sort here too — the fallback path above has no orderBy; harmless
+    // no-op when the indexed query already came back sorted.
+    therapists.sort((a,b) => (b.rating||0) - (a.rating||0));
     return res.status(200).json({ therapists });
   }
 
@@ -69,12 +82,22 @@ export default async function handler(req, res) {
     const uid = await verifyUser(req);
     if (!uid) return res.status(401).json({error:"Auth required"});
 
-    const snap = await db.collection("bookings")
-      .where("patient_uid","==",uid)
-      .orderBy("created_at","desc")
-      .limit(20).get();
+    let snap;
+    try {
+      snap = await db.collection("bookings")
+        .where("patient_uid","==",uid)
+        .orderBy("created_at","desc")
+        .limit(20).get();
+    } catch (e) {
+      console.error("[marketplace-therapists] my-bookings query failed, falling back to unindexed:", e.message);
+      snap = await db.collection("bookings")
+        .where("patient_uid","==",uid)
+        .limit(20).get();
+    }
 
-    const bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const toMillis = v => v?.toMillis?.() ?? (typeof v?._seconds==="number" ? v._seconds*1000 : 0);
+    const bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => toMillis(b.created_at) - toMillis(a.created_at));
     return res.status(200).json({ bookings });
   }
 
