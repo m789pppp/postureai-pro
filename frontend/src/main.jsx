@@ -183,6 +183,30 @@ const isKnownPath = path === "/" ||
 
 const standaloneLoader = STANDALONE_ROUTES[path];
 
+// "/" was always routed to the full App.jsx below, which statically
+// imports ~40 feature modules at module scope (HRPanel, AICoach,
+// NotificationsHub, Billing, EnterpriseAdminTools, postureEngine,
+// SecurityCenter, HelpCenter, ...) — none of which a first-time,
+// logged-out marketing visitor needs. Every anonymous hit on "/" was
+// downloading almost the entire authenticated-app bundle just to render
+// the landing page, which is the actual cause of the "heavy/laggy"
+// landing page: dozens of extra chunks (hr, ai-coach, ai-engine,
+// notifications, onboarding, billing, enterprise, pdf-engine, demo,
+// firebase-messaging, firebase-firestore, posture-engine, jspdf, ...)
+// fetched and parsed before a single pixel of marketing copy painted.
+// LandingPageV7 is already fully standalone (no required props, and its
+// own navTo() already falls back to a real page navigation when it
+// isn't mounted inside the SPA), exactly like the other marketing pages
+// below. App.jsx itself already uses this same flag to decide whether a
+// visitor is "returning" (skip straight to the login form) — reusing it
+// here means a returning/likely-logged-in user still gets the full App
+// as before, while the common case (new or logged-out visitor) gets only
+// the landing + framer-motion chunks instead of the whole app.
+const isReturningVisitor = (() => {
+  try { return localStorage.getItem("corvus_was_logged") === "1"; } catch { return false; }
+})();
+const isRootLanding = path === "/" && !isReturningVisitor;
+
 // If a top-level entry chunk resolves but its default export is missing
 // (stale CDN chunk after a new deploy — same class of bug as the
 // vite:preloadError case above, just caught one step later since the
@@ -224,6 +248,13 @@ if (!isKnownPath) {
   });
 } else if (standaloneLoader) {
   standaloneLoader().then(({ default: Page }) => {
+    if (!Page) { if (reloadOnceForStaleChunk()) return; }
+    createRoot(document.getElementById("root")).render(
+      <StrictMode><ErrorBoundary><Page /></ErrorBoundary></StrictMode>
+    );
+  });
+} else if (isRootLanding) {
+  import("./LandingPageV7.jsx").then(({ default: Page }) => {
     if (!Page) { if (reloadOnceForStaleChunk()) return; }
     createRoot(document.getElementById("root")).render(
       <StrictMode><ErrorBoundary><Page /></ErrorBoundary></StrictMode>
