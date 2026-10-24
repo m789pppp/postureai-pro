@@ -784,9 +784,14 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   ? <><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
                   : <>Cut Sick Leave <span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
               ) : (
+                // Was "...in 2 Weeks" / "...في أسبوعين فقط" — a specific medical
+                // timeline this product has no data to support, sitting right
+                // next to the 47% stat that IS properly attributed below. A
+                // health product promising a cure timeframe it can't back up is
+                // exactly the kind of claim this pass is here to remove.
                 ar
-                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>في أسبوعين فقط</span></>
-                  : <>Stop Back & Neck Pain<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>in 2 Weeks</span></>
+                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>من جذورها</span></>
+                  : <>Stop Back & Neck Pain<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>at the Source</span></>
               )}
             </h1>
           </Reveal>
