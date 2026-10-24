@@ -277,14 +277,24 @@ function PlanCard({ plan, isEgypt, billing, ar = false }) {
           </div>
         ) : (
           <div>
-            <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-              {billing==="yearly" && (
-                <span style={{ fontSize:16, color:T.muted, textDecoration:"line-through", fontFamily:FM }}>{isEgypt?"EGP ":"$"}{rawPrice}</span>
-              )}
-              <span style={{ fontSize:36, fontWeight:800, color:T.text, fontFamily:FM, letterSpacing:"-.025em" }}>
+            {/* Was one flex row cramming the struck-through old price, the
+                new price AND "/period" together — at this card's width the
+                36px bold price span itself had to shrink, and its own text
+                wrapped mid-string right after "EGP ", splitting the
+                currency from the number onto two lines. Old price now gets
+                its own small line above instead of competing for the same
+                row; whiteSpace:nowrap keeps "EGP 133" from ever breaking
+                internally again. */}
+            {billing==="yearly" && (
+              <div style={{ fontSize:14, color:T.muted, textDecoration:"line-through", fontFamily:FM, marginBottom:3 }}>
+                {isEgypt?"EGP ":"$"}{rawPrice}
+              </div>
+            )}
+            <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
+              <span style={{ fontSize:34, fontWeight:800, color:T.text, fontFamily:FM, letterSpacing:"-.025em", whiteSpace:"nowrap" }}>
                 {isEgypt?"EGP ":"$"}{discounted}
               </span>
-              <span style={{ fontSize:13, color:T.muted }}>/ {plan.period}</span>
+              <span style={{ fontSize:13, color:T.muted, whiteSpace:"nowrap" }}>/ {plan.period}</span>
             </div>
             {billing==="yearly" && discountPct != null && (
               <div style={{ fontSize:12, color:T.green, fontWeight:700, marginTop:5, fontFamily:FM }}>
