@@ -57,8 +57,14 @@ export default function FeatureFlags({ token }) {
   };
 
   return (
-    <div style={{ background:FF_TOKENS.bg, minHeight:"100dvh", padding:"32px 24px",
-      color:FF_TOKENS.text, maxWidth:1000, margin:"0 auto", fontFamily:"'Sora',sans-serif" }}>
+    // Same missing-position:fixed bug as BillingDashboard.jsx — mounted via
+    // {showFeatureFlags && <FeatureFlags/>} inside the existing app tree,
+    // not as its own route, so this needs to behave as a full-screen
+    // overlay rather than relying on default static document flow.
+    <div style={{ position:"fixed", inset:0, zIndex:1000, overflowY:"auto",
+      background:FF_TOKENS.bg, minHeight:"100dvh", padding:"32px 24px",
+      color:FF_TOKENS.text, fontFamily:"'Sora',sans-serif" }}>
+      <div style={{ maxWidth:1000, margin:"0 auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:28 }}>
         <div>
           <h1 style={{ fontSize:26, fontWeight:800, margin:"0 0 4px", letterSpacing:"-.03em" }}>Feature Flags</h1>
@@ -157,6 +163,7 @@ export default function FeatureFlags({ token }) {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
