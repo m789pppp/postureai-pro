@@ -17,7 +17,6 @@ import VoiceCoachSettings from "./VoiceCoachSettings.jsx";
 import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
 import { BasicDashboard, WhatsAppReminder } from "./BasicFeatures.jsx";
-import { WeeklyIntelligenceButton, WeeklyIntelligenceModal } from "./WeeklyIntelligence.jsx";
 // One icon language for the whole product. The sidebar was built out of emoji
 // (🏆 🤖 🧠 🔮 🩺 next to a geometric ⊞), so a single nav column mixed flat
 // glyphs with full-colour OS stickers that render differently on Windows,
@@ -1497,7 +1496,6 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
 function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPage, startCamera, onDownloadPDF, onDownloadClinicalPDF, onComparisonPDF, onTeamPDF, onLongitudinalPDF, onPostureDNA, onShareReport, onDeleteSession, onTrend, tier="standard", isHRAdmin=false, addToast }) {
   const [deleting, setDeleting] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
-  const [showWeeklyIntel, setShowWeeklyIntel] = useState(false);
 
   // Not fetched yet is not the same as none. Telling a returning user with
   // fifty sessions to "start your first session" for the length of a Firestore
@@ -1612,9 +1610,6 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
               display:"flex", alignItems:"center", gap:6 }}>
             🔒 {isAr?"PDF — Pro & Elite فقط":"PDF — Pro & Elite only"}
           </button>
-        )}
-        {tierAtLeast(tier,"professional") && (
-          <WeeklyIntelligenceButton sessions={userSessions} cs={cs} isAr={isAr} onOpen={()=>setShowWeeklyIntel(true)} />
         )}
         {isEliteTier && (
           <button onClick={()=>handlePDF(userSessions[0], totalSessions, true, "toolbar_c")}
@@ -1838,9 +1833,6 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
           );
         })}
       </div>
-      {showWeeklyIntel && createPortal(
-        <WeeklyIntelligenceModal sessions={userSessions} cs={cs} isAr={isAr} onClose={()=>setShowWeeklyIntel(false)} />
-      , document.body)}
     </div>
   );
 }
@@ -3467,10 +3459,13 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                 background:tab===item.id?"rgba(59,130,246,.1)":hov===item.id?cs.inp:"transparent",
                 color:tab===item.id?"#3b82f6":cs.muted,
                 fontSize:12.5, fontWeight:tab===item.id?700:400, textAlign:isAr?"right":"left", transition:"all .1s" }}>
-              <span style={{ width:18, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <span style={{ width:18, display:"inline-flex", alignItems:"center", justifyContent:"center", flexShrink:0,
+                filter: tab===item.id ? "drop-shadow(0 0 6px rgba(59,130,246,.7))" : "none" }}>
                 <ItemIcon item={item} size={16} color={tab===item.id?"#3b82f6":cs.muted} />
               </span>
-              <span style={{ flex:1 }}>{isAr?item.ar:item.en}</span>
+              <span style={{ flex:1, textShadow: tab===item.id ? "0 0 12px rgba(59,130,246,.45)" : "none" }}>
+                {isAr?item.ar:item.en}
+              </span>
               {(item.badge||0)>0&&<span style={{ background:"#ef4444", color:"#fff", fontSize:9,
                 fontWeight:700, borderRadius:99, padding:"1px 5px", minWidth:16, textAlign:"center" }}>{item.badge}</span>}
             </button>
@@ -3511,10 +3506,12 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
                     color:tool.locked?cs.muted:cs.text,
                     fontSize:12, fontWeight:500, textAlign:isAr?"right":"left", transition:"all .1s" }}>
                   <span style={{ width:18, display:"inline-flex", alignItems:"center", justifyContent:"center",
-                    flexShrink:0, opacity:tool.locked?.45:1 }}>
+                    flexShrink:0, opacity:tool.locked?.45:1,
+                    filter: hov===tool.id&&!tool.locked ? "drop-shadow(0 0 5px rgba(59,130,246,.6))" : "none" }}>
                     <ItemIcon item={tool} size={15} color={tool.locked?cs.muted:cs.text} />
                   </span>
-                  <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                    textShadow: hov===tool.id&&!tool.locked ? "0 0 10px rgba(59,130,246,.35)" : "none" }}>
                     {isAr&&tool.ar ? tool.ar : tool.en}
                   </span>
                   {tool.locked&&(
