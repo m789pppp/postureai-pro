@@ -3896,7 +3896,23 @@ export default function App(){
   // scripts/fetch-mediapipe.mjs at build time (they are ~28MB, so they are
   // gitignored rather than committed). The CDN is kept as a second attempt
   // for the case where that staging step was skipped or failed.
+  //
+  // BUG FIX: this ran with an empty deps array in the top-level App
+  // component with no gate at all — so it fired on literal first mount,
+  // before `if(!user) return <AuthPage/>` or any of the page===... early
+  // returns ever execute (hooks run unconditionally; the early return just
+  // decides what JSX comes back). A completely anonymous visitor who had
+  // never logged in, sitting on the marketing landing page reading about
+  // the product, downloaded and started compiling an ~18MB WASM pose model
+  // they have no way to use (the Hero's own demo is explicitly simulated,
+  // no real camera). Confirmed live, signed out: /mediapipe/vision_bundle,
+  // vision_wasm_internal.wasm and pose_landmarker_full.task all fired on
+  // the landing page. That's the page's reported heaviness — not the
+  // Framer Motion reveals or the ambient gradients, which are normal
+  // GPU-composited transform/opacity animations. Gated to signed-in users
+  // only; the dashboard/live pages still preload exactly as before.
   useEffect(()=>{
+    if(!user)return;
     if(mpRef.current||window.__mpLoading)return;
     window.__mpLoading=true;
     const CDN_BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
@@ -3951,8 +3967,11 @@ export default function App(){
     };
     load();
     setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},18000);
+  // Depends on `user` now (was [] — see the !user guard above): a visitor
+  // who signs in after this effect's first run with no user yet must still
+  // trigger the load once auth resolves, not just on anonymous first mount.
   // eslint-disable-next-line
-  },[]);
+  },[user]);
 
   // Analysis loop
   const runLoop=useCallback(()=>{
