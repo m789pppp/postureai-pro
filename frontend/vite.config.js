@@ -41,6 +41,17 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks(id) {
 
+          // Vite's own dynamic-import/preload runtime helper has no
+          // manualChunks rule of its own, so Rollup was free to physically
+          // place it inside whichever chunk it built first — which turned
+          // out to be 'jspdf' (380KB raw). Every single dynamic import()
+          // anywhere in the app, including the landing page's, then had to
+          // import that one helper binding from the jspdf chunk, which
+          // meant fetching and evaluating the entire jsPDF library just to
+          // get a tiny internal polyfill function. Checked first and given
+          // its own near-empty chunk instead.
+          if (id.includes('vite/preload-helper'))                 return 'vite-helpers';
+
           // ── 1. npm Firebase sub-packages ──────────────────────────
           if (id.includes('node_modules/firebase/auth'))          return 'firebase-auth';
           if (id.includes('node_modules/firebase/firestore'))     return 'firebase-firestore';
@@ -68,20 +79,49 @@ export default defineConfig({
           // pdfReports is heavy — keep with the jsPDF/html2canvas chunks
           if (id.includes('/src/lib/pdfReports') ||
               id.includes('/src/assets/cairoFont'))               return 'pdf-engine';
+          // findings.js imports from postureEngine.js and is only used by
+          // the admin-only FindingsPanel — must be checked before the
+          // generic '/src/lib/' catch-all below, which would otherwise
+          // match first and silently swallow this rule, pulling
+          // postureEngine into every page that needs anything else in
+          // 'shared-utils' (exactly what happened the first time this was
+          // added further down the if-chain, after the catch-all).
+          if (id.includes('/src/lib/findings'))                   return 'posture-engine';
           // Everything else in /src/lib/ + our firebase wrapper
           if (id.includes('/src/lib/useBodyScrollLock') ||
               id.includes('/src/lib/tierQuality') ||
               id.includes('/src/lib/'))                           return 'shared-utils';
 
-          // Our local firebase.js wrapper (≠ npm firebase package):
-          // Pin it to shared-utils so every feature chunk can import
-          // it without pulling the whole App chunk as a dependency.
+          // Our local firebase.js wrapper (≠ npm firebase package): own
+          // chunk, not 'shared-utils' and not 'App'. It was pinned to
+          // 'shared-utils' so every feature chunk could import it without
+          // pulling in the whole App chunk as a dependency — that part is
+          // still true here. But 'shared-utils' is also where small,
+          // genuinely-shared helpers like useBodyScrollLock/i18n live, and
+          // every public marketing page (landing, product, pricing, faq,
+          // how-it-works) needs one of those for its contact/legal modals.
+          // Bundled together, needing a scroll-lock hook forced the full
+          // Firebase SDK (firebase-core + firebase-firestore, ~150KB gzip)
+          // to load on pages that never touch Firestore. Its own chunk
+          // keeps both properties: no App coupling, and no forcing
+          // Firebase onto pages that only need the small utils.
           if (id.includes('/src/firebase.js') ||
-              id.includes('/src/config/api'))                     return 'shared-utils';
+              id.includes('/src/config/api'))                     return 'firebase-wrapper';
 
           if (id.includes('/src/localAI') ||
               id.includes('/src/gemini') ||
               id.includes('/src/aiPreloader'))                    return 'ai-engine';
+
+          // Hand-rolled SVG icon set — imported by both the landing page
+          // and the standalone marketing pages (ProductPage, etc.), which
+          // land in two different manual chunks ('landing' and
+          // 'page-product'/'page-solutions'/...). Left unassigned, Rollup
+          // has to pick one of those two chunks to physically hold this
+          // shared module, which makes the OTHER chunk statically depend
+          // on it — e.g. loading the landing page was also eagerly
+          // fetching the page-product chunk. Giving it its own stable
+          // chunk breaks that cross-dependency.
+          if (id.includes('/src/LiveUI'))                        return 'shared-utils';
 
           // ── 4b. Posture analysis engine + utils ───────────────────
           // postureEngine.js is the heaviest non-lazy import after App.jsx
@@ -113,10 +153,28 @@ export default defineConfig({
           if (id.includes('/src/HelpCenter') ||
               id.includes('/src/APIChangelog'))                   return 'help';
 
-          if (id.includes('/src/sentry'))                        return 'shared-utils';
+          // Own chunk, not 'shared-utils' — main.jsx calls initSentry()
+          // unconditionally on every single page (landing, 404, /verify/,
+          // every standalone marketing page). 'shared-utils' also holds
+          // firebase.js (our wrapper, which touches firebase/app +
+          // firebase/firestore) and the postureEngine-adjacent lib/ catch-all,
+          // so bundling sentry.js into it meant every page load forced a
+          // static, unconditional fetch of the Firebase + posture-engine
+          // chunks (~150KB gzip) just to initialize error reporting, which
+          // itself only needs @sentry/react. Isolating it removes that
+          // forced load from every route, not just the landing page.
+          if (id.includes('/src/sentry'))                        return 'sentry';
 
-          if (id.includes('/src/services/api') ||
-              id.includes('/src/lib/voiceCoach') ||
+          // services/api.js imports firebase.js (for the auth token) and is
+          // only ever used from inside App.jsx. Grouping it with the small,
+          // genuinely page-agnostic lib/ helpers below meant any page that
+          // needed one of those (useBodyScrollLock, salesWhatsapp, ...) also
+          // pulled in services/api.js's own static firebase.js import in the
+          // same physical chunk file — paired with 'firebase-wrapper'
+          // instead, which is where that dependency actually belongs.
+          if (id.includes('/src/services/api'))                   return 'firebase-wrapper';
+
+          if (id.includes('/src/lib/voiceCoach') ||
               id.includes('/src/lib/i18n') ||
               id.includes('/src/lib/faceBlur'))                   return 'shared-utils';
 
@@ -179,8 +237,17 @@ export default defineConfig({
               id.includes('/src/WhiteLabel'))                     return 'integrations';
 
           if (id.includes('/src/AuditSystem') ||
-              id.includes('/src/MFASetup') ||
-              id.includes('/src/LegalCompliance'))                return 'security';
+              id.includes('/src/MFASetup'))                       return 'security';
+
+          // LegalCompliance was grouped into 'security' with AuditSystem and
+          // MFASetup — both admin-only tools that import firebase.js for
+          // real Firestore reads. LegalCompliance's LegalModal/CookieConsent
+          // are what every public marketing page (landing, product,
+          // pricing, faq, how-it-works) uses for its Privacy/Terms/Refund
+          // modal, so bundling it with two Firebase-dependent admin tools
+          // forced the Firebase SDK onto every one of those pages just to
+          // show a legal modal that itself needs no Firebase at all.
+          if (id.includes('/src/LegalCompliance'))                return 'legal';
 
           if (id.includes('/src/ProductTour') ||
               id.includes('/src/OnboardingWizard'))               return 'onboarding';
