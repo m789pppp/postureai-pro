@@ -678,15 +678,28 @@ function Hero({ lang, onCTA, mode, setMode }) {
   const [demoScore, setDemoScore] = useState(89);
   // #11: camera demo consent gate — user must click "Start Demo" first
   const [demoStarted, setDemoStarted] = useState(false);
+  const heroRef = useRef(null);
   useEffect(() => {
-    // Smooth demo score oscillation — looks realistic without being jarring
+    // Smooth demo score oscillation — looks realistic without being jarring.
+    // This ran on an unconditional setInterval before, re-rendering React
+    // every 2.2s for as long as the tab stayed open — including long after
+    // the visitor had scrolled past the hero and it was off-screen, for
+    // the entire rest of the page. Paused via IntersectionObserver so it
+    // only ticks while the hero is actually visible.
+    const el = heroRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
     const sequence = [89,91,88,93,90,87,92,89,94,91,88,90];
-    let idx = 0;
-    const iv = setInterval(() => {
+    let idx = 0, iv = null;
+    const start = () => { if (!iv) iv = setInterval(() => {
       idx = (idx + 1) % sequence.length;
       setDemoScore(sequence[idx]);
-    }, 2200);
-    return () => clearInterval(iv);
+    }, 2200); };
+    const stop = () => { if (iv) { clearInterval(iv); iv = null; } };
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) start(); else stop();
+    }, { threshold:.1 });
+    obs.observe(el);
+    return () => { stop(); obs.disconnect(); };
   }, []);
 
   const scoreColor = demoScore >= 80 ? LPV7_TOKENS.green : demoScore >= 60 ? LPV7_TOKENS.amber : LPV7_TOKENS.red;
@@ -696,7 +709,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
   };
 
   return (
-    <section style={{
+    <section ref={heroRef} style={{
       // 100dvh, not 100vh: on iOS Safari / Chrome Android 100vh is the
       // expanded-chrome height, so the hero's CTA row and scroll cue sat below
       // the actually-visible fold on first paint. StandaloneLayout already
