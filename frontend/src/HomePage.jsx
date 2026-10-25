@@ -315,7 +315,7 @@ function ToolBtn({ icon, label, desc, color, onClick, locked, lockLabel="PRO", o
 }
 
 // ─── Tier badge ────────────────────────────────────────────────────
-function TierBadge({ tier }) {
+function TierBadge({ tier, isAr }) {
   // Keyed by featureTier()'s actual 4-rung ladder output (standard/basic/
   // professional/elite — see lib/tierQuality.js LEVELS). The map used to
   // have a "business" key instead of "basic": featureTier() never returns
@@ -324,8 +324,15 @@ function TierBadge({ tier }) {
   // "basic"/"personal_basic"/"starter") hit the missing "basic" key, fell
   // through to the `||map.standard` fallback, and showed "Free" despite
   // paying for Basic.
-  const map = { elite:["#10b981","Elite ✦"], professional:["#3b82f6","Pro"],
-    basic:["#a855f7","Basic"], standard:["#64748b","Free"] };
+  // This badge is rendered all over the dashboard (sidebar, settings,
+  // admin tables) and never took a language prop — every Arabic-mode user
+  // saw their plan badge in English regardless. Same tier names used on
+  // the landing page / FeatureTier label above.
+  const map = isAr
+    ? { elite:["#10b981","إيليت ✦"], professional:["#3b82f6","احترافي"],
+        basic:["#a855f7","أساسي"], standard:["#64748b","مجاني"] }
+    : { elite:["#10b981","Elite ✦"], professional:["#3b82f6","Pro"],
+        basic:["#a855f7","Basic"], standard:["#64748b","Free"] };
   // Was a raw lookup on the literal `tier` string, so any B2B account
   // (tier="b2b_starter"/"b2b_growth"/"b2b_enterprise" — real, paid plans,
   // see Billing.jsx/PricingPage.jsx) fell through to map.standard and
@@ -604,7 +611,7 @@ function DashIndividual({ user, profile, userSessions, sessionsLoading, setUserS
                 {isAr?`أهلاً, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "بيك"}!`:`Hey, ${profile?.name?.split(" ")[0] || user?.displayName?.split(" ")[0] || profile?.email?.split("@")[0] || "there"}!`}
               </div>
               <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3 }}>
-                <TierBadge tier={tier}/>
+                <TierBadge tier={tier} isAr={isAr}/>
                 {/* "d" suffix was hardcoded English even in Arabic mode. */}
                 {streak>0&&<span style={{ fontSize:10, color:"#f59e0b", fontWeight:600 }}>🔥 {streak}{isAr?" يوم":"d"}</span>}
               </div>
@@ -1341,7 +1348,7 @@ function DashHR({ profile, allUsers, cs, isAr, addToast, onBilling, onInvite,
                 (App.jsx's effectiveTier) for exactly this reason; DashHR
                 was missed, so an HR admin mid-trial saw "Free" instead of
                 their real trial tier. */}
-            {users.length} {isAr?"موظف":"employees"} · <TierBadge tier={tier||profile?.tier||"standard"}/>
+            {users.length} {isAr?"موظف":"employees"} · <TierBadge tier={tier||profile?.tier||"standard"} isAr={isAr}/>
           </div>
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -1600,7 +1607,7 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
               color: isEliteTier?"#6ee7b7":"#60a5fa",
               fontSize:12, fontWeight:600, cursor:"pointer",
               display:"flex", alignItems:"center", gap:6 }}>
-            📄 {isEliteTier?(isAr?"تنزيل Elite PDF":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}
+            📄 {isEliteTier?(isAr?"تنزيل PDF — إيليت":"Download Elite PDF"):(isAr?"تنزيل PDF":"Download PDF")}
           </button>
         ) : (
           <button onClick={()=>handlePDF(null, 0)}
@@ -1608,7 +1615,7 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
               border:"1px solid rgba(99,102,241,.25)", borderRadius:9,
               color:"#a5b4fc", fontSize:12, fontWeight:600, cursor:"pointer",
               display:"flex", alignItems:"center", gap:6 }}>
-            🔒 {isAr?"PDF — Pro & Elite فقط":"PDF — Pro & Elite only"}
+            🔒 {isAr?"PDF — احترافي وإيليت فقط":"PDF — Pro & Elite only"}
           </button>
         )}
         {isEliteTier && (
@@ -1795,7 +1802,7 @@ function PanelSessions({ userSessions, sessionsLoading, profile, cs, isAr, setPa
                     handlePDF twice. */}
                 <button onClick={()=>handlePDF(s, totalSessions-i)}
                   disabled={isLoadingPDF}
-                  title={isProTier?(isAr?"تنزيل PDF":"Download PDF"):(isAr?"PDF — Pro & Elite":"PDF — Pro & Elite")}
+                  title={isProTier?(isAr?"تنزيل PDF":"Download PDF"):(isAr?"PDF — احترافي وإيليت فقط":"PDF — Pro & Elite only")}
                   style={{ padding:"6px 10px",
                     background: isProTier?(isEliteTier?"rgba(16,185,129,.1)":"rgba(26,86,219,.12)"):"rgba(99,102,241,.08)",
                     border:`1px solid ${isProTier?(isEliteTier?"rgba(16,185,129,.25)":"rgba(26,86,219,.25)"):"rgba(99,102,241,.2)"}`,
@@ -2127,7 +2134,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
           </div>
           <div style={{ fontSize:12, color:cs.muted, marginTop:2 }}>{user?.email||"—"}</div>
           <div style={{ marginTop:6, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-            <TierBadge tier={tier}/>
+            <TierBadge tier={tier} isAr={isAr}/>
             {/* Account type badge */}
             {(() => {
               const isCompanyAcct = profile?.user_type==="hr_admin"||profile?.user_type==="employee"||!!profile?.is_org_owner||!!profile?.company_id||profile?.acct_type==="company";
@@ -2238,7 +2245,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 <option value="other">{isAr?"عام / أخرى":"General / Other"}</option>
               </select>
               <div style={{ fontSize:10, color:cs.subtle||cs.muted, marginTop:5 }}>
-                {isAr?"بيستخدم في تقرير بصمة الوضعية (Elite) للمقارنة بمعايير مهنتك":"Used in your Posture DNA report (Elite) to benchmark against your profession"}
+                {isAr?"بيستخدم في تقرير بصمة الوضعية (إيليت) للمقارنة بمعايير مهنتك":"Used in your Posture DNA report (Elite) to benchmark against your profession"}
               </div>
             </div>
             <div>
@@ -2441,7 +2448,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
             <div style={{ flex:1 }}>
               <div style={{ fontSize:16, fontWeight:800, color:cs.text }}>
                 {(()=>{const f=featureTier(tier);
-                  return f==="elite"?"Elite":f==="professional"?"Professional":f==="basic"?"Basic":"Free";})()}
+                  return f==="elite"?(isAr?"إيليت":"Elite"):f==="professional"?(isAr?"احترافي":"Professional"):f==="basic"?(isAr?"أساسي":"Basic"):(isAr?"مجاني":"Free");})()}
               </div>
               <div style={{ fontSize:12, color:cs.muted, marginTop:3 }}>
                 {(()=>{const f=featureTier(tier);
@@ -2451,7 +2458,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   :(isAr?"جلسات يومية محدودة":"Limited daily sessions");})()}
               </div>
             </div>
-            <TierBadge tier={tier}/>
+            <TierBadge tier={tier} isAr={isAr}/>
           </div>
           <button onClick={onBillingHistory} style={{ width:"100%", background:cs.inp, border:`1px solid ${cs.border}`, borderRadius:10, padding:"12px 16px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
             <span style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -3113,11 +3120,11 @@ function FamilyPartnerSettings({ cs, isAr, tier, onUpgrade, addToast }) {
       ) : !isPro ? (
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div style={{ flex:1, fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
-            {isAr?"رقّي لـ Pro عشان تشارك باقتك مع شخص واحد (شريك/فرد من العيلة) مجانًا":"Upgrade to Pro to share your plan with one family member or partner, free"}
+            {isAr?"رقّي لاحترافي عشان تشارك باقتك مع شخص واحد (شريك/فرد من العيلة) مجانًا":"Upgrade to Pro to share your plan with one family member or partner, free"}
           </div>
           <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"#1a56db", border:"none",
             borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
-            {isAr?"Pro":"Pro"}
+            {isAr?"احترافي":"Pro"}
           </button>
         </div>
       ) : data.partner ? (
@@ -3177,7 +3184,7 @@ function EarlyAccessPanel({ cs, isAr, tier, onUpgrade }) {
         <div style={{ fontSize:28 }}>🚀</div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:13, fontWeight:700, color:cs.text, marginBottom:3 }}>
-            {isAr?"Elite Early Access":"Elite Early Access"}
+            {isAr?"وصول مبكر — إيليت":"Elite Early Access"}
           </div>
           <div style={{ fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
             {data.count > 0
@@ -3187,7 +3194,7 @@ function EarlyAccessPanel({ cs, isAr, tier, onUpgrade }) {
         </div>
         <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"linear-gradient(135deg,#d4af37,#b8860b)",
           border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
-          {isAr?"⭐ Elite":"⭐ Elite"}
+          {isAr?"⭐ إيليت":"⭐ Elite"}
         </button>
       </div>
     );
@@ -3198,7 +3205,7 @@ function EarlyAccessPanel({ cs, isAr, tier, onUpgrade }) {
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
         <span style={{ fontSize:18 }}>🚀</span>
         <div style={{ fontSize:13, fontWeight:700, color:cs.text }}>
-          {isAr?"Early Access — حصري ليك":"Early Access — exclusive to you"}
+          {isAr?"وصول مبكر — حصري ليك":"Early Access — exclusive to you"}
         </div>
       </div>
       {data.flags.length === 0 ? (
@@ -3237,12 +3244,12 @@ function VoiceCoachUpsell({ cs, isAr, onUpgrade }) {
           {isAr?"مدرب صوتي بلهجات عربية":"Voice Coach with Arabic accents"}
         </div>
         <div style={{ fontSize:11.5, color:cs.muted, lineHeight:1.5 }}>
-          {isAr?"مصري، خليجي (سعودي/إماراتي) — حصري لأعضاء Elite":"Egyptian, Gulf (Saudi/Emirati) — exclusive to Elite members"}
+          {isAr?"مصري، خليجي (سعودي/إماراتي) — حصري لأعضاء إيليت":"Egyptian, Gulf (Saudi/Emirati) — exclusive to Elite members"}
         </div>
       </div>
       <button onClick={onUpgrade} style={{ padding:"8px 16px", background:"linear-gradient(135deg,#d4af37,#b8860b)",
         border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
-        {isAr?"⭐ Elite":"⭐ Elite"}
+        {isAr?"⭐ إيليت":"⭐ Elite"}
       </button>
     </div>
   );
