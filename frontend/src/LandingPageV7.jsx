@@ -52,6 +52,24 @@ function Reveal({ children, delay = 0, y = 28, style = {}, className }) {
   );
 }
 
+// The site's actual opening moment — first paint of the Hero, not another
+// scroll-triggered reveal. Same mechanics as Reveal (every element below
+// still uses it for consistency) but a touch of scale on top of the
+// fade+rise, slightly longer and slower, so the page visibly "opens"
+// rather than just fading in like any other section further down.
+function HeroReveal({ children, delay = 0, y = 22, style = {}, className }) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.div
+      className={className}
+      style={style}
+      initial={reduce ? false : { opacity: 0, y, scale: .97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.8, delay: delay / 1000, ease: [0.16, 1, 0.3, 1] }}
+    >{children}</motion.div>
+  );
+}
+
 // Stagger container — wraps a group of children so they cascade in
 // one after another on scroll, instead of each needing its own delay.
 function Stagger({ children, gap = 0.08, style = {}, className }) {
@@ -402,32 +420,11 @@ function GlobalStyle() {
 }
 
 
-// ── Scroll progress bar ───────────────────────────────────────────
-function ScrollProgress() {
-  const [w, setW] = useState(0);
-  useEffect(() => {
-    const h = () => {
-      const el = document.documentElement;
-      const pct = el.scrollTop / (el.scrollHeight - el.clientHeight);
-      setW(Math.round(pct * 100));
-    };
-    window.addEventListener("scroll", h, { passive: true });
-    return () => window.removeEventListener("scroll", h);
-  }, []);
-  return (
-    <div style={{
-      position:"fixed", top:0, left:0, right:0, height:2.5, zIndex:2000,
-      background:"rgba(255,255,255,.04)",
-    }}>
-      <div style={{
-        height:"100%", width:`${w}%`,
-        background:"linear-gradient(90deg,#1a56db,#22d3ee,#10d9a0)",
-        transition:"width .1s linear",
-        boxShadow:"0 0 8px rgba(34,211,238,.5)",
-      }}/>
-    </div>
-  );
-}
+// ── Scroll progress bar — REMOVED on the owner's instruction ───────
+// A thin gradient bar fixed to the very top of the viewport that fills
+// as the visitor scrolls — a generic SaaS-template trope, flagged as
+// reading as obviously AI-generated rather than a deliberate design
+// choice for this product.
 
 // ── Navigation ────────────────────────────────────────────────────
 function Nav({ lang, setLang, onCTA }) {
@@ -723,8 +720,16 @@ function Hero({ lang, onCTA, mode, setMode }) {
       minHeight: "100dvh", display:"flex", alignItems:"center",
       padding:"clamp(68px,8vw,110px) 24px clamp(48px,5vw,72px)", position:"relative", overflow:"hidden",
     }}>
-      {/* Ambient background */}
-      <div style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
+      {/* Ambient background — fades in on load instead of being fully
+          opaque from the very first frame, so the page's atmosphere
+          settles in alongside the foreground content rather than the
+          background just snapping to full strength while only the text
+          animates. */}
+      <motion.div
+        initial={reduce ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1.4, ease: "easeOut" }}
+        style={{ position:"absolute", inset:0, pointerEvents:"none" }}>
         <div className="lp-drift-a" style={{
           position:"absolute", top:"8%", left:"58%",
           width:680, height:680,
@@ -753,13 +758,13 @@ function Hero({ lang, onCTA, mode, setMode }) {
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)"/>
         </svg>
-      </div>
+      </motion.div>
 
       <div className="lp-wrap" style={{ width:"100%", position:"relative" }}>
         <div className="lp-hero-grid" style={{ direction: ar ? "rtl" : "ltr" }}>
         {/* Left */}
         <div>
-          <Reveal>
+          <HeroReveal>
             {/* Individual / Company toggle — drives the rest of the page */}
             <div style={{
               display:"inline-flex", alignItems:"center", gap:3,
@@ -788,7 +793,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 </button>
               ))}
             </div>
-          </Reveal>
+          </HeroReveal>
 
           {/* "Now Available · Free to Start" pill removed — a second rounded
               badge stacked directly above the headline, saying nothing the
@@ -797,7 +802,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
               generic-template beat; cutting straight to the toggle, then the
               headline, reads more deliberate. */}
 
-          <Reveal delay={80}>
+          <HeroReveal delay={160}>
             <h1 style={{
               ...TYPE.hero, color:LPV7_TOKENS.text, margin:"0 0 24px", fontFamily:FONT_DISPLAY,
             }}>
@@ -816,9 +821,9 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   : <>Stop Back & Neck Pain<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>at the Source</span></>
               )}
             </h1>
-          </Reveal>
+          </HeroReveal>
 
-          <Reveal delay={140}>
+          <HeroReveal delay={300}>
             <p style={{ ...TYPE.body, color:LPV7_TOKENS.sub, maxWidth:520, margin:"0 0 40px" }}>
               {/* The 47% figure is an ergonomics-research average, not a measured
                   Corvus outcome — the Stats section already labels it that way
@@ -834,9 +839,9 @@ function Hero({ lang, onCTA, mode, setMode }) {
                     : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware, no expensive subscriptions.")
               }
             </p>
-          </Reveal>
+          </HeroReveal>
 
-          <Reveal delay={200}>
+          <HeroReveal delay={430}>
             <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:16 }}>
               {isCompany ? (
                 <button type="button" className="lp-btn lp-btn-primary" onClick={(e)=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup")}} style={btn("primary","lg")}>
@@ -852,16 +857,12 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   {ar ? "🚀 تجربة مجانية 7 أيام" : "🚀 Start 7-Day Free Trial"}
                 </button>
               )}
-              {/* preventDefault + manual scroll: letting this anchor navigate
-                  pushed "#pricing" into the URL, and App.jsx's hashToPage maps
-                  "pricing" to the in-app PricingPage (it's in VALID_PAGES and,
-                  unlike features/how/faq, is NOT in LANDING_SECTIONS). So a
-                  visitor who clicked View Pricing, then any CTA, then Back,
-                  landed on the app's pricing screen instead of the landing
-                  page they came from. */}
-              <a href="#pricing" className="lp-btn lp-btn-ghost"
-                onClick={(e)=>{e.preventDefault();onCTA(e);document.getElementById("pricing")?.scrollIntoView({behavior:"smooth",block:"start"});}}
-                style={btn("ghost","lg")}>
+              {/* Was an in-page "#pricing" scroll to this same page's embedded
+                  Pricing section. The site has its own dedicated pricing
+                  page (PricingPageLP.jsx, at /pricing) — a button labelled
+                  "View Pricing" should go there, not jump partway down the
+                  page it's already on. */}
+              <a href="/pricing" onClick={onCTA} className="lp-btn lp-btn-ghost" style={btn("ghost","lg")}>
                 {ar ? "عرض الأسعار" : "View Pricing"}
               </a>
             </div>
@@ -874,10 +875,10 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 <span key={tr} style={{ fontSize:12, color:LPV7_TOKENS.muted, fontWeight:500 }}>{tr}</span>
               ))}
             </div>
-          </Reveal>
+          </HeroReveal>
 
           {/* Mobile-only mini stats */}
-          <Reveal delay={260}>
+          <HeroReveal delay={500}>
             <div className="lp-hero-mobile-stats" style={{
               display:"none", gap:0,
               background:"rgba(255,255,255,.03)", border:`1px solid ${LPV7_TOKENS.border}`,
@@ -910,11 +911,11 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 </div>
               ))}
             </div>
-          </Reveal>
+          </HeroReveal>
         </div>
 
         {/* Right — Camera demo */}
-        <Reveal delay={100} className="lp-hero-right">
+        <HeroReveal delay={220} className="lp-hero-right">
           <div style={{ position:"relative", paddingTop:20, paddingBottom:20, minWidth:320 }}>
             {/* Main camera card */}
             <div style={{ ...card(true), padding:0, overflow:"hidden" }}>
@@ -1098,7 +1099,7 @@ function Hero({ lang, onCTA, mode, setMode }) {
               </span>
             </motion.div>
           </div>
-        </Reveal>
+        </HeroReveal>
         </div>{/* end lp-hero-grid */}
       </div>{/* end lp-wrap */}
 
@@ -2732,15 +2733,15 @@ function Footer({ lang }) {
 
   const cols = ar ? [
     { title:"المنتج", links:[
-      { label:"المميزات",       href:"#features",     anchor:true },
-      { label:"كيف يعمل",      href:"#how",          anchor:true },
-      { label:"الأسعار",       href:"#pricing",      anchor:true },
+      { label:"المميزات",       href:"/product" },
+      { label:"كيف يعمل",      href:"/how-it-works" },
+      { label:"الأسعار",       href:"/pricing" },
       { label:"الأسئلة الشائعة", href:"/faq" },
     ]},
     { title:"الحلول", links:[
-      { label:"فرق HR",          href:"#casestudies",  anchor:true },
+      { label:"فرق HR",          href:"/solutions" },
       { label:"أين نحن الآن",    href:"#casestudies",  anchor:true },
-      { label:"التسعير المؤسسي", href:"#pricing",      anchor:true },
+      { label:"التسعير المؤسسي", href:"/pricing" },
       // the #schools section renders in both languages, but only the English
       // footer had a link to it
       { label:"للجامعات والمدارس", href:"#schools",   anchor:true },
@@ -2760,15 +2761,15 @@ function Footer({ lang }) {
     ]},
   ] : [
     { title:"Product", links:[
-      { label:"Features",     href:"#features",     anchor:true },
-      { label:"How it works", href:"#how",          anchor:true },
-      { label:"Pricing",      href:"#pricing",      anchor:true },
+      { label:"Features",     href:"/product" },
+      { label:"How it works", href:"/how-it-works" },
+      { label:"Pricing",      href:"/pricing" },
       { label:"FAQ",          href:"/faq" },
     ]},
     { title:"Solutions", links:[
-      { label:"HR Teams",         href:"#casestudies", anchor:true },
+      { label:"HR Teams",         href:"/solutions" },
       { label:"Where We Are",     href:"#casestudies", anchor:true },
-      { label:"Enterprise Plans", href:"#pricing",     anchor:true },
+      { label:"Enterprise Plans", href:"/pricing" },
       { label:"For Schools",      href:"#schools",     anchor:true },
       { label:"Book a Demo",      href:CALENDLY_URL },
     ]},
@@ -2985,7 +2986,6 @@ export default function LandingPage({ onNavigate, lang: langProp, setLang: setLa
   return (
     <div dir={lang==="ar"?"rtl":"ltr"} style={{ background:LPV7_TOKENS.bg, minHeight:"100dvh", color:LPV7_TOKENS.text, fontFamily:FONT_DISPLAY }}>
       <GlobalStyle/>
-      <ScrollProgress/>
       <Nav lang={lang} setLang={setLang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
       <Hero lang={lang} onCTA={handleCTA} mode={mode} setMode={setMode}/>
       <SocialProof lang={lang}/>
