@@ -370,7 +370,13 @@ function GlobalStyle() {
       @media(max-width:480px){
         .lp-stats-grid{grid-template-columns:1fr!important;gap:12px!important}
         .lp-sp-stats{grid-template-columns:1fr!important}
-        .lp-footer-grid{grid-template-columns:1fr!important}
+        /* lp-footer-grid:1fr!important used to live here too. Since
+           !important wins regardless of source order, it silently beat the
+           later, non-!important ".lp-footer-grid{grid-template-columns:1fr
+           1fr}" rule below at every width under 640px — every phone visitor
+           got the footer's 5 link groups fully stacked in one column with
+           generous per-link padding between them, instead of the intended
+           2-column layout, making it absurdly long to scroll through. */
       }
       @media(max-width:640px){
         .lp-wrap{padding:0 16px}.lp-section{padding:52px 16px}
