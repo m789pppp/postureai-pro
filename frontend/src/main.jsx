@@ -71,7 +71,7 @@ try { initSentry(); } catch {}
 
 // ── PWA: Service Worker ───────────────────────────────────────────
 // Force clear old SW + caches when CSP or SW version changes
-(async function clearOldAssets() {
+const assetsClearedPromise = (async function clearOldAssets() {
   try {
     const regs = await navigator.serviceWorker.getRegistrations();
     await Promise.all(regs.map(r => r.unregister()));
@@ -81,7 +81,21 @@ try { initSentry(); } catch {}
 })();
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
+  window.addEventListener("load", async () => {
+    // clearOldAssets() above is async and unregisters the previous SW —
+    // deleting its caches (the ~28MB MediaPipe cache among them) can take
+    // a real amount of time, especially on a phone's slower storage. The
+    // "load" event doesn't wait for it, so hadController below could
+    // still read the OLD, not-yet-unregistered SW as the controller,
+    // making this look like an "already controlled" tab even on a visit
+    // that should have had none. Every one of those reads then forced a
+    // real window.location.reload() once the actually-new SW took over a
+    // few moments later — on mobile, where that race is most likely to
+    // lose, this is what showed up as "the page shakes and reloads
+    // itself" mid-use. Awaiting the clear first closes the race: by the
+    // time hadController is captured, the old registration is
+    // genuinely gone.
+    await assetsClearedPromise;
     // Track whether this tab already had a controlling SW before this
     // registration — only a change AFTER that point is a genuine update
     // (an already-open tab getting taken over by a newer deploy). The

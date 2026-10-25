@@ -1294,7 +1294,7 @@ function Features({ lang }) {
     },
     {
       icon:"crystal", accentColor:"#8b5cf6",
-      badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
+      badge:{ en:"Basic +", ar:"أساسي +" }, badgeC:"#1a56db",
       title:{ en:"Pain Prediction AI", ar:"ذكاء توقع الألم" },
       sub:{ en:"Predicts pain zones 48 hrs before they peak", ar:"يتوقع مناطق الألم قبل 48 ساعة من ذروتها" },
       bullets:{
@@ -1316,7 +1316,7 @@ function Features({ lang }) {
     },
     {
       icon:"flame", accentColor:"#f59e0b",
-      badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
+      badge:{ en:"Basic +", ar:"أساسي +" }, badgeC:"#1a56db",
       title:{ en:"Habits & Streaks", ar:"العادات والسلاسل" },
       sub:{ en:"Daily check-ins · weekly challenge · 1× freeze/month", ar:"تسجيل يومي · تحدي أسبوعي · تجميد مرة/شهر" },
       bullets:{
@@ -1336,7 +1336,7 @@ function Features({ lang }) {
     },
     {
       icon:"sparkle", accentColor:"#6366f1",
-      badge:{ en:"Basic → Elite", ar:"Basic → Elite" }, badgeC:"#6366f1",
+      badge:{ en:"Basic → Elite", ar:"أساسي ← إيليت" }, badgeC:"#6366f1",
       title:{ en:"Dr. Corvus AI Coach", ar:"مدرب AI — د. كورفوس" },
       sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 ← 30 ← غير محدود رسالة/شهر · عربي وإنجليزي" },
       bullets:{
@@ -1355,7 +1355,7 @@ function Features({ lang }) {
     },
     {
       icon:"chat", accentColor:"#25d366",
-      badge:{ en:"Basic +", ar:"Basic +" }, badgeC:"#1a56db",
+      badge:{ en:"Basic +", ar:"أساسي +" }, badgeC:"#1a56db",
       title:{ en:"WhatsApp Reminders", ar:"تذكيرات واتساب" },
       sub:{ en:"Smart nudges in your time window · Cairo UTC+3", ar:"تنبيهات ذكية في نافذة وقتك · القاهرة UTC+3" },
       bullets:{
@@ -1394,7 +1394,7 @@ function Features({ lang }) {
     },
     {
       icon:"shield", accentColor:"#f59e0b",
-      badge:{ en:"Enterprise", ar:"Enterprise" }, badgeC:"#f59e0b",
+      badge:{ en:"Enterprise", ar:"إنتربرايز" }, badgeC:"#f59e0b",
       title:{ en:"Enterprise Security", ar:"أمان المستوى المؤسسي" },
       sub:{ en:"SSO · RBAC · AES-256 · Audit logs · GDPR", ar:"SSO · RBAC · AES-256 · سجلات تدقيق · GDPR" },
       bullets:{
@@ -1866,7 +1866,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       priceUSD:{ monthly:19.99, yearly:159.99 }, priceEGP:{ monthly:399, yearly:3190 },
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
-        ? ["كل مزايا Basic","رؤى AI","تقارير","مقارنة الجلسات","لوحة المتصدرين","تصدير CSV/PDF"]
+        ? ["كل مزايا أساسي","رؤى AI","تقارير","مقارنة الجلسات","لوحة المتصدرين","تصدير CSV/PDF"]
         : ["Everything in Basic","AI Insights","Reports","Session compare","Leaderboard","Export CSV/PDF"],
     },
     {
@@ -1874,7 +1874,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       priceUSD:{ monthly:39.99, yearly:299.99 }, priceEGP:{ monthly:699, yearly:5590 },
       color:LPV7_TOKENS.green,
       features: ar
-        ? ["كل مزايا Pro","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة متقدمة"]
+        ? ["كل مزايا احترافي","مدرب AI غير محدود","AI تنبؤي","تقرير PDF","دعم أولوية","معايرة متقدمة"]
         : ["Everything in Pro","AI Coach unlimited","Predictive AI","PDF report","Priority support","Calibration"],
     },
   ];
@@ -2210,10 +2210,15 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
             { key:"business",   label:ar?"جروث":"Growth",          color:"#6366f1", popular:true },
             { key:"enterprise", label:ar?"إنتربرايز":"Enterprise", color:"#f59e0b" },
           ] : [
+            // "Basic"/"Pro"/"Elite" were hardcoded English regardless of
+            // language — every other label on this table (and the plan
+            // cards right above it) is Arabic in Arabic mode, so this read
+            // as a half-translated table. Matches the plan cards' own
+            // Arabic names for the same tiers.
             { key:"free",  label:ar?"مجاني":"Free",   color:"#8896ac" },
-            { key:"basic", label:"Basic",              color:"#1a56db" },
-            { key:"pro",   label:"Pro",                color:"#6366f1", popular:true },
-            { key:"elite", label:"Elite",              color:"#f59e0b" },
+            { key:"basic", label:ar?"أساسي":"Basic",   color:"#1a56db" },
+            { key:"pro",   label:ar?"احترافي":"Pro",   color:"#6366f1", popular:true },
+            { key:"elite", label:ar?"إيليت":"Elite",   color:"#f59e0b" },
           ];
           const B2B_GROUPS = [
             {
@@ -2287,7 +2292,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               ],
             },
             {
-              en:"Basic Habits",ar:"عادات Basic",
+              en:"Basic Habits",ar:"عادات أساسي",
               rows:[
                 { en:"Daily Check-in",       ar:"تسجيل يومي",           free:"—", basic:"✅", pro:"✅", elite:"✅" },
                 { en:"Weekly Challenge",     ar:"تحدي أسبوعي",          free:"—", basic:"✅", pro:"✅", elite:"✅" },
@@ -2299,7 +2304,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               ],
             },
             {
-              en:"Pro Intelligence",ar:"ذكاء Pro",
+              en:"Pro Intelligence",ar:"ذكاء احترافي",
               rows:[
                 { en:"Weekly Intelligence Report", ar:"تقرير ذكاء أسبوعي",         free:"—", basic:"—", pro:"✅", elite:"✅" },
                 { en:"Shareable PDF Report",        ar:"تقرير PDF قابل للمشاركة",  free:"—", basic:"—", pro:"✅", elite:"✅" },
@@ -2310,14 +2315,14 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               ],
             },
             {
-              en:"Elite Exclusive",ar:"حصري Elite",
+              en:"Elite Exclusive",ar:"حصري إيليت",
               rows:[
                 { en:"Predictive AI (detailed)",     ar:"ذكاء اصطناعي تنبؤي تفصيلي", free:"—", basic:"—", pro:"—", elite:"✅" },
                 { en:"Voice Coach (Arabic)",          ar:"مدرب صوتي عربي",             free:"—", basic:"—", pro:"—", elite:"✅" },
                 { en:"Monthly Physiotherapist",       ar:"أخصائي علاج طبيعي شهري",    free:"—", basic:"—", pro:"—", elite:"✅" },
                 { en:"Posture DNA Report (quarterly)",ar:"تقرير Posture DNA (ربع سنوي)",free:"—",basic:"—",pro:"—", elite:"✅" },
                 { en:"Priority WhatsApp Support",     ar:"دعم واتساب أولوية",          free:"—", basic:"—", pro:"—", elite:"✅" },
-                { en:"Elite Early Access",            ar:"وصول مبكر Elite",            free:"—", basic:"—", pro:"—", elite:"✅" },
+                { en:"Elite Early Access",            ar:"وصول مبكر إيليت",            free:"—", basic:"—", pro:"—", elite:"✅" },
               ],
             },
           ]; // end B2C GROUPS
@@ -2669,11 +2674,11 @@ function SchoolsSection({ lang, onCTA }) {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:20, marginBottom:48 }}>
           {[
-            { icon:"star", en:"Full Pro features", ar:"كل مميزات Pro" },
+            { icon:"star", en:"Full Pro features", ar:"كل مميزات الباقة الاحترافية" },
             { icon:"building", en:"Academic dashboard", ar:"لوحة إدارة أكاديمية" },
             { icon:"barChart", en:"Periodic wellness reports", ar:"تقارير صحية دورية" },
             { icon:"trophy", en:"Certificates for graduates", ar:"شهادات للخريجين" },
-            { icon:"sparkle", en:"AI Coach for students", ar:"Dr. Corvus للطلاب" },
+            { icon:"sparkle", en:"AI Coach for students", ar:"مدرب AI — د. كورفوس للطلاب" },
             { icon:"chat", en:"WhatsApp support", ar:"دعم WhatsApp مخصص" },
           ].map(f => (
             <div key={f.en} style={{ background:"rgba(255,255,255,.03)",
