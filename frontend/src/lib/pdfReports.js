@@ -497,7 +497,7 @@ function _ftr(doc,W,ml,mr,H,p,total,name){
   hr(doc,0,H-10,W,PDF_TOKENS.border);
   fc(doc,...PDF_TOKENS.bg);doc.rect(0,H-9.5,W,9.5,"F");
   font(doc,PDF_FLAGS.micro,"normal");tc(doc,...PDF_TOKENS.ghost);
-  doc.text("Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-3.5);
+  doc.text("Posmoz · Confidential · Not a medical diagnosis",ml,H-3.5);
   font(doc,PDF_FLAGS.micro,"bold");tc(doc,...PDF_TOKENS.muted);
   doc.text(_fit(doc,name,W*0.4),W/2,H-3.5,{align:"center"});
   doc.text(`${p} / ${total}`,W-mr,H-3.5,{align:"right"});
@@ -944,7 +944,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.rect(ml,H-9,cw,.3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     sf(5.5,"normal"); tc(doc,...TEXT3);
-    doc.text(isAr?"Posmoz Health Intelligence · سري · ليس تشخيصاً طبياً":"Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
+    doc.text(isAr?"Posmoz · سري · ليس تشخيصاً طبياً":"Posmoz · Confidential · Not a medical diagnosis",ml,H-4.5);
     doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
 
     // ══════════════════════════════════════════════════════════
@@ -1114,7 +1114,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.rect(ml,H-9,cw,.3,"F");
     doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     sf(5.5,"normal"); tc(doc,...TEXT3);
-    doc.text(isAr?"Posmoz Health Intelligence · سري · ليس تشخيصاً طبياً":"Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
+    doc.text(isAr?"Posmoz · سري · ليس تشخيصاً طبياً":"Posmoz · Confidential · Not a medical diagnosis",ml,H-4.5);
     doc.text("2 / 2",W-mr,H-4.5,{align:"right"});
 
     const _fn = `Posmoz_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`;
@@ -1260,7 +1260,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
   doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
   sf(5.5,"normal");tc(doc,...TEXT3);
-  doc.text(isAr?"Posmoz Health Intelligence · سري · ليس تشخيصاً طبياً":"Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
+  doc.text(isAr?"Posmoz · سري · ليس تشخيصاً طبياً":"Posmoz · Confidential · Not a medical diagnosis",ml,H-4.5);doc.text("1 / 2",W-mr,H-4.5,{align:"right"});
 
   // PAGE 2 — full metrics + AI analysis
   doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
@@ -1429,7 +1429,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     }
     fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
     doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
-    sf(5.5,"normal");tc(doc,...TEXT3);doc.text(isAr?"Posmoz Health Intelligence · سري · ليس تشخيصاً طبياً":"Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
+    sf(5.5,"normal");tc(doc,...TEXT3);doc.text(isAr?"Posmoz · سري · ليس تشخيصاً طبياً":"Posmoz · Confidential · Not a medical diagnosis",ml,H-4.5);
     const ptot=doc.internal.getNumberOfPages();
     for(let p=1;p<=ptot;p++){doc.setPage(p);sf(5.5,"normal");tc(doc,...TEXT3);doc.text(`${p} / ${ptot}`,W-mr,H-4.5,{align:"right"});}
     const _fn = `Posmoz_Pro_Session_${realIdx}_${new Date().toISOString().slice(0,10)}.pdf`;
@@ -1766,7 +1766,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...BORDER);doc.setGState&&doc.setGState(new doc.GState({opacity:.4}));
     doc.rect(ml,H-9,cw,.3,"F");doc.setGState&&doc.setGState(new doc.GState({opacity:1}));
     sf(5.5,"normal");tc(doc,...TEXT3);
-    doc.text(isAr?"Posmoz Health Intelligence · سري · ليس تشخيصاً طبياً":"Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-4.5);
+    doc.text(isAr?"Posmoz · سري · ليس تشخيصاً طبياً":"Posmoz · Confidential · Not a medical diagnosis",ml,H-4.5);
     doc.text(`${p} / ${tot}`,W-mr,H-4.5,{align:"right"});
   }
 
@@ -4023,7 +4023,7 @@ export async function generateQuarterlyWellnessReport({
     doc.setPage(p);
     fc(doc, 10, 15, 30); doc.rect(0, H - 14, W, 14, "F");
     sf(5.5, "normal"); tc(doc, 140, 150, 170);
-    doc.text(isAr ? "🦅 Posmoz Health Intelligence · posmoz.io · ليس تشخيصاً طبياً" : "🦅 Posmoz Health Intelligence · posmoz.io · Not a medical diagnosis", ml, H - 6);
+    doc.text(isAr ? "🦅 Posmoz · posmoz.io · ليس تشخيصاً طبياً" : "🦅 Posmoz · posmoz.io · Not a medical diagnosis", ml, H - 6);
     doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 6, { align: "right" });
     doc.text(isAr ? "سري — للاستخدام الداخلي فقط" : "CONFIDENTIAL — Internal Use Only", W / 2, H - 6, { align: "center" });
   }
@@ -4213,7 +4213,7 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
     for (let p = 1; p <= pgs; p++) {
       doc.setPage(p);
       sf(6, "normal"); tc(doc, ...PDF_TOKENS.light);
-      doc.text("🦅 Posmoz Health Intelligence", ml, H - 8);
+      doc.text("🦅 Posmoz", ml, H - 8);
       doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 8, { align: "right" });
     }
   };

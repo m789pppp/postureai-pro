@@ -1220,7 +1220,7 @@ function _ftr(doc,W,ml,mr,H,p,total,name){
   hr(doc,0,H-10,W,FB_TOKENS.border);
   fc(doc,...FB_TOKENS.bg);doc.rect(0,H-9.5,W,9.5,"F");
   font(doc,FB_FLAGS.micro,"normal");tc(doc,...FB_TOKENS.ghost);
-  doc.text("Posmoz Health Intelligence · Confidential · Not a medical diagnosis",ml,H-3.5);
+  doc.text("Posmoz · Confidential · Not a medical diagnosis",ml,H-3.5);
   font(doc,FB_FLAGS.micro,"bold");tc(doc,...FB_TOKENS.muted);
   doc.text(name,W/2,H-3.5,{align:"center"});
   doc.text(`${p} / ${total}`,W-mr,H-3.5,{align:"right"});

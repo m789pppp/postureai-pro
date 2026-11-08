@@ -342,7 +342,7 @@ export function SharedFooter({ lang }) {
           }}>
             <span dir="ltr" style={{ fontSize:12.5, color:"#8896ac" }}>
               {/* BUG FIX: was a hardcoded "© 2025", already stale. */}
-              © {new Date().getFullYear()} Posmoz Health Intelligence.{" "}
+              © {new Date().getFullYear()} Posmoz.{" "}
               {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
             </span>
             <span style={{ fontSize:12, color:"#7590aa", fontWeight:500 }}>

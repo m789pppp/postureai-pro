@@ -284,7 +284,7 @@ export default function SharedReportPage() {
     metricsTitle: isAr ? "تفاصيل المقاييس" : "Posture Metrics Breakdown",
     ctaBtn:    isAr ? "جرّب Posmoz مجاناً ←" : "Try Posmoz Free →",
     expired:   isAr ? "الرابط غير متاح" : "Report Unavailable",
-    poweredBy: isAr ? "مشغّل بواسطة Posmoz Health Intelligence · ليس تشخيصاً طبياً" : "Powered by Posmoz Health Intelligence · Not a medical diagnosis",
+    poweredBy: isAr ? "مشغّل بواسطة Posmoz · ليس تشخيصاً طبياً" : "Powered by Posmoz · Not a medical diagnosis",
     sessionStart: isAr ? "بداية الجلسة" : "Session start",
     final:     isAr ? "النهاية" : "Final",
   };
@@ -594,7 +594,7 @@ export default function SharedReportPage() {
 
       {/* Powered by footer */}
       <footer style={{ textAlign:"center", padding:"24px 0 40px", color:"#334155", fontSize:11 }}>
-        Powered by Posmoz Health Intelligence · Not a medical diagnosis
+        Powered by Posmoz · Not a medical diagnosis
       </footer>
     </div>
   );

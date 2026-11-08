@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     valid:true, cert_id, type:data.type, name:data.name,
     company_name:data.company_name||null, issued_at:data.issued_at,
     expires_at:data.expires_at||null,
-    issuer:"Posmoz Health Intelligence",
+    issuer:"Posmoz",
     standard:"ISO 9241-110 Ergonomics of Human-System Interaction",
   });
 }

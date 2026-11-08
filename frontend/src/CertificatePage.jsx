@@ -76,7 +76,7 @@ export async function generateCertPDF({ cert_id, name, company_name, type, issue
   // ── "This certifies that" ──
   doc.setFontSize(7.5); doc.setTextColor(140,150,170);
   doc.text(
-    isAr ? "تُشهد Posmoz Health Intelligence بأن" : "This certifies that",
+    isAr ? "تُشهد Posmoz بأن" : "This certifies that",
     W/2, 42, {align:"center"}
   );
 
@@ -226,7 +226,7 @@ export function CertVerifyPage({ certId: propCertId }) {
             </div>
 
             <div style={{fontSize:11,color:"#10b981",background:"rgba(16,185,129,.08)",borderRadius:8,padding:"8px 14px"}}>
-              ✓ This certificate is authentic and was issued by Posmoz Health Intelligence
+              ✓ This certificate is authentic and was issued by Posmoz
             </div>
           </>
         )}

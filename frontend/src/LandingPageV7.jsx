@@ -2911,7 +2911,7 @@ function Footer({ lang }) {
       <div style={{ borderTop:"1px solid rgba(255,255,255,.05)" }}>
         <div className="lp-wrap" style={{ padding:"18px 32px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
           <span style={{ fontSize:12, color:"#8896ac" }}>
-            © {new Date().getFullYear()} Posmoz Health Intelligence.{" "}
+            © {new Date().getFullYear()} Posmoz.{" "}
             {ar ? "جميع الحقوق محفوظة." : "All rights reserved."}
           </span>
           <div style={{ display:"flex", gap:20, alignItems:"center" }}>

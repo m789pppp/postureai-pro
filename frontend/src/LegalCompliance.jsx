@@ -137,7 +137,7 @@ export function LegalModal({ doc, cs, onClose }) {
         { heading: "7. CCPA Rights", body: "California residents may opt out of sale of personal information (we don't sell), request disclosure, and request deletion. Email privacy@posmoz.com." },
         { heading: "8. Cookies", body: "We use necessary cookies (session), analytics cookies (with consent), and no third-party advertising cookies. Manage preferences via the cookie banner." },
         { heading: "9. Security", body: "Data is encrypted in transit (TLS 1.3) and at rest (AES-256) by our infrastructure provider, Google Cloud / Firebase. Access is restricted by role-based access control. We are not currently SOC 2 or ISO 27001 certified and do not claim to be; enterprise customers can request our security questionnaire responses." },
-        { heading: "10. Contact", body: "Data Controller: Posmoz Ltd, London, UK. DPO: dpo@posmoz.com. Privacy team: privacy@posmoz.com." },
+        { heading: "10. Contact", body: "Data Controller: Posmoz. DPO: dpo@posmoz.com. Privacy team: privacy@posmoz.com." },
       ],
     },
     refund: {
@@ -156,7 +156,7 @@ export function LegalModal({ doc, cs, onClose }) {
       title: "Data Processing Agreement",
       lastUpdated: "2026-06-01",
       sections: [
-        { heading: "1. Parties", body: "This DPA is between Posmoz Ltd ('Processor') and the Customer ('Controller'). It supplements the main Terms of Service." },
+        { heading: "1. Parties", body: "This DPA is between Posmoz ('Processor') and the Customer ('Controller'). It supplements the main Terms of Service." },
         { heading: "2. Subject Matter", body: "Posmoz processes personal data on behalf of the Customer solely to provide the Service described in the Terms of Service." },        { heading: "3. Categories of Data", body: "Employee names and emails; posture session scores; usage metadata. Special category data (health-related scores) is processed under Article 9(2)(b) GDPR (employment context)." },
         { heading: "4. Customer Obligations", body: "The Customer warrants it has lawful basis to provide employee data; has informed employees of processing; has obtained necessary consents where required." },
         { heading: "5. Posmoz Obligations", body: "Process data only on documented Customer instructions; ensure personnel are bound by confidentiality; implement Article 32 security measures; assist with DSAR requests within 5 business days." },
@@ -178,7 +178,7 @@ export function LegalModal({ doc, cs, onClose }) {
         <div style={{ padding: "20px 28px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 20, color: cs?.text || "#fff" }}>{content.title}</div>
-            <div style={{ fontSize: 12, color: cs?.textDim || "#94a3b8", marginTop: 3 }}>Last updated: {content.lastUpdated} · Posmoz Ltd</div>
+            <div style={{ fontSize: 12, color: cs?.textDim || "#94a3b8", marginTop: 3 }}>Last updated: {content.lastUpdated} · Posmoz</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => window.print?.()} style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: cs?.textDim || "#94a3b8", borderRadius: 9, padding: "7px 14px", cursor: "pointer", fontSize: 12 }}>🖨 Print</button>

@@ -160,6 +160,6 @@ export default async function handler(req, res) {
     result,
     usage: { calls_used: callsThisMonth + 1, monthly_limit: monthlyLimit,
       remaining: monthlyLimit - callsThisMonth - 1 },
-    powered_by: "Posmoz Health Intelligence API v1",
+    powered_by: "Posmoz API v1",
   });
 }
