@@ -47,7 +47,7 @@ export async function geminiChat(messagesOrPrompt, { systemPrompt = "", maxToken
 
   const { localChat } = await import("./localAI.js");
 
-  // If caller already built a full system prompt (e.g. AICoach builds Dr. Posmoz prompt
+  // If caller already built a full system prompt (e.g. AICoach builds Posmoz Coach prompt
   // with all patient data), pass it through directly — don't append redundant context.
   // Only append context JSON if the system prompt is minimal/empty.
   let fullSystemPrompt;

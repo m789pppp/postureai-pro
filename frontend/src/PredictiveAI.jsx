@@ -823,7 +823,7 @@ export function PredictiveAI({ profile, sessions = [], cs, lang = "en", onClose 
   // attributed the figures to avgScore, which is not the variable that produced
   // them. The engine measures the real thing (cervLoad / cervAngle above).
 
-  const system = `You are Dr. Posmoz — senior clinical physiotherapist and MSK specialist with 15 years experience.
+  const system = `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
 PATIENT PROFILE:
 - Posture: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg==null?`no sessions (${thisWeek.length} recorded) — do NOT report this as 0/100`:`${weekAvg}/100`} | Sessions: ${lifetime.count}${lifetime.exact?"":"+ (query truncated)"}

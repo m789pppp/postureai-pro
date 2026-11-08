@@ -71,7 +71,7 @@ export default async function handler(req, res) {
           type:       "risk_alert",
           icon:       "🚨",
           title:      "Posture Risk Alert",
-          body:       "Your posture score has declined " + Math.abs(trend) + " points recently. Time for a check-in with Dr. Posmoz.",
+          body:       "Your posture score has declined " + Math.abs(trend) + " points recently. Time for a check-in with Posmoz Coach.",
           color:      "#f85149",
           read:       false,
           created_at: new Date().toISOString(),

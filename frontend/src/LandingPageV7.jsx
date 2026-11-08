@@ -808,8 +808,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
             }}>
               {isCompany ? (
                 ar
-                  ? <><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>قلّل إجازات الأمراض</span>{" "}47% بدون أجهزة إضافية</>
-                  : <>Cut Sick Leave <span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>47%</span><br/>with AI Posture Coaching</>
+                  ? <><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>وضعية أحسن لفريقك</span>{" "}بدون أجهزة إضافية</>
+                  : <>Better Posture <span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Habits</span><br/>with AI Posture Coaching</>
               ) : (
                 // Was "...in 2 Weeks" / "...في أسبوعين فقط" — a specific medical
                 // timeline this product has no data to support, sitting right
@@ -817,8 +817,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
                 // health product promising a cure timeframe it can't back up is
                 // exactly the kind of claim this pass is here to remove.
                 ar
-                  ? <>اخلص من آلام الظهر والرقبة<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>من جذورها</span></>
-                  : <>Stop Back & Neck Pain<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>at the Source</span></>
+                  ? <>قعدة أحسن على مكتبك<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>من النهاردة</span></>
+                  : <>Better Posture at Your Desk<br/><span style={{ background:LPV7_TOKENS.gHero, WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Starting Today</span></>
               )}
             </h1>
           </HeroReveal>
@@ -832,8 +832,8 @@ function Hero({ lang, onCTA, mode, setMode }) {
                   Attributed here so the headline number stays honest. */}
               {isCompany
                 ? (ar
-                    ? "برامج تحسين الوضعية في مكان العمل بترتبط بانخفاض إجازات الأمراض المهنية يوصل لـ47% في أبحاث الإرغونوميا. منصة تحليل الوضعية بالذكاء الاصطناعي للمؤسسات."
-                    : "Workplace posture programs are linked to up to 47% fewer occupational sick days in ergonomics research. Real-time AI posture coaching built for MENA enterprise teams.")
+                    ? "منصة لمتابعة وضعية الموظفين بالذكاء الاصطناعي من كاميرا اللابتوب، مبنية لفرق الشرق الأوسط."
+                    : "Real-time AI posture coaching from the laptop camera, built for MENA teams.")
                 : (ar
                     ? "كاميرا اللابتوب بتاعك كافية. الذكاء الاصطناعي بيتابع وضعيتك في الخلفية ويبعتلك تنبيه لو انحنيت — من غير أي أجهزة أو اشتراك مكلف."
                     : "Your laptop camera is all you need. AI monitors your posture in the background and alerts you when you slouch — no hardware, no expensive subscriptions.")
@@ -1207,11 +1207,11 @@ function Stats({ lang }) {
   // that was missed when the rest of the emoji icons (Features,
   // HowItWorks, Schools) were converted to the shared SVG set.
   const stats = ar
-    ? [["-47%","تقليل الإجازات المرضية","متوسط من أبحاث الإرغونوميا — مش نتيجتنا","heartPulse"],
-       ["3.2×","عائد استثمار تقديري","نموذج حسابي لتكاليف الغياب — مش نتيجة مقاسة","wallet"],
+    ? [["13","مقياس للوضعية","من كاميرا اللابتوب","heartPulse"],
+       ["0","أجهزة إضافية","كاميرا اللابتوب كفاية","wallet"],
        ["على جهازك","المعالجة بالكامل","الفيديو مايغادرش الجهاز أبداً","settings"]]
-    : [["-47%","Reduction in sick leave","Ergonomics research average — not our result","heartPulse"],
-       ["3.2×","Modelled ROI in year 1","An absence-cost model, not a measured outcome","wallet"],
+    : [["13","posture metrics","From the laptop camera","heartPulse"],
+       ["0","extra hardware","Your laptop camera is enough","wallet"],
        ["On-device","processing","Video never leaves the device","settings"]];
   return (
     <section id="stats" className="lp-section">
@@ -1295,17 +1295,17 @@ function Features({ lang }) {
     {
       icon:"crystal", accentColor:"#8b5cf6",
       badge:{ en:"Basic +", ar:"أساسي +" }, badgeC:"#1a56db",
-      title:{ en:"Pain Prediction AI", ar:"ذكاء توقع الألم" },
-      sub:{ en:"Predicts pain zones 48 hrs before they peak", ar:"يتوقع مناطق الألم قبل 48 ساعة من ذروتها" },
+      title:{ en:"Posture Strain Alerts", ar:"تنبيهات إجهاد الوضعية" },
+      sub:{ en:"Shows posture strain patterns from your recent sessions", ar:"بيوضح أنماط إجهاد الوضعية من جلساتك الأخيرة" },
       bullets:{
         en:["Analyses 14-day posture history to spot strain patterns",
             "Risk scores for neck, lower back, shoulders & wrists",
             "Donut chart visualises body risk zones at a glance",
-            "Proactive WhatsApp alert sent before pain peaks"],
+            "WhatsApp reminder when posture strain builds up"],
         ar:["يحلل 14 يوماً من تاريخ الوضعية للكشف عن أنماط الإجهاد",
             "درجة خطر للرقبة، أسفل الظهر، الكتفين والمعصمين",
             "مخطط دائري يُظهر مناطق خطر الجسم بلمحة",
-            "تنبيه واتساب استباقي يُرسل قبل بلوغ الألم ذروته"],
+            "تذكير واتساب لما إجهاد الوضعية يزيد"],
       },
       // "48h early warning window" — nothing in PredictiveAI.jsx works on a
       // 48-hour horizon. forecast() projects 7 days ahead and the preventive
@@ -1337,7 +1337,7 @@ function Features({ lang }) {
     {
       icon:"sparkle", accentColor:"#6366f1",
       badge:{ en:"Basic → Elite", ar:"أساسي ← إيليت" }, badgeC:"#6366f1",
-      title:{ en:"Dr. Posmoz AI Coach", ar:"مدرب AI — د. كورفوس" },
+      title:{ en:"Posmoz AI Coach", ar:"مدرب AI — Posmoz Coach" },
       sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 ← 30 ← غير محدود رسالة/شهر · عربي وإنجليزي" },
       bullets:{
         en:["Remembers your full session history — no re-explaining needed",
@@ -1361,7 +1361,7 @@ function Features({ lang }) {
       bullets:{
         en:["Set your reminder window (e.g. 9 AM–5 PM Cairo time)",
             "AI picks the sharpest message based on your recent score",
-            "Pain early-warning alerts sent proactively when risk rises",
+            "Posture strain alerts when patterns worsen",
             "Twilio-powered — works on any phone, no app download needed"],
         ar:["حدد نافذة التذكير (مثلاً 9 صباحاً–5 مساءً بتوقيت القاهرة)",
             "الـ AI يختار أقوى رسالة بناءً على درجتك الأخيرة",
@@ -1493,14 +1493,14 @@ function Features({ lang }) {
     if (type === "coach") return (
       <div style={{ ...s, background:"rgba(255,255,255,.04)", border:"1px solid rgba(255,255,255,.07)", padding:"14px 16px", display:"flex", flexDirection:"column", gap:8 }}>
         <div style={{ alignSelf:"flex-start", background:"rgba(79,124,249,.15)", border:"1px solid rgba(79,124,249,.25)", borderRadius:"14px 14px 14px 4px", padding:"9px 13px", maxWidth:"80%" }}>
-          <div style={{ fontSize:10.5, color:"#818cf8", marginBottom:3, fontWeight:600 }}>Dr. Posmoz</div>
+          <div style={{ fontSize:10.5, color:"#818cf8", marginBottom:3, fontWeight:600 }}>Posmoz Coach</div>
           <div style={{ fontSize:11.5, color:"#d1d5db", lineHeight:1.5 }}>{ar?"درجتك انخفضت 8 نقاط — الرقبة في وضع أمامي 47 دقيقة. جرّب تمرين الـ chin tuck الآن.":"Your score dropped 8pts — forward head for 47 min. Try a chin tuck stretch now."}</div>
         </div>
         <div style={{ alignSelf:"flex-end", background:"rgba(255,255,255,.07)", borderRadius:"14px 14px 4px 14px", padding:"9px 13px", maxWidth:"70%" }}>
           <div style={{ fontSize:11.5, color:"#d1d5db" }}>{ar?"كيف أعمل الـ chin tuck صح؟":"How do I do chin tuck correctly?"}</div>
         </div>
         <div style={{ alignSelf:"flex-start", background:"rgba(79,124,249,.15)", border:"1px solid rgba(79,124,249,.25)", borderRadius:"14px 14px 14px 4px", padding:"9px 13px", maxWidth:"85%" }}>
-          <div style={{ fontSize:10.5, color:"#818cf8", marginBottom:3, fontWeight:600 }}>Dr. Posmoz</div>
+          <div style={{ fontSize:10.5, color:"#818cf8", marginBottom:3, fontWeight:600 }}>Posmoz Coach</div>
           <div style={{ fontSize:11.5, color:"#d1d5db", lineHeight:1.5 }}>{ar?"اسحب ذقنك للخلف دون خفض رأسك — 10 تكرارات كل ساعة.":"Pull chin straight back without dropping head — 10 reps, every hour."}</div>
         </div>
       </div>
@@ -1538,7 +1538,7 @@ function Features({ lang }) {
           </div>
         ))}
         <div style={{ marginTop:10, padding:"8px 12px", background:"rgba(239,68,68,.08)", border:"1px solid rgba(239,68,68,.2)", borderRadius:9, fontSize:11, color:"#fca5a5" }}>
-          🚨 {ar?"3 موظفين في المبيعات — خطر ألم ظهر مرتفع":"3 Sales employees — high back pain risk"}
+          🚨 {ar?"قسم المبيعات — إجهاد وضعية مرتفع":"Sales team — high posture strain"}
         </div>
       </div>
     );
@@ -1858,8 +1858,8 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       priceUSD:{ monthly:9.99, yearly:79.99 }, priceEGP:{ monthly:199, yearly:1590 },
       color:LPV7_TOKENS.sub,
       features: ar
-        ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","تتبع الاستمرارية","الأهداف","توقع الألم"]
-        : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Pain prediction"],
+        ? ["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","تتبع الاستمرارية","الأهداف","إجهاد الوضعية"]
+        : ["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Posture strain alerts"],
     },
     {
       id:"professional", name: ar?"احترافي":"Pro",
@@ -2240,7 +2240,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               en:"Analytics & AI",ar:"التحليلات والذكاء الاصطناعي",
               rows:[
                 { en:"Workforce Analytics",  ar:"تحليلات القوى العاملة",  starter:"—",              business:"✅",           enterprise:"✅" },
-                { en:"Pain Prediction",      ar:"توقع الألم",             starter:"—",              business:"✅",           enterprise:"✅" },
+                { en:"Posture Strain",      ar:"إجهاد الوضعية",             starter:"—",              business:"✅",           enterprise:"✅" },
                 // "توقع الإنهاء" reads as predicting *termination* (firing someone)
                 // in an HR product — wrong and alarming. Churn/attrition is التسرب.
                 { en:"Churn Prediction",     ar:"توقع تسرب الموظفين",     starter:"—",              business:"✅",           enterprise:"✅" },
@@ -2296,7 +2296,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
               rows:[
                 { en:"Daily Check-in",       ar:"تسجيل يومي",           free:"—", basic:"✅", pro:"✅", elite:"✅" },
                 { en:"Weekly Challenge",     ar:"تحدي أسبوعي",          free:"—", basic:"✅", pro:"✅", elite:"✅" },
-                { en:"Pain Prediction Card", ar:"بطاقة توقع الألم",     free:"—", basic:"✅", pro:"✅", elite:"✅" },
+                { en:"Posture Strain Card", ar:"بطاقة إجهاد الوضعية",     free:"—", basic:"✅", pro:"✅", elite:"✅" },
                 { en:"Streak Freeze",        ar:"تجميد الـ Streak",      free:"—", basic:"✅", pro:"✅", elite:"✅" },
                 { en:"Posture Habit Score",  ar:"درجة عادة الوضعية",    free:"—", basic:"✅", pro:"✅", elite:"✅" },
                 { en:"WhatsApp Reminders",   ar:"تذكيرات واتساب",       free:"—", basic:"✅", pro:"✅", elite:"✅" },
@@ -2678,7 +2678,7 @@ function SchoolsSection({ lang, onCTA }) {
             { icon:"building", en:"Academic dashboard", ar:"لوحة إدارة أكاديمية" },
             { icon:"barChart", en:"Periodic wellness reports", ar:"تقارير صحية دورية" },
             { icon:"trophy", en:"Certificates for graduates", ar:"شهادات للخريجين" },
-            { icon:"sparkle", en:"AI Coach for students", ar:"مدرب AI — د. كورفوس للطلاب" },
+            { icon:"sparkle", en:"AI Coach for students", ar:"مدرب AI — Posmoz Coach للطلاب" },
             { icon:"chat", en:"WhatsApp support", ar:"دعم WhatsApp مخصص" },
           ].map(f => (
             <div key={f.en} style={{ background:"rgba(255,255,255,.03)",

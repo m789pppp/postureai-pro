@@ -26,10 +26,10 @@ const PAID_PLANS = [
     },
     features: {
       en: ["Unlimited sessions", "Daily Check-in", "Weekly Challenge",
-           "Pain Prediction Card", "Streak Freeze", "Posture Habit Score",
+           "Posture Strain Card", "Streak Freeze", "Posture Habit Score",
            "WhatsApp Reminders", "AI Coach (10 msgs/mo)"],
       ar: ["جلسات غير محدودة", "تسجيل يومي", "تحدي أسبوعي",
-           "بطاقة توقع الألم", "تجميد الـ Streak", "درجة عادة الوضعية",
+           "بطاقة إجهاد الوضعية", "تجميد الـ Streak", "درجة عادة الوضعية",
            "تذكيرات واتساب", "مدرب AI (10 رسائل/شهر)"],
     },
   },

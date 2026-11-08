@@ -501,7 +501,7 @@ export function AIInsights({ profile, sessions = [], calibration, cs, lang = "en
   const _neckL  = ctx.neckRisk==null?"NOT MEASURED"
                 : ctx.neckRisk>=70?"HIGH 🔴":ctx.neckRisk>=45?"MODERATE 🟡":"LOW 🟢";
   const _neckV  = ctx.neckRisk==null?"not measured":`${ctx.neckRisk}%`;
-  const systemPrompt = `You are Dr. Posmoz — a senior clinical physiotherapist and ergonomics specialist with 15 years of MSK experience.
+  const systemPrompt = `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
 ## PATIENT CLINICAL PROFILE: ${ctx.name}
 - Overall score: ${ctx.avgScore}/100 (${_scoreL}) | This week: ${ctx.weekAvg==null?`no sessions (${ctx.thisWeekSessions} recorded) — do NOT report this as 0/100`:`${ctx.weekAvg}/100`} | Last week: ${ctx.lastWeekAvg==null?"no sessions — do NOT report this as 0/100":`${ctx.lastWeekAvg}/100`}

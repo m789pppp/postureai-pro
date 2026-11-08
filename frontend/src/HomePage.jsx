@@ -136,7 +136,7 @@ function StatCard({ label, value, sub, color="#3b82f6", cs }) {
 }
 
 // ─── Pain Risk forecast card ───────────────────────────────────────
-// "Pain prediction" was listed as a Basic-tier feature but had zero
+// "Posture strain alerts" was listed as a Basic-tier feature but had zero
 // presence on the dashboard — the only pain-prediction UI in the app is
 // buried inside the live camera sidebar and only fires mid-session
 // (App.jsx usePainPrediction). This is a separate, longer-horizon view:
@@ -192,11 +192,11 @@ function PainRiskCard({ sessions, cs, isAr }) {
   const icon  = level === "high" ? "🔴" : level === "moderate" ? "🟠" : "🟢";
 
   const msgEn = level === "low"
-    ? `Low pain risk right now — your posture the last 48h has stayed mostly healthy. Keep it up.`
-    : `Based on your posture the last 48h, ~${riskPct}% chance of ${region.en} discomfort within 48 hours if it doesn't change.`;
+    ? `Low posture strain right now — your posture over the last 48h has stayed mostly healthy. Keep it up.`
+    : `Your posture over the last 48h shows ${level === "high" ? "high" : "moderate"} strain around the ${region.en}. Try a short break and a posture reset.`;
   const msgAr = level === "low"
-    ? `احتمال ألم منخفض حاليًا — وضعيتك في آخر 48 ساعة كانت صحية في الغالب. استمر كده.`
-    : `بناءً على وضعيتك آخر 48 ساعة، احتمال ${riskPct}% تحس بألم في ${region.ar} خلال 48 ساعة إذا ما بدّلتش وضعيتك.`;
+    ? `إجهاد الوضعية قليل حاليًا — وضعيتك في آخر 48 ساعة كانت كويسة في الغالب. استمر كده.`
+    : `وضعيتك آخر 48 ساعة بتوضح إجهاد ${level === "high" ? "عالي" : "متوسط"} حوالين ${region.ar}. جرّب استراحة قصيرة وعدّل قعدتك.`;
 
   return (
     <div style={{
@@ -211,7 +211,7 @@ function PainRiskCard({ sessions, cs, isAr }) {
       <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: col, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>
-          {isAr ? "توقع الألم" : "Pain Prediction"}
+          {isAr ? "إجهاد الوضعية" : "Posture Strain"}
         </div>
         <div style={{ fontSize: 13, color: cs.text, lineHeight: 1.5 }}>
           {isAr ? msgAr : msgEn}
@@ -889,7 +889,7 @@ function DashEmployee({ user, profile, userSessions, allUsers, cs, isAr, setPage
           background:"linear-gradient(135deg,rgba(99,102,241,.1),rgba(8,145,178,.06))" }}>
           <div style={{ fontSize:28, marginBottom:8 }}>🤖</div>
           <div style={{ fontSize:20, fontWeight:800, color:cs.text, marginBottom:4 }}>
-            {isAr?"مدرب AI — د. كورفوس":"AI Coach — Dr. Posmoz"}
+            {isAr?"مدرب AI — Posmoz Coach":"Posmoz AI Coach"}
           </div>
           <div style={{ fontSize:13, color:cs.muted, marginBottom:18 }}>
             {isAr?"اسألني عن وضعيتك، ألمك، أو احصل على تمارين مخصصة لبياناتك"
@@ -2554,8 +2554,8 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                   priceEGP:199, priceUSD:9.99,
                   tag:     isAr?"للمبتدئين":"Starter",
                   features:isAr
-                    ?["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","توقع الألم"]
-                    :["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Pain prediction"],
+                    ?["جلسات غير محدودة","مدرب AI (10 رسائل/شهر)","سلسلة وأهداف","إجهاد الوضعية"]
+                    :["Unlimited sessions","AI Coach (10 msgs/mo)","Streak & Goals","Posture strain alerts"],
                 },
                 {
                   id:"professional", color:"#8b5cf6",

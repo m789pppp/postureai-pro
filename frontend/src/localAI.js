@@ -522,8 +522,8 @@ Laptops are ergonomically flawed by design — screen and keyboard are linked, s
     : `**About Posmoz:**\n\nPosmoz PostureAI is an intelligent posture monitoring system using your camera to analyze posture in real-time.\n\n**Key features:**\n- Real-time posture analysis (Neck, Spine, Shoulders, Head)\n- Personal AI Coach — that's me! 🤖\n- Weekly reports and predictions\n- Personal calibration to your body\n\nFor pricing and plan questions → check the Pricing page in the app.`,
 
   offtopic: ar
-    ? `سؤال ممتاز! كـ Dr. Posmoz، تخصصي الأساسي هو الوضعية والإرجونوميكس وصحة الجهاز العضلي الهيكلي.\n\nلو سؤالك عن صحة عامة أو رياضة أو تغذية — أقدر أساعدك بس من زاوية تأثيرها على جسمك وعمودك الفقري.\n\n💬 إيه السؤال بالتحديد؟ أو لو عندك ألم أو مشكلة في وضعيتك — أنا هنا! 💪`
-    : `Great question! As Dr. Posmoz, my core specialization is posture, ergonomics, and musculoskeletal health.\n\nFor general health, fitness, or nutrition topics — I can help from the angle of how they affect your spine, posture, and MSK health.\n\n💬 What specifically would you like to know? Or if you have a posture issue or pain — I'm here! 💪`,
+    ? `سؤال ممتاز! كـ Posmoz Coach، تخصصي الأساسي هو الوضعية والإرجونوميكس وصحة الجهاز العضلي الهيكلي.\n\nلو سؤالك عن صحة عامة أو رياضة أو تغذية — أقدر أساعدك بس من زاوية تأثيرها على جسمك وعمودك الفقري.\n\n💬 إيه السؤال بالتحديد؟ أو لو عندك ألم أو مشكلة في وضعيتك — أنا هنا! 💪`
+    : `Great question! As Posmoz Coach, my core specialization is posture, ergonomics, and musculoskeletal health.\n\nFor general health, fitness, or nutrition topics — I can help from the angle of how they affect your spine, posture, and MSK health.\n\n💬 What specifically would you like to know? Or if you have a posture issue or pain — I'm here! 💪`,
 
 }; }
 
@@ -1229,7 +1229,7 @@ function buildLLMSystemPrompt(systemPrompt, forAnalysis = false) {
     : "LANGUAGE: Respond in clear, professional English.";
 
   if (forAnalysis) {
-    return `You are Dr. Posmoz — the clinical AI physiotherapist inside Posmoz PostureAI Pro.
+    return `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
 ROLE: Posture analytics engine. Generate structured, evidence-based clinical reports.
 
@@ -1253,10 +1253,10 @@ ${dataLines || "No session data available."}
 ${langLine}`;
   }
 
-  return `You are Dr. Posmoz — the AI physiotherapist embedded in Posmoz PostureAI Pro.
+  return `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
-IDENTITY: Certified ergonomics consultant and physiotherapy specialist. Not a generic assistant.
-You are Dr. Posmoz — never say "I'm an AI."
+IDENTITY: AI posture and ergonomics coach. Not a doctor, physiotherapist or licensed clinician.
+If asked, say clearly that you are an AI.
 
 CLINICAL EXPERTISE:
 - MSK anatomy: cervical/thoracic/lumbar spine, shoulder girdle, carpal tunnel, hip flexors, pelvis

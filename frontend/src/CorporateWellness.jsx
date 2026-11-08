@@ -35,7 +35,7 @@ export function QuarterlyReportModal({ profile, allUsers = [], cs, isAr, onClose
   async function generateAISummary() {
     setLoadingAI(true);
     try {
-      const prompt = `You are Dr. Posmoz, Chief Ergonomics Officer at Posmoz Health Intelligence. 
+      const prompt = `You are Posmoz Coach, an AI assistant that writes ergonomics summaries. You are not a clinician. 
 Write a 3-sentence executive summary for a corporate wellness report.
 Data: Company="${company}", Quarter="${quarter}", Employees=${totalU}, TeamAvgScore=${teamAvg}/100, AtRisk=${atRisk}, Excellent=${excellent}.
 Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Write in English."}`;
@@ -55,7 +55,7 @@ Be concise, professional, and action-oriented. ${isAr ? "Write in Arabic." : "Wr
       setAiSummary(text.trim());
     } catch {
       setAiSummary(isAr
-        ? `شهدت ${company} أداءً متوسطاً بدرجة ${teamAvg}/100 خلال ${quarter}، مع ${atRisk} موظف في خطر يستلزمون تدخلاً فورياً. يُنصح بجلسات إرجونوميكس جماعية وتفعيل Dr. Posmoz AI لدعم الفريق.`
+        ? `شهدت ${company} أداءً متوسطاً بدرجة ${teamAvg}/100 خلال ${quarter}، مع ${atRisk} موظف في خطر يستلزمون تدخلاً فورياً. يُنصح بجلسات إرجونوميكس جماعية وتفعيل Posmoz Coach لدعم الفريق.`
         : `${company} achieved an average posture score of ${teamAvg}/100 in ${quarter}, with ${atRisk} at-risk employees requiring immediate intervention. Group ergonomics training and AI coaching activation are recommended.`
       );
     }
@@ -334,7 +334,7 @@ export function SchoolsModal({ cs, isAr, onClose, addToast }) {
                 [isAr?"كل مميزات Pro لكل طالب":"Full Pro features for every student","⭐"],
                 [isAr?"لوحة إدارة للمشرف الأكاديمي":"Academic admin dashboard","🏫"],
                 [isAr?"تقارير صحية دورية للإدارة":"Periodic wellness reports for management","📊"],
-                [isAr?"Dr. Posmoz AI Coach للطلاب":"Dr. Posmoz AI Coach for students","🤖"],
+                [isAr?"Posmoz AI Coach للطلاب":"Posmoz AI Coach for students","🤖"],
                 [isAr?"شهادات إرجونوميكس للخريجين":"Ergonomics certificates for graduates","🏅"],
                 [isAr?"دعم تقني مخصص على واتساب":"Dedicated WhatsApp support","📱"],
               ].map(([text,icon])=>(

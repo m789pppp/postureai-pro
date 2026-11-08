@@ -68,7 +68,7 @@ const IND_PLANS = [
       { t:"Sessions / month",      v:"Unlimited" },
       { t:"Daily Check-in",        v:true },
       { t:"Weekly Challenge",      v:true },
-      { t:"Pain Prediction Card",  v:true },
+      { t:"Posture Strain Card",  v:true },
       { t:"Streak Freeze",         v:true },
       { t:"Posture Habit Score",   v:true },
       { t:"WhatsApp Reminders",    v:true },
@@ -181,7 +181,7 @@ const COMPARE = [
   { cat:"Basic Habits", rows:[
     ["Daily Check-in",         "—",  "✓",        "✓",        "✓"],
     ["Weekly Challenge",       "—",  "✓",        "✓",        "✓"],
-    ["Pain Prediction Card",   "—",  "✓",        "✓",        "✓"],
+    ["Posture Strain Card",   "—",  "✓",        "✓",        "✓"],
     ["Streak Freeze",          "—",  "✓",        "✓",        "✓"],
     ["Posture Habit Score",    "—",  "✓",        "✓",        "✓"],
     ["WhatsApp Reminders",     "—",  "✓",        "✓",        "✓"],
@@ -667,7 +667,7 @@ export default function PricingPageStandalone() {
               {tr("Start for free today", ar)}
             </h2>
             <p style={{ fontSize:17.5, color:T.sub, margin:"0 auto 40px", maxWidth:480, lineHeight:1.75 }}>
-              {tr("Join teams across Egypt and MENA cutting sick leave with AI posture coaching.", ar)}
+              {tr("Join teams across Egypt and MENA building better posture habits with AI coaching.", ar)}
             </p>
             <div style={{ display:"flex", gap:14, justifyContent:"center", flexWrap:"wrap" }}>
               <a href="/auth?mode=signup" style={{

@@ -71,6 +71,17 @@ noClaim("solvePnP", "no solvePnP implementation exists");
 noClaim("~96%", "an accuracy figure that was never measured against a reference");
 noClaim("< 40ms", "the analysis loop is throttled to a 20fps (50ms) ceiling");
 
+console.log("\nno clinician persona or unproven health outcome");
+for (const [n, why] of [["Dr. Posmoz", "an AI coach must not hold a doctor title"], ["Pain Prediction", "no validated model predicts pain"], ["Pain prediction", "no validated model predicts pain"], ["توقع الألم", "no validated model predicts pain"], ["-47%", "not a Posmoz result"], ["Cut Sick Leave", "not a Posmoz result"], ["sick leave", "no measured sick-leave outcome"]]) noClaim(n, why);
+for (const f of ["AICoach.jsx", "AIInsights.jsx", "AIReports.jsx", "PredictiveAI.jsx", "localAI.js", "aiPreloader.js"]) {
+  const t = readFileSync(join(SRC, f), "utf8");
+  check(`${f}: AI prompt claims no human credentials`, !/15 years|خبرة 15|Dr\. Posmoz|never say "I'm an AI"/i.test(t));
+}
+
+console.log("\ncamera images stay on the device");
+check("frame upload is off", /const ALLOW_FRAME_UPLOAD = false;/.test(APP));
+check("the upload path requires that flag", /needsBackend = ALLOW_FRAME_UPLOAD &&/.test(APP));
+
 console.log("\nno unbacked accuracy percentage anywhere");
 {
   // Any "NN% accurate/accuracy" in user-facing copy. There is a real

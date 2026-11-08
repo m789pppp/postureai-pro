@@ -56,7 +56,7 @@ export const AR = {
   "Unlimited": "غير محدود",
   "Daily Check-in": "تسجيل يومي",
   "Weekly Challenge": "تحدي أسبوعي",
-  "Pain Prediction Card": "بطاقة توقّع الألم",
+  "Posture Strain Card": "بطاقة إجهاد الوضعية",
   "Streak Freeze": "تجميد السلسلة",
   "Posture Habit Score": "درجة عادات الوضعية",
   "Sessions Countdown": "عدّاد الجلسات",
@@ -112,8 +112,8 @@ export const AR = {
   "Feature": "الميزة",
   "Pricing FAQ": "أسئلة شائعة عن الأسعار",
   "Start for free today": "ابدأ مجانًا النهاردة",
-  "Join teams across Egypt and MENA cutting sick leave with AI posture coaching.":
-    "انضم لفرق في مصر والمنطقة بتقلّل إجازات الأمراض بتدريب الوضعية بالذكاء الاصطناعي.",
+  "Join teams across Egypt and MENA building better posture habits with AI coaching.":
+    "انضم لفرق في مصر والمنطقة بتبني عادات وضعية أحسن بالتدريب بالذكاء الاصطناعي.",
   "Core": "الأساسيات",
   "Basic Habits": "العادات الأساسية",
   "Pro Intelligence": "تحليلات احترافي",

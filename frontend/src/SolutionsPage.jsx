@@ -36,7 +36,7 @@ function Reveal({ children, delay=0, y=24 }) {
 
 const INDUSTRIES = [
   { icon:"building", name:"Banking & Finance", color:"#4f7cf9",
-    problem:"Compliance teams and analysts spend 10+ hours/day at screens. Back and neck conditions are the #1 cause of sick leave.",
+    problem:"Compliance teams and analysts spend 10+ hours/day at screens.",
     solution:"Posmoz monitors all desk-based staff silently, generates weekly ergonomic compliance reports, and flags high-risk employees before claims arise.",
     results:[["13","Weighted posture metrics"],["Weekly","Automated PDF reports"],["0","Video frames stored"]],
     clients:"Built for desk-based compliance, analyst and back-office teams",
@@ -75,7 +75,7 @@ const PERSONAS = [
     gets:"Real-time team posture feed, automatic Slack/Teams alerts when someone hits a risk threshold.",
   },
   { role:"Individual Employee", icon:"heartPulse", color:"#10d9a0",
-    needs:["Fix my back pain","Understand my posture habits","Get coaching without seeing a physio"],
+    needs:["Sit more comfortably at work","Understand my posture habits","Get coaching without seeing a physio"],
     gets:"Personal AI coach, daily posture score, personalised stretch programs, and weekly progress reports.",
   },
   { role:"IT / Security", icon:"shield", color:"#818cf8",

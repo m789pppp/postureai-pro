@@ -1,0 +1,16 @@
+{
+  "_note": "The PI sets these BEFORE the first participant. A null loa_max means the metric cannot be judged and is reported as NOT_SET. loa_max is the largest allowed absolute limit of agreement, including bias.",
+  "icc_lower_min": 0.75,
+  "min_participants": 33,
+  "icc_note": "Validity is judged on the lower 95% bound of ICC(3,1). Bias is judged through loa_max.",
+  "primary_posture": "habitual",
+  "loa_max": {
+    "cva_proxy_deg": null,
+    "head_sagittal_deg": null,
+    "trunk_inclination_deg": null,
+    "neck_lateral_deg": null,
+    "head_tilt_deg": null,
+    "shoulder_tilt_deg": null,
+    "spine_lateral_deg": null
+  }
+}

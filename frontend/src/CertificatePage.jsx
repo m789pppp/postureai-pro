@@ -139,7 +139,7 @@ export async function generateCertPDF({ cert_id, name, company_name, type, issue
   // ── Issuer stamp (left bottom) ──
   doc.setFont("helvetica","bold");
   doc.setFontSize(6.5); doc.setTextColor(212,175,55);
-  doc.text("Dr. Posmoz AI", 25, H-22, {align:"center"});
+  doc.text("Posmoz Coach", 25, H-22, {align:"center"});
   doc.setFont("helvetica","normal");
   doc.setFontSize(5.5); doc.setTextColor(140,150,170);
   doc.text(isAr?"رئيس قسم تقييم الإرجونوميكس":"Chief Ergonomics Officer", 25, H-17, {align:"center"});

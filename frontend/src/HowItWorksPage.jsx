@@ -66,7 +66,7 @@ mediapipe.analyze(webcamFrame)
   },
   { n:"04", icon:"barChart", color:"#818cf8", time:"Automated", title:"HR reviews weekly reports",
     desc:"Every Monday, HR admins receive an auto-generated PDF with department risk scores, trending issues, and recommended interventions.",
-    details:["Auto PDF every Monday 8am","Department risk heatmap","Individual risk flags","ROI calculation vs sick leave"],
+    details:["Auto PDF every Monday 8am","Department risk heatmap","Aggregate team trends","ROI estimate from your own figures"],
     code:`// Webhook on high-risk detection
 POST your-endpoint
 { "employee_id": "emp_123",

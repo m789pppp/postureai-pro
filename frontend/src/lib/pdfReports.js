@@ -1097,7 +1097,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     sf(10,"bold"); tc(doc,...TEXT); doc.text(isAr?"رقّي لـ Elite":"Upgrade to Elite",ml+50,y+18);
     sf(7,"normal"); tc(doc,...TEXT2); doc.text(isAr?"افتح تحليلات متقدمة وتقارير كاملة":"Unlock advanced insights and reports",ml+50,y+26);
     // Feature list — colored dot + label (emoji don't render in helvetica)
-    const feats=[[isAr?"تحليل AI":"Detailed AI"],["Full PDF"],[isAr?"توقع الألم":"Pain prediction"],[isAr?"مقارنة":"Baseline"]];
+    const feats=[[isAr?"تحليل AI":"Detailed AI"],["Full PDF"],[isAr?"إجهاد الوضعية":"Posture strain alerts"],[isAr?"مقارنة":"Baseline"]];
     feats.forEach(([lb],i)=>{
       const fx=ml+50+i*34;
       fc(doc,...tierCol); doc.circle(fx+7,y+37,1.8,"F");
@@ -3997,12 +3997,12 @@ export async function generateQuarterlyWellnessReport({
   doc.text(isAr ? "التوصيات" : "Recommendations", ml, y); y += 8;
 
   const recs = isAr ? [
-    ["🔴", "تدخل فوري",  `${atRisk.length} موظف بحاجة لتقييم إرجونوميكس فوري ودعم من Dr. Posmoz AI`],
+    ["🔴", "تدخل فوري",  `${atRisk.length} موظف بحاجة لتقييم إرجونوميكس فوري ودعم من Posmoz Coach`],
     ["🟡", "تدريب",      "جلسة إرجونوميكس جماعية لتحسين وضعية الجلوس — متاحة عبر Posmoz"],
     ["🟢", "صيانة",      `الحفاظ على مستوى الـ ${excellent.length} موظف الممتاز بتحديات أسبوعية`],
     ["📊", "متابعة",     "إعادة تقييم بعد 30 يومًا وقياس التحسن مقارنةً بهذا التقرير"],
   ] : [
-    ["🔴", "Immediate",  `${atRisk.length} employees need ergonomics assessment + Dr. Posmoz AI coaching`],
+    ["🔴", "Immediate",  `${atRisk.length} employees need ergonomics assessment + Posmoz Coach coaching`],
     ["🟡", "Training",   "Group ergonomics session to improve posture habits — available via Posmoz"],
     ["🟢", "Maintain",   `Preserve the ${excellent.length} excellent performers with weekly challenges`],
     ["📊", "Follow-up",  "Re-assess in 30 days and benchmark against this report"],

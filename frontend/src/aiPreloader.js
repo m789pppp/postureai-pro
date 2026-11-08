@@ -208,7 +208,7 @@ function buildPrompts(ctx, lang) {
   const wk = v => v==null ? "no sessions — do NOT report this as 0/100" : `${v}/100`;
   const tr = v => v==null ? "no comparison possible (a week has no sessions)" : `${v>0?"+":""}${v}%`;
 
-  const system = `You are Dr. Posmoz — the clinical AI physiotherapist inside Posmoz PostureAI Pro.
+  const system = `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
 PATIENT — ${ctx.name} | Tier: ${ctx.tier}
 Score: ${ctx.avgScore}/100 (${scoreLabel}) | This week: ${wk(ctx.weekAvg)} | Last week: ${wk(ctx.lastWeekAvg)}

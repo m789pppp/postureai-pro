@@ -403,10 +403,10 @@ export function LiveHeader({
   // which reads as broken/degraded to a non-technical user when nothing
   // is actually wrong. Softened to an "info" tone with a plain-language
   // label and a hover tooltip explaining what it means.
-  const mpTone = mpStatus === "ready" ? "good" : mpStatus === "loading" ? "info" : mpStatus === "fallback" ? "info" : "bad";
+  const mpTone = mpStatus === "ready" ? "good" : mpStatus === "loading" ? "info" : "bad";
   const mpIcon = mpTone === "good" ? "checkCircle" : mpTone === "bad" ? "alertTriangle" : "infoCircle";
-  const mpLabel = { ready: isAr ? "جاهز" : "Ready", loading: isAr ? "تحميل" : "Loading", fallback: isAr ? "يعمل (سيرفر)" : "Active (cloud)", error: isAr ? "خطأ" : "Error" }[mpStatus] || mpStatus;
-  const mpTitle = mpStatus === "fallback" ? (isAr ? "تحليل الوضعية شغال عادي، بس بيتم على السيرفر بدل جهازك — أبطأ شوية بس نفس الدقة" : "Posture analysis is working normally, just running on our server instead of your device — slightly slower, same accuracy") : undefined;
+  const mpLabel = { ready: isAr ? "جاهز" : "Ready", loading: isAr ? "تحميل" : "Loading", fallback: isAr ? "غير متاح" : "Unavailable", error: isAr ? "خطأ" : "Error" }[mpStatus] || mpStatus;
+  const mpTitle = mpStatus === "fallback" ? (isAr ? "التحليل مش قادر يشتغل على الجهاز ده، وصور الكاميرا مش بتتبعت لأي سيرفر." : "Analysis can't run on this device, and camera images are never sent to a server.") : undefined;
   const coachTone = aiCoachStatus?.error ? "bad" : aiCoachStatus?.ready ? "good" : "info";
   const coachIcon = aiCoachStatus?.error ? "alertTriangle" : aiCoachStatus?.ready ? "checkCircle" : "infoCircle";
   const coachLabel = aiCoachStatus?.ready

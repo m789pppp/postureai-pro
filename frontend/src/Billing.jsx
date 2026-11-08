@@ -63,8 +63,8 @@ export const PLANS = {
       yearly:  import.meta.env.VITE_STRIPE_PRICE_BASIC_YEARLY  || "",
     },
     color:"#3b82f6",
-    features:   ["Unlimited sessions", "Daily Check-in", "Weekly Challenge", "Pain Prediction Card", "Streak Freeze", "Posture Habit Score", "WhatsApp Reminders", "AI Coach (10 msgs/mo)"],
-    featuresAr: ["جلسات غير محدودة", "تسجيل يومي", "تحدي أسبوعي", "بطاقة توقع الألم", "تجميد الـ Streak", "درجة عادة الوضعية", "تذكيرات واتساب", "مدرب AI (10 رسائل/شهر)"],
+    features:   ["Unlimited sessions", "Daily Check-in", "Weekly Challenge", "Posture Strain Card", "Streak Freeze", "Posture Habit Score", "WhatsApp Reminders", "AI Coach (10 msgs/mo)"],
+    featuresAr: ["جلسات غير محدودة", "تسجيل يومي", "تحدي أسبوعي", "بطاقة إجهاد الوضعية", "تجميد الـ Streak", "درجة عادة الوضعية", "تذكيرات واتساب", "مدرب AI (10 رسائل/شهر)"],
     limit: -1,
   },
   professional: {
@@ -230,8 +230,8 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
       ar: ["5 جلسات/شهر", "درجة الوضعية", "تنبيهات أساسية", "تتبع السلسلة"],
     },
     basic: {
-      en: ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak & Goals", "Pain prediction", "Leaderboard"],
-      ar: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "سلسلة وأهداف", "توقع الألم", "المتصدرين"],
+      en: ["Unlimited sessions", "AI Coach (10 msgs/mo)", "Streak & Goals", "Posture strain alerts", "Leaderboard"],
+      ar: ["جلسات غير محدودة", "مدرب AI (10 رسائل/شهر)", "سلسلة وأهداف", "إجهاد الوضعية", "المتصدرين"],
     },
     professional: {
       en: ["Everything in Basic", "AI Insights", "Full Reports", "Session compare", "Export CSV/PDF", "Weekly report"],

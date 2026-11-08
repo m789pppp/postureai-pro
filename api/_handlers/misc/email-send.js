@@ -92,7 +92,7 @@ function welcomeTemplate({ name, tier, email }) {
   return baseLayout(`
     <h1>Welcome to Posmoz, ${name || "there"}! 👋</h1>
     <p>Your account is ready. You're on the <span class="badge badge-${tierBadge}">${tier || "Standard"}</span> plan.</p>
-    <p>Start your first posture session to get personalized AI insights from Dr. Posmoz, your AI physiotherapy specialist.</p>
+    <p>Start your first posture session to get personalized AI insights from Posmoz Coach, your AI posture coach.</p>
     <a class="btn" href="${APP_URL}">Open Dashboard →</a>
     <hr class="divider">
     <p style="font-size:12px;">Account: <span class="highlight">${email}</span></p>

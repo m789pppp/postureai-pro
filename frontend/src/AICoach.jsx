@@ -346,9 +346,9 @@ function buildSystemPrompt(ctx, isAr) {
 
   if (isAr) return `تعليمات إلزامية: يجب أن تردّ باللغة العربية فقط في كل الأحوال. ممنوع منعاً باتاً الرد بالإنجليزية أو أي لغة أخرى بغض النظر عن لغة المستخدم.
 
-أنت دكتور كورفوس — فيزيوثيرابيست سريري وخبير إرجونوميكس داخل Posmoz PostureAI Pro. خبرة 15 سنة في الجهاز العضلي الهيكلي.
+أنت Posmoz Coach، مدرب ذكاء اصطناعي للوضعية وبيئة العمل داخل Posmoz PostureAI Pro. أنت لست طبيبًا ولا أخصائي علاج طبيعي، ولو حد سألك وضّح إنك ذكاء اصطناعي.
 
-## بيانات ${nm} السريرية:
+## بيانات ${nm}:
 - درجة الوضعية: **${ctx.avg_score}/100** (${sc}) — متوسط كل الجلسات | آخر ${ctx.recent_n||0} جلسة: ${ctx.recent_avg??"—"}/100
 - هذا الأسبوع: ${waTxt} (${trTxt})
 - خطر الرقبة: **${nrTxt}** — ${nr==null?"ما تتكلمش عن الرقبة كأنك قستها":nr>=70?"🔴 مرتفع":nr>=40?"🟡 متوسط":"🟢 منخفض"}
@@ -376,9 +376,9 @@ ${load==null
 
 [CTXDATA:${JSON.stringify({avg:ctx.avg_score??null, avgRecent:ctx.recent_avg??null, recentN:ctx.recent_n??0, sessions:ctx.sessions_count??null, sessionsExact:!!ctx.sessions_exact, weekAvg:wa??null, lastWeekAvg:ctx.last_week_avg??null, weekSessions:ctx.week_sessions??0, trendPct:tr??null, neckRisk:nr??null, cervicalLoadKg:load??null, neckFlexionDeg:flex??null, fatigueDecline:fd??null, calibrated:!!ctx.has_calibration, reliabilityPct:ctx.reliability_pct??null, alerts:al, lang:"ar"})}]`;
 
-  return `You are Dr. Posmoz — clinical physiotherapist & ergonomics specialist in Posmoz PostureAI Pro. 15 years MSK experience.
+  return `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
-## PATIENT DATA: ${nm}
+## USER DATA: ${nm}
 | Metric | Value | Status |
 |--------|-------|--------|
 | Posture (all-time) | ${ctx.avg_score}/100 | ${sc} |
@@ -596,15 +596,15 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
     const unscored = !n && (sessions.length > 0 || context.sessions_count > 0);
     const content=isAr
       ?(unscored
-        ?`أهلاً ${name}! 👋 أنا **Dr. Posmoz** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nعندك جلسات مسجّلة بس مفيش فيها درجات صالحة — غالباً الكاميرا مشافتش جسمك كويس. اسألني أي حاجة، ولو عايز تقييم للوضعية جرّب جلسة والكاميرا شايفاك من الوسط لفوق.`
+        ?`أهلاً ${name}! 👋 أنا **Posmoz Coach** — مدرب ذكاء اصطناعي للوضعية وبيئة العمل، مش دكتور.\n\nعندك جلسات مسجّلة بس مفيش فيها درجات صالحة — غالباً الكاميرا مشافتش جسمك كويس. اسألني أي حاجة، ولو عايز تقييم للوضعية جرّب جلسة والكاميرا شايفاك من الوسط لفوق.`
         :n
-        ?`أهلاً ${name}! 👋 أنا **Dr. Posmoz** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nمتوسط آخر **${n}** جلسة: **${s}/100** (من إجمالي **${total}** جلسة). اسألني أي حاجة عن وضعيتك، ألمك، أو إعداد مكان شغلك.`
-        :`أهلاً ${name}! 👋 أنا **Dr. Posmoz** — فيزيوثيرابيست ذكاء اصطناعي متخصص في الجهاز العضلي الهيكلي.\n\nلسه مفيش جلسات مسجّلة، فمقدرش أقيّم وضعيتك لحد ما تعمل أول جلسة. اسألني أي حاجة عن الألم أو إعداد مكان شغلك.`)
+        ?`أهلاً ${name}! 👋 أنا **Posmoz Coach** — مدرب ذكاء اصطناعي للوضعية وبيئة العمل، مش دكتور.\n\nمتوسط آخر **${n}** جلسة: **${s}/100** (من إجمالي **${total}** جلسة). اسألني أي حاجة عن وضعيتك، ألمك، أو إعداد مكان شغلك.`
+        :`أهلاً ${name}! 👋 أنا **Posmoz Coach** — مدرب ذكاء اصطناعي للوضعية وبيئة العمل، مش دكتور.\n\nلسه مفيش جلسات مسجّلة، فمقدرش أقيّم وضعيتك لحد ما تعمل أول جلسة. اسألني أي حاجة عن الألم أو إعداد مكان شغلك.`)
       :(unscored
-        ?`Hey${name?" "+name:""}! 👋 I'm **Dr. Posmoz**, your AI physiotherapy specialist.\n\nYou have sessions recorded but none produced a usable score — usually that means the camera couldn't see enough of you. Ask me anything, and for a posture assessment try a session with your head and shoulders in frame.`
+        ?`Hey${name?" "+name:""}! 👋 I'm **Posmoz Coach**, your AI posture coach. I'm not a doctor.\n\nYou have sessions recorded but none produced a usable score — usually that means the camera couldn't see enough of you. Ask me anything, and for a posture assessment try a session with your head and shoulders in frame.`
         :n
-        ?`Hey${name?" "+name:""}! 👋 I'm **Dr. Posmoz**, your AI physiotherapy specialist.\n\nYour last **${n}** sessions average **${s}/100** — ${sl}\nOut of **${total}** sessions total.\n\nAsk me anything about your posture, pain, or workspace.`
-        :`Hey${name?" "+name:""}! 👋 I'm **Dr. Posmoz**, your AI physiotherapy specialist.\n\nNo sessions recorded yet, so I can't assess your posture until you run one. Ask me anything about pain or your workspace setup in the meantime.`);
+        ?`Hey${name?" "+name:""}! 👋 I'm **Posmoz Coach**, your AI posture coach. I'm not a doctor.\n\nYour last **${n}** sessions average **${s}/100** — ${sl}\nOut of **${total}** sessions total.\n\nAsk me anything about your posture, pain, or workspace.`
+        :`Hey${name?" "+name:""}! 👋 I'm **Posmoz Coach**, your AI posture coach. I'm not a doctor.\n\nNo sessions recorded yet, so I can't assess your posture until you run one. Ask me anything about pain or your workspace setup in the meantime.`);
     setMessages(prev => prev.length ? prev : [{role:"assistant",content,ts:Date.now()}]);
     greetedRef.current = true;
   },[greetReady,context.recent_avg,context.recent_n,context.sessions_count,context.sessions_exact,profile,sessions.length,isAr]);
@@ -758,7 +758,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
 
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:14,fontWeight:700,color:T.text,letterSpacing:"-.02em",lineHeight:1.2}}>
-              Dr. Posmoz
+              Posmoz Coach
             </div>
             <div style={{fontSize:10,color:T.teal,display:"flex",alignItems:"center",gap:5,marginTop:2}}>
               <span style={{
@@ -832,7 +832,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
             }}>
               <div style={{fontSize:34}}>🩺</div>
               <div style={{fontSize:14,fontWeight:700,color:T.text||"#f0f6ff"}}>
-                {isAr?"أهلاً! أنا Dr. Posmoz":"Hi, I'm Dr. Posmoz"}
+                {isAr?"أهلاً! أنا Posmoz Coach":"Hi, I'm Posmoz Coach"}
               </div>
               <div style={{fontSize:12,color:T.subtle,maxWidth:280,lineHeight:1.6}}>
                 {isAr
@@ -932,7 +932,7 @@ function FreeChatCoach({ profile, sessions=[], calibration, cs, lang="en", effec
               e.target.style.height=Math.min(e.target.scrollHeight,120)+"px";
             }}
             onKeyDown={handleKey}
-            placeholder={isAr?"اسأل Dr. Posmoz…":"Ask Dr. Posmoz anything…"}
+            placeholder={isAr?"اسأل Posmoz Coach…":"Ask Posmoz Coach anything…"}
             disabled={loading||limitReached}
             rows={1}
             style={{
@@ -1065,7 +1065,7 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
             <div style={{ width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#1158c7,#0e7490)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16 }}>🩺</div>
             <div>
               <div style={{ fontSize:14,fontWeight:800,color:T.text }}>{isAr?"تشيك-إن اليوم":"Today's Check-in"}</div>
-              <div style={{ fontSize:10,color:T.muted }}>Dr. Posmoz · {isAr?"مرة واحدة يوميًا":"once a day"}</div>
+              <div style={{ fontSize:10,color:T.muted }}>Posmoz Coach · {isAr?"مرة واحدة يوميًا":"once a day"}</div>
             </div>
           </div>
           <button onClick={onClose} style={{ background:"none",border:"none",color:T.muted,fontSize:18,cursor:"pointer" }}>✕</button>
@@ -1148,7 +1148,7 @@ function DailyCheckinPanel({ profile, sessions=[], calibration, cs, lang="en", t
 // Professional/Elite: full free-form chat (plenty of monthly budget).
 export function AICoach({ profile, sessions=[], calibration, cs, lang="en", effectiveTier, onClose }) {
   useBodyScrollLock();
-  // All users get the free-chat Dr. Posmoz — tier only affects the monthly message limit
+  // All users get the free-chat Posmoz Coach — tier only affects the monthly message limit
   // (free=5, basic=10, pro=50, elite=unlimited). DailyCheckinPanel is still
   // accessible via the Basic features panel; this modal is the full chat.
   return <FreeChatCoach profile={profile} sessions={sessions} calibration={calibration} cs={cs} lang={lang} effectiveTier={effectiveTier} onClose={onClose} />;

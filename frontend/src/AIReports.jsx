@@ -215,7 +215,7 @@ export function AIReports({ profile, sessions = [], allUsers = [], cs, lang = "e
   const cervLoad  = cervicalLoadKg(sessions);
   const cervAngle = neckFlexionDeg(sessions);
 
-  const system = `You are Dr. Posmoz — senior physiotherapist and occupational health specialist, 15 years MSK clinical experience.
+  const system = `You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
 PATIENT: ${_name} | Tier: ${_tier}
 Score: ${avgScore}/100 (${_scoreL}) | This week: ${weekAvg==null?`no sessions (${thisWeek.length} recorded) — do NOT report this as 0/100`:`${weekAvg}/100`} | Last week: ${lastWeekAvg==null?"no sessions — do NOT report this as 0/100":`${lastWeekAvg}/100`}

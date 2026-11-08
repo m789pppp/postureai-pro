@@ -42,7 +42,7 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
     { id:"professional", name:"احترافي", price:"399 جنيه", period:"/شهر", color:"#0ea5e9",
       features:["✓ AI Coach بدون حدود","✓ تقارير PDF كاملة","✓ تحليل وضعية متقدم","✓ إحصائيات تفصيلية"] },
     { id:"elite", name:"إيليت", price:"699 جنيه", period:"/شهر", color:"#10b981", badge:"الأفضل",
-      features:["✓ كل مميزات الاحترافي","✓ AI بالذكاء الاصطناعي العميق","✓ توقع الألم المبكر","✓ دعم أولوية 24/7"] },
+      features:["✓ كل مميزات الاحترافي","✓ AI بالذكاء الاصطناعي العميق","✓ تنبيهات الإجهاد المبكرة","✓ دعم أولوية 24/7"] },
   ] : [
     { id:"professional", name:"Professional", price:"$19.99", period:"/mo", color:"#0ea5e9",
       features:["✓ Unlimited AI Coach","✓ Full PDF Reports","✓ Advanced Analysis","✓ Detailed Stats"] },

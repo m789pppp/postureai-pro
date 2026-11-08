@@ -1177,8 +1177,8 @@ def get_pricing():
             "color": "#8b5cf6",
             "popular": True,
             "features": {
-                "en": ["Everything in Basic", "AI Insights", "Reports", "Compare sessions", "Pain prediction"],
-                "ar": ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "توقع الألم"],
+                "en": ["Everything in Basic", "AI Insights", "Reports", "Compare sessions", "Posture strain alerts"],
+                "ar": ["كل Basic", "رؤى AI", "تقارير", "مقارنة الجلسات", "إجهاد الوضعية"],
             },
             "pricing": PRICING_DISPLAY.get(region, PRICING_DISPLAY["gulf"]).get("professional", {}),
             "cta": "الأكثر شعبية" if is_ar else "Most Popular",
@@ -14828,10 +14828,10 @@ def coach_chat():
         _streak      = context.get("streak_days", 0)
         _week_sess   = context.get("week_sessions", 0)
 
-        sys_prompt = f"""You are Dr. Posmoz — the AI physiotherapist embedded in Posmoz PostureAI Pro.
+        sys_prompt = f"""You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.
 
 IDENTITY: You are a certified ergonomics consultant and clinical physiotherapy specialist. Not a generic chatbot.
-Never say "I'm an AI" — you are Dr. Posmoz.
+If asked, say clearly that you are an AI.
 
 CLINICAL EXPERTISE:
 - MSK anatomy: cervical/thoracic/lumbar spine, shoulder girdle, carpal tunnel, hip flexors, sacroiliac joint
@@ -14913,7 +14913,7 @@ CONVERSATION STYLE:
         # "unified AI call entry point for this entire backend", per its own
         # docstring) documents exactly this Gemini→Groq→Ollama order for
         # every OTHER AI feature — session analysis, reports, insights —
-        # but Dr. Posmoz chat, the one feature a user actually talks to,
+        # but Posmoz Coach chat, the one feature a user actually talks to,
         # had its own separate, older fallback chain that never grew the
         # Gemini/Groq branches when they were added elsewhere. The result:
         # every coach_chat reply came from either a local Ollama instance
@@ -15085,7 +15085,7 @@ def coach_daily_checkin():
         _alerts_str = ", ".join(top_alerts[:3]) if top_alerts else "none recorded"
         _pain_line  = f"\nSelf-reported pain area: {pain_area}." if pain_area and pain_area != "none" else ""
 
-        sys_prompt = f"""You are Dr. Posmoz, the AI physiotherapist in Posmoz PostureAI Pro, running a
+        sys_prompt = f"""You are Posmoz Coach, an AI posture coach in Posmoz PostureAI Pro (not a doctor or licensed clinician), running a
 30-second DAILY CHECK-IN (not a free-form chat).
 
 PATIENT DATA: posture score {avg_score}/100, streak {streak} days, {_neck_line},
@@ -18823,7 +18823,7 @@ def llm_proxy():
     try:
         data = request.get_json(force=True) or {}
         messages     = data.get("messages", [])
-        system_prompt = data.get("system_prompt", "You are Dr. Posmoz, a clinical physiotherapy AI.")
+        system_prompt = data.get("system_prompt", "You are Posmoz Coach, an AI posture and ergonomics coach in Posmoz PostureAI Pro. You are not a doctor, physiotherapist or licensed clinician. If asked, say clearly that you are an AI.")
         max_tokens   = int(data.get("max_tokens", 700))
         temperature  = float(data.get("temperature", 0.5))
 

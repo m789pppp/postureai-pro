@@ -59,6 +59,7 @@ const VoiceCoachSettings = lazy(() => import("./VoiceCoachSettings.jsx"));
 // for that wording, so the live panel, the session summary and the reports
 // cannot describe the same measurement three different ways.
 const FindingsPanel = lazy(() => import("./FindingsPanel.jsx"));
+const ClinicalCapture = lazy(() => import("./ClinicalCapture.jsx"));
 import { CustomAlertRulesPanel, useCustomAlertRuleEngine, ALERT_METRICS } from "./CustomAlertRules.jsx";
 import { getT } from "./lib/i18n.js";
 import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
@@ -123,6 +124,7 @@ const TR = {
 // EGP = Egypt market (Kashier) · USD = Gulf/International market (Stripe)
 // Annual = 20% discount (2 months free) — applied at checkout, not stored here
 // ══════════════════════════════════════════════════════════════════
+const ALLOW_FRAME_UPLOAD = false; // Camera images stay on the device. Guarded by claims.test.mjs.
 const COUPONS = {}; // Coupons validated server-side via /api/coupon/validate
 
 // ── B2C Pricing (Egypt + Gulf) ────────────────────────────────────
@@ -173,7 +175,7 @@ const TIERS = {
     id:"basic", name:"Basic", color:"#3b82f6", colorDim:"rgba(59,130,246,.12)",
     price_egp_monthly:199, price_egp_yearly:1590,  // 199 EGP/mo | 1,590/yr
     price_usd_monthly:9.99,   price_usd_yearly:79.99,    // $9.99/mo  | $79.99/yr
-    features:["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Pain prediction"],
+    features:["Unlimited sessions","AI Coach (10 msgs/mo)","Streak tracking","Goals","Posture strain alerts"],
     badge:null
   },
   professional:{
@@ -381,6 +383,7 @@ function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,
     alerts:             eng.alerts,
     bodyModules:        eng.bodyModules,
     detectedConditions: eng.detectedConditions,
+    measurements:       eng.measurements,
     qualityScore:       eng.qualityScore,
     qualityReason:      eng.qualityReason,
     confidence:         eng.confidence,
@@ -2875,6 +2878,8 @@ export default function App(){
   // Calibration (personal baseline)
   const[showCalibWizard,setShowCalibWizard]=useState(false);
   const[showQATest,setShowQATest]=useState(false); // dev-only structured accuracy test
+  const[showClinical,setShowClinical]=useState(false); // validation-study capture
+  const clinicalSinkRef=useRef(null); // set only while the capture panel is open
   const { calibration: savedCalib } = useCalibration(profile?.uid);
   const [calibData, setCalibData] = useState(null);
   const [calibStale, setCalibStale] = useState(false); // true when calibration >30 days old
@@ -4096,6 +4101,7 @@ export default function App(){
           const lms=lmSmootherRef.current.smooth(rawLms);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
+          clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
@@ -4551,7 +4557,11 @@ export default function App(){
     //
     // Cost note: at 100 concurrent Elite users this was roughly 40 req/s of
     // ~200KB uploads to an endpoint that discarded them.
-    const needsBackend = mpStatus==="fallback";
+    // A study session must never send a participant's frame off the device.
+    // Camera frames never leave the device. The product promises this in its
+    // privacy policy and marketing, so a device that cannot run MediaPipe gets
+    // an explanation (see the overlay below) instead of a silent upload.
+    const needsBackend = ALLOW_FRAME_UPLOAD && mpStatus==="fallback" && !clinicalSinkRef.current;
     // Gate on ELAPSED TIME, not on `totalRef % 45`.
     //
     // In fallback mode (local MediaPipe failed to load) mpRef is null, so the
@@ -5278,8 +5288,8 @@ export default function App(){
       pain_summary: (()=>{
         const painMins=la.pain_prediction?.minutes_to_pain;
         if(painMins==null) return null;
-        if(painMins<30) return isAr?`⚠️ توقع إزعاج خلال ${Math.round(painMins)} دقيقة — خذ استراحة الآن`:`⚠️ Discomfort likely in ${Math.round(painMins)} min — take a break now`;
-        if(painMins<90) return isAr?`~${Math.round(painMins)} دقيقة قبل الإزعاج المحتمل`:`~${Math.round(painMins)} min before likely discomfort`;
+        if(painMins<30) return isAr?`⚠️ إجهاد الوضعية بيزيد — خد استراحة دلوقتي`:`⚠️ Posture strain is building — take a break now`;
+        if(painMins<90) return isAr?`إجهاد الوضعية كان متوسط في الجلسة دي`:`Moderate posture strain this session`;
         return null;
       })(),
       // No longer captured — see the note in the analysis loop. Kept as an
@@ -6004,8 +6014,8 @@ async function downloadPDF(sessionOverride, isClinical=false){
       ai_tip:          aiTip,
       improvement_tip: la.improvement_tip||"",
       pain_summary:    la.pain_prediction?.minutes_to_pain < 90
-        ? (isAr?`⚠️ توقع إزعاج خلال ${Math.round(la.pain_prediction.minutes_to_pain)} دقيقة`
-                :`⚠️ Discomfort in ~${Math.round(la.pain_prediction.minutes_to_pain)} min`)
+        ? (isAr?`⚠️ إجهاد الوضعية بيزيد`
+                :`⚠️ Posture strain building`)
         : null,
       pain_prediction: la.pain_prediction||null,
     };
@@ -7085,6 +7095,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         set the state and nothing happened: no modal, no error, just a
         dead button. Mounted here too so it actually opens on this page. */}
     {showCalibWizard&&<ErrorBoundary key="calibwizard-live"><CalibrationWizard uid={profile?.uid} cs={cs} lang={lang} onDone={d=>{setCalibData(d);setShowCalibWizard(false);addToast(isAr?"تم حفظ المعايرة ✓":"Calibration saved ✓","success");}} onSkip={()=>setShowCalibWizard(false)}/></ErrorBoundary>}
+    {showClinical&&(isAdmin||profile?.study_access===true)&&<ErrorBoundary key="clinical-live"><Suspense fallback={null}><ClinicalCapture sinkRef={clinicalSinkRef} camActive={camActive} isAr={isAr} cs={cs} onClose={()=>setShowClinical(false)}/></Suspense></ErrorBoundary>}
     {showQATest&&<ErrorBoundary key="qatest-live"><QAAccuracyTest analysis={analysis} camActive={camActive} isAr={isAr} cs={cs} onClose={()=>setShowQATest(false)}/></ErrorBoundary>}
     {/* The 4 modals below are triggered from buttons on THIS page (Billing/
         Upgrade, Custom Alert Rules, Onboarding restart, Company setup) but
@@ -7837,6 +7848,17 @@ async function downloadPDF(sessionOverride, isClinical=false){
               normal user flow. Deliberately small and unlabeled-by-default
               (icon only) so it doesn't read as a real feature to regular
               users, but still reachable without digging through devtools. */}
+          {camActive && (isAdmin||profile?.study_access===true) && (
+            <button className="liveui-focusable" onClick={()=>setShowClinical(true)}
+              title={isAr?"قياس الدراسة":"Study measurement"}
+              aria-label={isAr?"قياس الدراسة":"Study measurement"} style={{
+              position:"absolute",bottom:8,
+              left:isAr?"auto":48, right:isAr?48:"auto", zIndex:20,
+              width:32,height:32,borderRadius:8,
+              background:"rgba(2,8,16,.8)",border:"1px solid rgba(255,255,255,.15)",
+              color:"#e2e8f0",cursor:"pointer",fontSize:12,fontWeight:700,
+            }}>°</button>
+          )}
           {camActive && (
             <button className="liveui-focusable" onClick={()=>setShowQATest(true)}
               title={isAr?"اختبار دقة QA":"QA accuracy test"}
@@ -7906,7 +7928,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               available (mpStatus==="fallback") and /api/analyze has failed
               3 times in a row. Without this the camera feed just sits
               there with no score ever updating and zero explanation. */}
-          {camActive && backendDown && (
+          {camActive && (backendDown || mpStatus==="fallback") && (
             <CameraOverlay align="center">
               <div style={{width:44,height:44,borderRadius:LT.radius.md,background:liveAlpha(LT.color.bad,0.14),
                 border:`1px solid ${liveAlpha(LT.color.bad,0.35)}`,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -7914,15 +7936,15 @@ async function downloadPDF(sessionOverride, isClinical=false){
               </div>
               <div>
                 <div style={{fontSize:15,fontWeight:800,color:"#f0f6ff",marginBottom:6}}>
-                  {isAr?"تعذر الوصول لخادم التحليل":"Can't reach the analysis server"}
+                  {isAr?"التحليل مش قادر يشتغل على جهازك":"Analysis can't run on this device"}
                 </div>
                 <div style={{fontSize:11,color:"#94a3b8",lineHeight:1.6,maxWidth:280}}>
-                  {isAr?"جهازك مش شغال بالتحليل المحلي دلوقتي، والسيرفر مش بيرد. تأكد من الإنترنت وحاول تاني":"Local analysis isn't available on this device right now, and the server isn't responding. Check your connection and retry"}
+                  {isAr?"عشان خصوصيتك، صور الكاميرا مش بتتبعت لأي سيرفر. جرّب Chrome أو Edge بآخر تحديث، وبعدها اعمل تحديث للصفحة.":"To protect your privacy, camera images are never sent to a server. Try the latest Chrome or Edge, then reload this page."}
                 </div>
               </div>
               <LiveBtn variant="ghost" icon="refresh" cs={{muted:"#e2e8f0",border:"rgba(148,163,184,.25)"}}
-                onClick={()=>{ backendFailRef.current=0; backendFailShownRef.current=false; setBackendDown(false); }}>
-                {isAr?"حاول تاني":"Retry"}
+                onClick={()=>window.location.reload()}>
+                {isAr?"تحديث الصفحة":"Reload"}
               </LiveBtn>
             </CameraOverlay>
           )}
@@ -7961,7 +7983,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               action) takes priority while it's showing; this overlay
               reappears as soon as backendDown clears, since isPaused is
               untouched either way. */}
-          {camActive && isPaused && !backendDown && (
+          {camActive && isPaused && !backendDown && mpStatus!=="fallback" && (
             <CameraOverlay align="center">
               <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(255,255,255,.1)",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <Icon name={resumingCam?"camera":"pause"} size={22} color="#fff"/>
@@ -8644,7 +8666,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
                 <span style={{fontSize:13}}>{icon}</span>
                 <div style={{fontSize:10,fontWeight:700,color:col}}>
-                  {isAr?`احتمال إجهاد خلال ~${m} دقيقة`:`Discomfort likely in ~${m} min`}
+                  {isAr?(m<=10?"إجهاد الوضعية عالي":m<=30?"إجهاد الوضعية بيزيد":"إجهاد الوضعية قليل"):(m<=10?"Posture strain is high":m<=30?"Posture strain is building":"Posture strain is low")}
                   {pp.primary_driver?` · ${pp.primary_driver}`:""}
                 </div>
               </div>

@@ -1507,7 +1507,11 @@ function analyzeNeckLean(lms, W, H, prop, calib = null) {
   const severity  = classify(dev, SEV.NECK);
   const confidence = Math.round(70 + (vis(PL.L_EAR) ? 15 : 0) + (noseOK ? 10 : 0) + (shOK ? 5 : 0));
 
-  return { angle: Math.round(angle), score, severity, confidence, reliable, okAdj:t.ok, badAdj:t.bad, personalised:t.personalised };
+  // Exact reading for the validation export. Positive = toward the subject's
+  // RIGHT, derived in-frame the same way as analyzeSpineLean's sign.
+  const neckToHigherX = (neckRef.x - prop.midSh.x) > 0;
+  const neckRight = (prop.lSh.x >= prop.rSh.x) ? !neckToHigherX : neckToHigherX;
+  return { angle: Math.round(angle), angleRaw: angle, signedRaw: neckRight ? angle : -angle, score, severity, confidence, reliable, okAdj:t.ok, badAdj:t.bad, personalised:t.personalised };
 }
 
 function analyzeHeadTilt(lms, W, H, calib = null) {
@@ -1524,7 +1528,10 @@ function analyzeHeadTilt(lms, W, H, calib = null) {
   const dev = Math.abs(angle - t.ideal);
   const score    = scoreMetric(angle, t.ideal, t.ok, t.bad);
   const severity = classify(dev, { mild: 3, moderate: 7, severe: 10 });
-  return { angle: Math.round(angle), score, severity, confidence: 85, reliable, personalised:t.personalised };
+  // Positive = the subject's RIGHT eye is lower (head tilted to their right),
+  // matching analyzeShoulderLevel's convention.
+  const headSigned = (rEye.y - lEye.y) > 0 ? angle : -angle;
+  return { angle: Math.round(angle), angleRaw: angle, signedRaw: headSigned, score, severity, confidence: 85, reliable, personalised:t.personalised };
 }
 
 function analyzeShoulderLevel(lms, W, H, prop, calib = null) {
@@ -1545,7 +1552,7 @@ function analyzeShoulderLevel(lms, W, H, prop, calib = null) {
   // whether the frame is mirrored.
   const signed   = (prop.rSh.y - prop.lSh.y) > 0 ? angle : -angle;
 
-  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true, personalised:t.personalised };
+  return { angle: Math.round(angle), angleRaw: angle, signedRaw: signed, signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 90, reliable: true, personalised:t.personalised };
 }
 
 /**
@@ -1624,11 +1631,12 @@ function analyzeTrunkRotation(lms, W, H, prop, headYawDeg = 0, calib = null) {
   // ratio = neutral * cos(theta)  ->  theta = acos(ratio / neutral).
   // Only SHRINKAGE means rotation; a ratio above neutral is noise, not a twist.
   const cosT  = Math.max(0, Math.min(1, ratio / Math.max(neutralRatio, 0.1)));
-  const angle = Math.round(Math.acos(cosT) * 180 / Math.PI);
+  const angleRaw = Math.acos(cosT) * 180 / Math.PI;
+  const angle = Math.round(angleRaw);
 
   const score    = scoreMetric(angle, 0, THR.TRUNK_ROT.ok, THR.TRUNK_ROT.bad);
   const severity = classify(angle, SEV.TRUNK_ROT);
-  return { angle, score, severity, confidence: personalised ? 88 : 80, reliable: true, personalised };
+  return { angle, angleRaw, score, severity, confidence: personalised ? 88 : 80, reliable: true, personalised };
 }
 
 /**
@@ -1742,7 +1750,7 @@ function analyzeSpineLean(lms, W, H, prop, roundedScore, calib = null) {
   const towardHigherX = (prop.midSh.x - midHip.x) > 0;
   const leaningRight  = leftIsHigherX ? !towardHigherX : towardHigherX;
   const signed = leaningRight ? angle : -angle;
-  return { angle: Math.round(angle), signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 88, reliable: true, personalised:t.personalised };
+  return { angle: Math.round(angle), angleRaw: angle, signedRaw: signed, signedAngle: Math.round(signed * 10) / 10, score, severity, confidence: 88, reliable: true, personalised:t.personalised };
 }
 
 function analyzeRoundedShoulders(lms, prop, H, calib = null, trunkFlexDeg = 0) {
@@ -2561,6 +2569,38 @@ function buildAlerts(modules, distCm, lo, hi, nowMs = Date.now()) {
 // MAIN FRONT-CAMERA ANALYSIS
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Exact per-frame readings for validation against a reference instrument.
+ *
+ * Purely additive: nothing here feeds the score. The legacy `metrics` block
+ * reports 0 for a metric it could not measure, which is harmless for a score
+ * but would enter a validation dataset as a false reading of zero, so an
+ * unreliable measurement here is null instead.
+ *
+ * `method` is recorded because these are not equally direct measurements:
+ * 2d_image_plane is geometry in the frame; the others depend on MediaPipe's
+ * estimated depth, an assumed body proportion, or foreshortening. One decimal
+ * is display resolution only. It is not a statement of accuracy, which only a
+ * comparison with a reference instrument can establish.
+ */
+function buildMeasurements({ neck, headTilt, shoulder, spine, yaw, trunkRot, elbow, fhp }) {
+  const m = (mod, raw, signed, unit, method) => {
+    const ok = !!mod?.reliable && Number.isFinite(raw);
+    const r1 = v => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
+    return { value: ok ? r1(raw) : null, signed: ok ? r1(signed) : null, unit, method, reliable: ok };
+  };
+  return {
+    neck_lateral_deg:    m(neck,     neck?.angleRaw,     neck?.signedRaw,     "deg", "2d_image_plane"),
+    head_tilt_deg:       m(headTilt, headTilt?.angleRaw, headTilt?.signedRaw, "deg", "2d_image_plane"),
+    shoulder_tilt_deg:   m(shoulder, shoulder?.angleRaw, shoulder?.signedRaw, "deg", "2d_image_plane"),
+    spine_lateral_deg:   m(spine,    spine?.angleRaw,    spine?.signedRaw,    "deg", "2d_image_plane"),
+    head_yaw_deg:        m(yaw,      yaw?.absAngle,      yaw?.angle,          "deg", yaw?.usedDepth ? "estimated_depth" : "nose_offset_estimate"),
+    trunk_rotation_deg:  m(trunkRot, trunkRot?.angleRaw, trunkRot?.angleRaw,  "deg", "foreshortening_estimate"),
+    elbow_included_deg:  m(elbow,    elbow?.angle,       elbow?.angle,        "deg", "estimated_depth"),
+    forward_head_cm:     m(fhp,      fhp?.distCm,        fhp?.distCm,         "cm",  "estimated_depth"),
+  };
+}
+
 export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null, calib = null) {
   if (!lms || lms.length < 25) return null;
 
@@ -3163,6 +3203,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       torsoFlex.reliable && torsoFlex.severity !== "normal" && { name: "Forward Slouch",   severity: torsoFlex.severity, value: `${torsoFlex.shrinkPct}%` },
       trunkRot.reliable  && trunkRot.severity  !== "normal" && { name: "Trunk Rotation",   severity: trunkRot.severity,  value: `${trunkRot.angle}°` },
     ].filter(Boolean),
+
+    measurements: buildMeasurements({ neck, headTilt, shoulder, spine, yaw, trunkRot, elbow, fhp }),
 
     // Legacy metrics shape (backward-compatible with App.jsx/overlays)
     metrics: {

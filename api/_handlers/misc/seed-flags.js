@@ -19,7 +19,7 @@ function getAdmin() {
 }
 
 const DEFAULT_FLAGS = [
-  { id:"ai_coach",          label:"AI Coach",               enabled:true,  rollout_pct:100, tiers:["pro","elite"],           description:"Dr. Posmoz AI chat" },
+  { id:"ai_coach",          label:"AI Coach",               enabled:true,  rollout_pct:100, tiers:["pro","elite"],           description:"Posmoz Coach chat" },
   { id:"ai_insights",       label:"AI Insights",            enabled:true,  rollout_pct:100, tiers:["standard","pro","elite"],description:"AI posture insight tabs" },
   { id:"ai_reports",        label:"AI Reports",             enabled:true,  rollout_pct:100, tiers:["pro","elite"],           description:"PDF reports with AI" },
   { id:"predictive_ai",     label:"Predictive AI",          enabled:true,  rollout_pct:100, tiers:["elite"],                 description:"Burnout & risk forecasting" },
