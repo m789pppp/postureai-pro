@@ -109,8 +109,8 @@ export default async function handler(req, res) {
     const name = u.name || "User";
     const region = lang === "ar" ? (pr.region_ar || "وضعيتك") : (pr.region_en || "your posture");
     const body = lang === "ar"
-      ? `🦅 تذكير وقائي من Posmoz\n\nبناءً على نمطك المعتاد، بكرة ممكن تحس بألم في ${region}. خد 10 دقايق stretch دلوقتي عشان تقلل الاحتمال.\n\nافتح التطبيق لتمارين مقترحة.`
-      : `🦅 Preventive reminder from Posmoz\n\nBased on your usual pattern, tomorrow may bring some ${region} discomfort. Take 10 minutes to stretch now to lower the odds.\n\nOpen the app for suggested stretches.`;
+      ? `🦅 تذكير وقائي من Posmoz\n\nنمطك الأخير بيوضح إجهاد في الوضعية حوالين ${region}. خد كام دقيقة تتحرك وتعدّل قعدتك.\n\nافتح التطبيق لتمارين مقترحة.`
+      : `🦅 Preventive reminder from Posmoz\n\nYour recent pattern shows posture strain around the ${region}. Take a few minutes to move and reset your posture.\n\nOpen the app for suggested stretches.`;
     try {
       results.push({ uid: doc.id, type: "predictive", ok: await sendWhatsApp(u.whatsapp_phone, body) });
     } catch (e) {
