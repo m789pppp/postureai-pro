@@ -1341,7 +1341,7 @@ function Features({ lang }) {
       sub:{ en:"10 → 30 → Unlimited msgs/mo · Arabic & English", ar:"10 ← 30 ← غير محدود رسالة/شهر · عربي وإنجليزي" },
       bullets:{
         en:["Remembers your full session history — no re-explaining needed",
-            "Evidence-based stretch & ergonomics advice per your score",
+            "Stretch & ergonomics tips based on your score",
             "Explains exactly why your score dropped and what to fix first",
             "Elite: voice replies in Egyptian & Gulf Arabic dialects"],
         ar:["يحفظ كامل تاريخ جلساتك — لا حاجة للشرح مجدداً",
@@ -1901,7 +1901,7 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
       popular:true, color:LPV7_TOKENS.blue,
       features: ar
         ? ["حتى 100 موظف","كل مزايا ستارتر","قواعد تنبيه مخصّصة","تقارير PDF إكلينيكية","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"]
-        : ["Up to 100 employees","Everything in Starter","Custom alert rules","Clinical PDF reports","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
+        : ["Up to 100 employees","Everything in Starter","Custom alert rules","Detailed PDF reports","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
     },
     {
       id:"b2b_enterprise", name: ar?"إنتربرايز":"Enterprise",

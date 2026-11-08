@@ -1206,7 +1206,7 @@ function SecurityPolicies({orgId,adminUid,isAr}) {
 
       {/* Compliance badges */}
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
-        {[["GDPR",RBAC_TOKENS.green],["HIPAA-ready",RBAC_TOKENS.blue],["SOC 2 (in progress)",RBAC_TOKENS.amber],["AES-256",RBAC_TOKENS.purple],["TLS 1.3",RBAC_TOKENS.teal]].map(([l,c])=>(
+        {[["AES-256",RBAC_TOKENS.purple],["TLS 1.3",RBAC_TOKENS.teal]].map(([l,c])=>(
           <Badge key={l} color={c}>✓ {l}</Badge>
         ))}
       </div>
@@ -1268,7 +1268,7 @@ export function EnterpriseRBAC({ orgId, adminUid, profile, members=[], cs, lang=
               </div>
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {["GDPR","SAML 2.0","HIPAA-ready"].map(b=>(
+              {["SAML 2.0"].map(b=>(
                 <span key={b} style={{background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.18)",
                   borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,color:"#34d399"}}>✓ {b}</span>
               ))}

@@ -72,7 +72,7 @@ noClaim("~96%", "an accuracy figure that was never measured against a reference"
 noClaim("< 40ms", "the analysis loop is throttled to a 20fps (50ms) ceiling");
 
 console.log("\nno clinician persona or unproven health outcome");
-for (const [n, why] of [["Dr. Posmoz", "an AI coach must not hold a doctor title"], ["Pain Prediction", "no validated model predicts pain"], ["Pain prediction", "no validated model predicts pain"], ["توقع الألم", "no validated model predicts pain"], ["-47%", "not a Posmoz result"], ["Cut Sick Leave", "not a Posmoz result"], ["sick leave", "no measured sick-leave outcome"]]) noClaim(n, why);
+for (const [n, why] of [["Dr. Posmoz", "an AI coach must not hold a doctor title"], ["Pain Prediction", "no validated model predicts pain"], ["Pain prediction", "no validated model predicts pain"], ["توقع الألم", "no validated model predicts pain"], ["HIPAA-ready", "no HIPAA assessment exists"], ["SOC 2 (in progress)", "no SOC 2 process has started"], ["Pre-built connectors exist", "no HR system connector ships today"], ["Clinical PDF reports", "the reports are not clinical documents"], ["scientific citations", "citations are not verified per response"], ["-47%", "not a Posmoz result"], ["Cut Sick Leave", "not a Posmoz result"], ["sick leave", "no measured sick-leave outcome"]]) noClaim(n, why);
 for (const f of ["AICoach.jsx", "AIInsights.jsx", "AIReports.jsx", "PredictiveAI.jsx", "localAI.js", "aiPreloader.js"]) {
   const t = readFileSync(join(SRC, f), "utf8");
   check(`${f}: AI prompt claims no human credentials`, !/15 years|خبرة 15|Dr\. Posmoz|never say "I'm an AI"/i.test(t));

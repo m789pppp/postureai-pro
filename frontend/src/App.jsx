@@ -224,7 +224,7 @@ const B2B_TIERS = {
     price_egp_monthly:6999, price_egp_yearly:67190,   // 6,999 EGP/mo flat | 67,190/yr
     price_usd_monthly:199,  price_usd_yearly:1910,    // $199/mo flat | $1,910/yr
     seats:100,
-    features:["Up to 100 employees","Everything in Starter","Custom alert rules","Clinical PDF reports","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
+    features:["Up to 100 employees","Everything in Starter","Custom alert rules","Detailed PDF reports","Advanced HR analytics","Slack/Teams alerts","Executive HR reports","Priority support"],
     featuresAr:["حتى 100 موظف","كل مزايا ستارتر","قواعد تنبيه مخصّصة","تقارير PDF إكلينيكية","تحليلات HR متقدمة","تنبيهات Slack/Teams","تقارير HR تنفيذية","دعم أولوية"],
     badge:"Most Popular",
   },

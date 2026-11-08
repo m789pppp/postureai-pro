@@ -78,7 +78,7 @@ const CATEGORIES = [
       ["Can I set up departments and teams?","Yes. The HR dashboard supports unlimited department hierarchies. You can assign managers, set department-level alert thresholds, and compare performance across teams."],
       ["What reports does HR receive?","Weekly PDF reports with company-wide posture trends, department risk heatmaps, and ROI estimates based on your organisation's own figures. Reports are auto-generated every Monday at 8am."],
       ["Can I set custom alert thresholds?","Yes. HR admins can set risk score thresholds per department. When an employee's score drops below the threshold for 3+ consecutive sessions, an automatic alert is sent to the HR admin and optionally to the employee's manager."],
-      ["How does Posmoz integrate with our HR system?","Via REST API and webhooks. Pre-built connectors exist for SAP, Workday, and BambooHR. Custom webhooks can push risk alerts to Slack, Microsoft Teams, or any endpoint you specify."],
+      ["How does Posmoz integrate with our HR system?","Via REST API and webhooks. Pre-built HR system connectors are not available yet. Custom webhooks can push risk alerts to Slack, Microsoft Teams, or any endpoint you specify."],
     ],
   },
 ];

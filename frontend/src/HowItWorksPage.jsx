@@ -76,7 +76,7 @@ POST your-endpoint
   },
   { n:"05", icon:"sparkle", color:"#f59e0b", time:"Always on", title:"AI Coach works in the background",
     desc:"Posmoz' AI coach monitors trends, sends nudges, and adapts recommendations based on each employee's history. Like a physio in their pocket.",
-    details:["Personalised stretch programs","Progress tracking over time","Evidence-based recommendations","Arabic and English support"],
+    details:["Personalised stretch programs","Progress tracking over time","Personalised recommendations","Arabic and English support"],
     code:`// AI Coach response (Groq)
 { "message": "Your neck angle improved
     3° this week. Try this stretch...",
@@ -233,7 +233,7 @@ export default function HowItWorksPage() {
           <div className="hiw-stack-grid" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
             {[
               { icon:"target", color:"#4f7cf9", title:"On-device AI", desc:"MediaPipe Pose runs entirely in the browser. 33 body landmarks, 13 posture metrics, zero video upload." },
-              { icon:"brain", color:"#22d3ee", title:"Groq LLM", desc:"llama-3.1-8b-instant powers the AI coach. Responses in < 2 seconds with scientific citation support." },
+              { icon:"brain", color:"#22d3ee", title:"Groq LLM", desc:"llama-3.1-8b-instant powers the AI coach." },
               { icon:"plug", color:"#10d9a0", title:"Firebase + Flask", desc:"Auth, Firestore, and a Python backend for score storage, HR reports, and webhook delivery." },
             ].map((item,i) => (
               <Reveal key={item.title} delay={i*.08}>

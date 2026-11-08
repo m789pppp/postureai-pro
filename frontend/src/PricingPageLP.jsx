@@ -141,7 +141,7 @@ const CO_PLANS = [
       { t:"Employees", v:"Up to 100" },
       { t:"Everything in Starter", v:true },
       { t:"Custom alert rules", v:true },
-      { t:"Clinical PDF reports", v:true },
+      { t:"Detailed PDF reports", v:true },
       { t:"Advanced HR analytics", v:true },
       { t:"Slack / Teams alerts", v:true },
       { t:"Executive HR reports", v:true },

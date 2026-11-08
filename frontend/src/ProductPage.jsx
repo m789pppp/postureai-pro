@@ -51,7 +51,7 @@ const FEATURES = [
     icon:"sparkle", color:"#10d9a0",
     title:"AI Coach — Powered by Groq",
     badge:"AI Layer",
-    desc:"Every employee gets a personal AI posture coach. Evidence-based recommendations backed by scientific citations, delivered in under 2 seconds.",
+    desc:"Every employee gets a personal AI posture coach. Practical recommendations based on each session.",
     specs:[["Model","Llama 3.1 8B"],["Response time","< 2 sec"],["Languages","AR + EN"],["Fallback","48-intent local AI"]],
     bullets:["Session-aware therapeutic advice","Scientific citation support","Personalised stretch programs","Progressive overload tracking"],
   },
