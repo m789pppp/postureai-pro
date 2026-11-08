@@ -141,7 +141,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
 
   const copyLink = () => {
     const code = profile?.referral_code || (profile?.uid||"").slice(0,8);
-    const url = `https://posmoz.io?ref=${code}`;
+    const url = `https://posmoz.com?ref=${code}`;
     navigator.clipboard?.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -149,7 +149,7 @@ export function GrowthHub({ profile, cs, lang, onClose }) {
   };
 
   const refCode = profile?.referral_code || (profile?.uid||"").slice(0,8);
-  const refUrl  = `https://posmoz.io?ref=${refCode}`;
+  const refUrl  = `https://posmoz.com?ref=${refCode}`;
   const myStats = affiliateStats || { clicks:0, signups:0, revenue_egp:0 };
 
   const filtered = catFilter==="all" ? items : items.filter(i=>i.category===catFilter);

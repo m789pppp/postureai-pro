@@ -161,7 +161,7 @@ function drawCard(canvas, data) {
     ctx.font = "13px -apple-system,sans-serif";
     ctx.fillStyle = "#a5b4fc";
     ctx.textAlign = "center";
-    ctx.fillText("🌐 posmoz.io", rx + 155, ctaY + 24);
+    ctx.fillText("🌐 posmoz.com", rx + 155, ctaY + 24);
 
     // Date
     ctx.textAlign = "right"; ctx.textBaseline = "alphabetic";
@@ -232,8 +232,8 @@ export function ShareCard({ score, sessions, avgScore, streak, name, lang, onClo
   const share = async () => {
     setSharing(true);
     const text = isAr
-      ? `حققت نتيجة ${score}/100 في وضعية الجسم على Posmoz 🧠💪\nجرّب مجاناً: posmoz.io`
-      : `I scored ${score}/100 on posture health with Posmoz 🧠💪\nTry free: posmoz.io`;
+      ? `حققت نتيجة ${score}/100 في وضعية الجسم على Posmoz 🧠💪\nجرّب مجاناً: posmoz.com`
+      : `I scored ${score}/100 on posture health with Posmoz 🧠💪\nTry free: posmoz.com`;
     try {
       const url  = getDataURL();
       if (url && navigator.canShare) {

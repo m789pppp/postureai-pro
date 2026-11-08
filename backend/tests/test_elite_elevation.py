@@ -6,7 +6,7 @@ Coach limits, backend-assisted analysis, etc.) reads. frontend/src/
 firebase.js keeps its own duplicate copy for client-side display, with
 a comment saying it "mirrors backend middleware" -- it didn't: that copy
 had coventry.ac.uk/coventry-university.ac.uk/city.ac.uk and
-support@posmoz.io that this file was missing entirely. Commit history
+support@posmoz.com that this file was missing entirely. Commit history
 ("state the real Coventry pilot") confirms Coventry is a genuine
 institutional partner, not placeholder data, so those pilot users were
 shown Elite-tier UI the backend would not actually grant -- the opposite
@@ -53,7 +53,7 @@ class TestIndividualEmails:
         assert _should_elevate_to_elite("m789pppp@gmail.com")
 
     def test_internal_support_account(self):
-        assert _should_elevate_to_elite("support@posmoz.io")
+        assert _should_elevate_to_elite("support@posmoz.com")
 
     def test_case_insensitive(self):
         assert _should_elevate_to_elite("Support@Posmoz.IO")
@@ -83,6 +83,6 @@ class TestFrontendParity:
 
     def test_emails_match_frontends_copy(self):
         frontend_emails = {
-            "judyayman36@gmail.com", "support@posmoz.io", "m789pppp@gmail.com",
+            "judyayman36@gmail.com", "support@posmoz.com", "m789pppp@gmail.com",
         }
         assert set(e.lower() for e in ELITE_EMAILS) == frontend_emails

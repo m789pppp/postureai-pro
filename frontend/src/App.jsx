@@ -108,7 +108,7 @@ import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
-// Example: VITE_API_URL=https://corvus-backend.onrender.com/api
+// Example: VITE_API_URL=https://your-backend.example.com/api
 const API = API_BASE_URL;
 
 // ── i18n ──────────────────────────────────────────────────────────

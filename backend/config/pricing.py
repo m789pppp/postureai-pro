@@ -137,7 +137,7 @@ def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
     if tier not in ALL_TIERS:
         return False, f"Invalid tier '{tier}'. Valid: {sorted(ALL_TIERS)}"
     if tier == "b2b_enterprise" or tier == "enterprise":
-        return False, "Enterprise plans require a custom contract — contact sales@posmoz.io"
+        return False, "Enterprise plans require a custom contract — contact sales@posmoz.com"
     if billing not in BILLING_MODES:
         return False, f"Invalid billing '{billing}'. Valid: monthly, yearly"
     return True, ""

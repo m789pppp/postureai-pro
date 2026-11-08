@@ -782,7 +782,7 @@ def validate_plan_request(tier: str, billing: str) -> tuple[bool, str]:
     tier_lower = tier.lower()
     # Enterprise tiers are always custom/contact-sales — never go through automated checkout
     if tier_lower in ("b2b_enterprise", "enterprise"):
-        return False, "Enterprise plans require a custom contract — contact sales@posmoz.io"
+        return False, "Enterprise plans require a custom contract — contact sales@posmoz.com"
     valid_tiers    = set(_PAYMOB_PRICES.keys()) | set(_STRIPE_PRICES.keys())
     valid_billings = {"monthly", "yearly", "annual"}
     if tier_lower not in valid_tiers:
@@ -14044,7 +14044,7 @@ def _session_to_fhir_observation(session_data, uid, session_id):
             "valueQuantity": {"value": round(float(val),2), "unit": unit, "system":"http://unitsofmeasure.org"},
             "interpretation": [{"coding":[_fhir_score_interpretation(sc)]}],
             "extension": [{
-                "url": "https://posmoz.health/fhir/StructureDefinition/posture-metric-score",
+                "url": "https://posmoz.com/fhir/StructureDefinition/posture-metric-score",
                 "valueInteger": round(sc),
             }],
         })
@@ -14053,7 +14053,7 @@ def _session_to_fhir_observation(session_data, uid, session_id):
         "resourceType": "Observation",
         "id": session_id,
         "meta": {
-            "profile": ["https://posmoz.health/fhir/StructureDefinition/PostureObservation"],
+            "profile": ["https://posmoz.com/fhir/StructureDefinition/PostureObservation"],
             "versionId": "1",
             "lastUpdated": iso_ts,
         },
@@ -14093,9 +14093,9 @@ def _session_to_fhir_observation(session_data, uid, session_id):
         }],
         "component": components,
         "extension": [
-            {"url":"https://posmoz.health/fhir/ext/session-duration-seconds","valueInteger": duration_s},
-            {"url":"https://posmoz.health/fhir/ext/good-posture-percentage","valueDecimal": session_data.get("good_pct",0)},
-            {"url":"https://posmoz.health/fhir/ext/camera-mode","valueString": session_data.get("mode","laptop")},
+            {"url":"https://posmoz.com/fhir/ext/session-duration-seconds","valueInteger": duration_s},
+            {"url":"https://posmoz.com/fhir/ext/good-posture-percentage","valueDecimal": session_data.get("good_pct",0)},
+            {"url":"https://posmoz.com/fhir/ext/camera-mode","valueString": session_data.get("mode","laptop")},
         ],
     }
 
@@ -14238,7 +14238,7 @@ def emr_patient_summary(patient_uid):
             "resourceType": "DiagnosticReport",
             "id": f"posmoz-posture-{patient_uid}-{days}d",
             "meta": {
-                "profile": ["https://posmoz.health/fhir/StructureDefinition/PostureDiagnosticReport"],
+                "profile": ["https://posmoz.com/fhir/StructureDefinition/PostureDiagnosticReport"],
                 "lastUpdated": report_date,
             },
             "status": "final",
@@ -14274,12 +14274,12 @@ def emr_patient_summary(patient_uid):
                 "url": f"/api/v1/emr/patient/{patient_uid}/summary",
             }],
             "extension": [
-                {"url":"https://posmoz.health/fhir/ext/sessions-analysed","valueInteger":len(sessions)},
-                {"url":"https://posmoz.health/fhir/ext/avg-posture-score","valueInteger":avg_sc},
-                {"url":"https://posmoz.health/fhir/ext/cervical-zone-risk","valueInteger":avg_zone["cervical"]},
-                {"url":"https://posmoz.health/fhir/ext/thoracic-zone-risk","valueInteger":avg_zone["thoracic"]},
-                {"url":"https://posmoz.health/fhir/ext/lumbar-zone-risk",  "valueInteger":avg_zone["lumbar"]},
-                {"url":"https://posmoz.health/fhir/ext/days-monitored","valueInteger":days},
+                {"url":"https://posmoz.com/fhir/ext/sessions-analysed","valueInteger":len(sessions)},
+                {"url":"https://posmoz.com/fhir/ext/avg-posture-score","valueInteger":avg_sc},
+                {"url":"https://posmoz.com/fhir/ext/cervical-zone-risk","valueInteger":avg_zone["cervical"]},
+                {"url":"https://posmoz.com/fhir/ext/thoracic-zone-risk","valueInteger":avg_zone["thoracic"]},
+                {"url":"https://posmoz.com/fhir/ext/lumbar-zone-risk",  "valueInteger":avg_zone["lumbar"]},
+                {"url":"https://posmoz.com/fhir/ext/days-monitored","valueInteger":days},
             ],
             # Posmoz non-FHIR summary (for convenience — non-FHIR clients)
             "_posmoz": {

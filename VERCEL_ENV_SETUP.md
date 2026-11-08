@@ -39,7 +39,7 @@ Go to: https://vercel.com/dashboard → postureai-pro → Settings → Environme
 | TWILIO_PHONE_NUMBER | SMS MFA sender number |
 | VITE_STRIPE_PUBLIC_KEY | Stripe payments (shows "Coming Soon" if absent) |
 | VITE_APP_URL | `https://postureai-pro-omega-nine.vercel.app` |
-| VITE_SUPPORT_EMAIL | `support@posmoz.io` |
+| VITE_SUPPORT_EMAIL | `support@posmoz.com` |
 | VITE_AUTO_APPROVE_DOMAIN | `tkh.edu.eg` — auto-elite for this domain |
 
 ## How to set FIREBASE_PRIVATE_KEY in Vercel

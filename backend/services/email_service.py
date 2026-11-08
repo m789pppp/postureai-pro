@@ -12,9 +12,9 @@ from typing import Optional
 logger = logging.getLogger("posmoz.email")
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
-FROM_EMAIL     = os.getenv("FROM_EMAIL", "Posmoz <noreply@posmoz.io>")
-SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@posmoz.io")
-APP_URL        = os.getenv("APP_URL", "https://posmoz.io")
+FROM_EMAIL     = os.getenv("FROM_EMAIL", "Posmoz <noreply@posmoz.com>")
+SUPPORT_EMAIL  = os.getenv("SUPPORT_EMAIL", "support@posmoz.com")
+APP_URL        = os.getenv("APP_URL", "https://posmoz.com")
 
 
 def _resend_send(to: str, subject: str, html: str, text: str = "") -> bool:

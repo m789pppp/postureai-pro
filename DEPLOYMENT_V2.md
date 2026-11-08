@@ -104,7 +104,7 @@ stripe listen --forward-to localhost:5050/api/stripe/webhook
 
 ### 4.1 Account & Domain
 1. https://resend.com → Sign up
-2. Domains → Add domain: `posmoz.io`
+2. Domains → Add domain: `posmoz.com`
 3. Add DNS records (SPF, DKIM, DMARC) to your domain registrar
 4. Wait for verification (usually <1 hour)
 
@@ -178,7 +178,7 @@ Already included in `frontend/vercel.json`:
 
 ### 6.4 Custom domain
 1. Vercel → Project Settings → Domains
-2. Add `posmoz.io` and `www.posmoz.io`
+2. Add `posmoz.com` and `www.posmoz.com`
 3. Update DNS at your registrar
 
 ---
@@ -253,7 +253,7 @@ cp infrastructure/docker/deploy.yml .github/workflows/deploy.yml
 ### After deploy
 ```bash
 # Test auth
-curl -X POST https://api.posmoz.io/api/health
+curl -X POST https://api.posmoz.com/api/health
 
 # Test Stripe webhook
 stripe trigger checkout.session.completed

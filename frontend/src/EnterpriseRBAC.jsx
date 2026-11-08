@@ -865,7 +865,7 @@ function SAMLConfig({orgId,adminUid,isAr}) {
               placeholder="https://your-idp.com/saml/sso" />
             <Input label={isAr?"معرّف الكيان (Entity ID)":"Entity ID"}
               value={config.entityId} onChange={e=>setConfig(c=>({...c,entityId:e.target.value}))}
-              placeholder="https://app.posmoz.io/saml/metadata" />
+              placeholder="https://app.posmoz.com/saml/metadata" />
           </div>
 
           <div style={{marginBottom:14}}>
@@ -919,9 +919,9 @@ function SAMLConfig({orgId,adminUid,isAr}) {
               {isAr?"روابط Posmoz (SP) — انسخها لـ IdP":"Posmoz (SP) URLs — copy to your IdP"}
             </div>
             {[
-              {l:isAr?"ACS URL":"ACS URL",                v:`https://app.posmoz.io/saml/acs`},
-              {l:isAr?"رابط البيانات الوصفية":"Metadata", v:`https://app.posmoz.io/saml/metadata`},
-              {l:isAr?"رابط تسجيل الخروج":"Logout URL",  v:`https://app.posmoz.io/saml/logout`},
+              {l:isAr?"ACS URL":"ACS URL",                v:`https://app.posmoz.com/saml/acs`},
+              {l:isAr?"رابط البيانات الوصفية":"Metadata", v:`https://app.posmoz.com/saml/metadata`},
+              {l:isAr?"رابط تسجيل الخروج":"Logout URL",  v:`https://app.posmoz.com/saml/logout`},
             ].map(({l,v})=>(
               <div key={l} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${RBAC_TOKENS.border}`}}>
                 <span style={{fontSize:11,color:RBAC_TOKENS.muted,minWidth:120,fontWeight:500}}>{l}</span>

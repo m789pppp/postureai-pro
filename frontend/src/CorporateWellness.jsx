@@ -243,7 +243,7 @@ export function SchoolsModal({ cs, isAr, onClose, addToast }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "sales@posmoz.io",
+          to: "sales@posmoz.com",
           subject: `[Posmoz for Schools] ${form.institution}`,
           html: `<h2>New School Enrollment Request</h2>
 <p><b>Name:</b> ${form.name}</p>

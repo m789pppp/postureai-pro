@@ -155,7 +155,7 @@ export async function createStripeCheckout({ planId, billing, userEmail, userId,
   if (!priceId) {
     // Enterprise (company tier) is contact-sales / custom-priced — doesn't go through Stripe checkout
     if (planId === "b2b_enterprise") {
-      throw new Error("Enterprise plan requires a custom contract — contact us at support@posmoz.io");
+      throw new Error("Enterprise plan requires a custom contract — contact us at support@posmoz.com");
     }
     throw new Error(
       `Stripe price ID not configured for ${planId}/${billing}. ` +
@@ -467,7 +467,7 @@ export function BillingModal({ profile, currentPlan, cs, lang = "en", onClose, o
                     {isAr ? "الاستمرار مجاناً" : "Continue free"}
                   </button>
                 ) : isEntCustom ? (
-                  <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "support@posmoz.io"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
+                  <a href={`mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "support@posmoz.com"}?subject=Enterprise%20Inquiry`} style={{ display: "block", width: "100%", background: col, border: "none", borderRadius: 9, padding: "10px 0", fontSize: 12, fontWeight: 600, color: "white", cursor: "pointer", textDecoration: "none", textAlign: "center" }}>
                     {t.contact}
                   </a>
                 ) : isCurr ? (

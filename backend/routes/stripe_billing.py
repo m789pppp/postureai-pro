@@ -15,7 +15,7 @@ stripe_bp = Blueprint("stripe", __name__)
 
 STRIPE_SECRET_KEY    = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-APP_URL = os.getenv("APP_URL", "https://posmoz.io")
+APP_URL = os.getenv("APP_URL", "https://posmoz.com")
 
 # ── Server-side pricing (NEVER trust client amount) ───────────────
 STRIPE_PRICES = {

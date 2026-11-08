@@ -118,7 +118,7 @@ export function HelpCenter({ cs, lang, onClose }) {
         {/* FAQ items */}
         {filtered.length === 0 && (
           <p style={{color:"#475569",textAlign:"center",padding:24}}>
-            {isAr ? "لا توجد نتائج" : "No results found"} — <a href="mailto:support@posmoz.io" style={{color:"#6366f1"}}>Contact support</a>
+            {isAr ? "لا توجد نتائج" : "No results found"} — <a href="mailto:support@posmoz.com" style={{color:"#6366f1"}}>Contact support</a>
           </p>
         )}
 
@@ -144,7 +144,7 @@ export function HelpCenter({ cs, lang, onClose }) {
           <p style={{margin:"0 0 10px",color:"#94a3b8",fontSize:13}}>
             {isAr ? "لم تجد إجابتك؟" : "Didn't find what you need?"}
           </p>
-          <a href="mailto:support@posmoz.io"
+          <a href="mailto:support@posmoz.com"
              style={{padding:"9px 20px",borderRadius:8,background:"#6366f1",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:600}}>
             {isAr ? "تواصل مع الدعم ←" : "Contact Support →"}
           </a>

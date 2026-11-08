@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       cert_id: existing.docs[0].id, issued_at: d.issued_at,
       expires_at: d.expires_at, already_exists: true,
-      verify_url: `${process.env.VITE_APP_URL||"https://posmoz.io"}/verify/${existing.docs[0].id}`,
+      verify_url: `${process.env.VITE_APP_URL||"https://posmoz.com"}/verify/${existing.docs[0].id}`,
     });
   }
 
@@ -77,6 +77,6 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     cert_id, issued_at, expires_at,
-    verify_url:`${process.env.VITE_APP_URL||"https://posmoz.io"}/verify/${cert_id}`,
+    verify_url:`${process.env.VITE_APP_URL||"https://posmoz.com"}/verify/${cert_id}`,
   });
 }

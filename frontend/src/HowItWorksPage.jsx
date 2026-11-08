@@ -53,7 +53,7 @@ file: team.csv`,
     code:`// Send an invite link
 POST /api/org/send-invite
 { "email": "jane@company.com",
-  "invite_url": "https://app.posmoz.io/invite/abc123" }`,
+  "invite_url": "https://app.posmoz.com/invite/abc123" }`,
   },
   { n:"03", icon:"camera", color:"#10d9a0", time:"2 min/day", title:"Employees run daily check-ins",
     desc:"Each employee opens Posmoz in their browser, enables their webcam for 60 seconds, and gets an instant posture score. No app install. No hardware.",

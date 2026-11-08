@@ -10,7 +10,7 @@ import logging
 from flask import Blueprint, jsonify
 
 health_bp = Blueprint("health", __name__)
-logger = logging.getLogger("posmoz.health")
+logger = logging.getLogger("posmoz.com")
 
 _start_time = time.time()
 

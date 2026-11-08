@@ -126,7 +126,7 @@ export default async function handler(req, res) {
     return res.status(429).json({
       error: "Monthly call limit reached",
       limit: monthlyLimit, used: callsThisMonth,
-      upgrade_url: "https://posmoz.io/api-pricing",
+      upgrade_url: "https://posmoz.com/api-pricing",
     });
   }
 

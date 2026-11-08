@@ -456,8 +456,8 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
             </div>
             <div style={{ fontSize: 11, color: "#8b9bb4", lineHeight: 1.6 }}>
               {isAr
-                ? "اذهب إلى إعدادات المتصفح ← الخصوصية ← الكاميرا وأضف posmoz.io للمواقع المسموح بها"
-                : "Go to browser Settings → Privacy → Camera → allow posmoz.io"}
+                ? "اذهب إلى إعدادات المتصفح ← الخصوصية ← الكاميرا وأضف posmoz.com للمواقع المسموح بها"
+                : "Go to browser Settings → Privacy → Camera → allow posmoz.com"}
             </div>
           </div>
         )}

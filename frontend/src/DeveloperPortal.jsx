@@ -110,7 +110,7 @@ export function DeveloperPortalModal({ profile, cs, isAr, onClose, addToast }) {
   );
 
   const CODE_SAMPLE = `// cURL example
-curl -X POST https://posmoz.io/api/posture-api/analyze \\
+curl -X POST https://posmoz.com/api/posture-api/analyze \\
   -H "x-api-key: crv_live_your_key_here" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -198,7 +198,7 @@ curl -X POST https://posmoz.io/api/posture-api/analyze \\
                   BASE URL
                 </div>
                 <div style={{ fontSize:13,color:"#10b981",fontFamily:"monospace" }}>
-                  POST https://posmoz.io/api/posture-api/analyze
+                  POST https://posmoz.com/api/posture-api/analyze
                 </div>
               </div>
 
@@ -384,8 +384,8 @@ curl -X POST https://posmoz.io/api/posture-api/analyze \\
               </div>
               <div style={{ fontSize:11,color:cs.muted,textAlign:"center" }}>
                 {isAr
-                  ? "لطلب Enterprise أو الاستفسار: sales@posmoz.io"
-                  : "For Enterprise or custom pricing: sales@posmoz.io"}
+                  ? "لطلب Enterprise أو الاستفسار: sales@posmoz.com"
+                  : "For Enterprise or custom pricing: sales@posmoz.com"}
               </div>
             </div>
           )}
@@ -413,7 +413,7 @@ export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({
-          to: "partnerships@posmoz.io",
+          to: "partnerships@posmoz.com",
           subject: `[Insurance Partnership] ${form.company}`,
           html: `<h2>Insurance Partnership Inquiry</h2>
 <p><b>Name:</b> ${form.name}</p><p><b>Email:</b> ${form.email}</p>
@@ -435,8 +435,8 @@ export function InsurancePartnerModal({ cs, isAr, onClose, addToast }) {
       addToast?.(isAr?"✅ تم إرسال طلبك":"✅ Request sent","success");
     } catch (e) {
       addToast?.(isAr
-        ? "تعذّر إرسال الطلب — حاول تاني أو ابعتلنا على partnerships@posmoz.io"
-        : "Couldn't send your request — try again, or email partnerships@posmoz.io","error");
+        ? "تعذّر إرسال الطلب — حاول تاني أو ابعتلنا على partnerships@posmoz.com"
+        : "Couldn't send your request — try again, or email partnerships@posmoz.com","error");
       console.warn("[insurance] send failed:", e?.message);
     }
     setSending(false);

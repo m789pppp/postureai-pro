@@ -4023,7 +4023,7 @@ export async function generateQuarterlyWellnessReport({
     doc.setPage(p);
     fc(doc, 10, 15, 30); doc.rect(0, H - 14, W, 14, "F");
     sf(5.5, "normal"); tc(doc, 140, 150, 170);
-    doc.text(isAr ? "🦅 Posmoz · posmoz.io · ليس تشخيصاً طبياً" : "🦅 Posmoz · posmoz.io · Not a medical diagnosis", ml, H - 6);
+    doc.text(isAr ? "🦅 Posmoz · posmoz.com · ليس تشخيصاً طبياً" : "🦅 Posmoz · posmoz.com · Not a medical diagnosis", ml, H - 6);
     doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 6, { align: "right" });
     doc.text(isAr ? "سري — للاستخدام الداخلي فقط" : "CONFIDENTIAL — Internal Use Only", W / 2, H - 6, { align: "center" });
   }

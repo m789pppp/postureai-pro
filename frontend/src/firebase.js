@@ -432,7 +432,7 @@ export async function getCalibration(uid) {
 // Keep in sync with ELITE_EMAILS + ELITE_DOMAINS in middleware.py
 const _ELITE_EMAILS = [
   "judyayman36@gmail.com",
-  "support@posmoz.io",
+  "support@posmoz.com",
   "m789pppp@gmail.com",   // Posmoz founder — always elite
   // add individual emails here as needed
 ];

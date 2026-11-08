@@ -85,7 +85,7 @@
 | Variable | القيمة |
 |---|---|
 | `SENDGRID_API_KEY` | `SG.xxxxx` |
-| `SUPPORT_EMAIL` | البريد المتحقق منه في SendGrid مثال: `support@posmoz.io` |
+| `SUPPORT_EMAIL` | البريد المتحقق منه في SendGrid مثال: `support@posmoz.com` |
 
 > ⚠️ لازم تتحقق من الـ domain في SendGrid Sender Authentication
 
@@ -96,8 +96,8 @@
 |---|---|
 | `VITE_API_URL` | `https://YOUR-BACKEND.railway.app/api` |
 | `VITE_FIREBASE_VAPID_KEY` | من Firebase Console → Project Settings → Cloud Messaging → Web Push certificates → Generate key pair. من غيرها زرار "تفعيل الإشعارات" هيرجع "push isn't fully configured yet" بدل ما يكسر. |
-| `APP_URL` | `https://posmoz-omega-nine.vercel.app` |
-| `ALLOWED_ORIGINS` | `https://posmoz-omega-nine.vercel.app` |
+| `APP_URL` | `https://postureai-pro-omega-nine.vercel.app` |
+| `ALLOWED_ORIGINS` | `https://postureai-pro-omega-nine.vercel.app` |
 | `FLASK_ENV` | `production` |
 
 ---
@@ -113,8 +113,8 @@
 | `VITE_POSTHOG_HOST` | `https://app.posthog.com` | |
 | `VITE_CRISP_WEBSITE_ID` | app.crisp.chat → Settings → Website ID | Live chat support |
 | `ADMIN_EMAIL` | بريدك | تلقي notifications |
-| `VITE_SUPPORT_EMAIL` | `support@posmoz.io` | ظاهر للـ users |
-| `VITE_AUTO_APPROVE_DOMAIN` | `posmoz.io` | Auto-approve HR from your domain |
+| `VITE_SUPPORT_EMAIL` | `support@posmoz.com` | ظاهر للـ users |
+| `VITE_AUTO_APPROVE_DOMAIN` | `posmoz.com` | Auto-approve HR from your domain |
 
 ---
 

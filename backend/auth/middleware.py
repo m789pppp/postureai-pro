@@ -236,7 +236,7 @@ ELITE_DOMAINS: list[str] = [
 ELITE_EMAILS: list[str] = [
     "judyayman36@gmail.com",
     "m789pppp@gmail.com",
-    "support@posmoz.io",   # internal support account — needs elite access to test/verify elite-only features
+    "support@posmoz.com",   # internal support account — needs elite access to test/verify elite-only features
     # add individual emails here as needed
 ]
 

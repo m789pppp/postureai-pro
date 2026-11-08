@@ -26,7 +26,7 @@ function getAdminAuth() {
 }
 
 const RESEND_KEY   = process.env.RESEND_API_KEY || "";
-const FROM_EMAIL   = process.env.EMAIL_FROM     || "Posmoz PostureAI <noreply@posmoz.io>";
+const FROM_EMAIL   = process.env.EMAIL_FROM     || "Posmoz PostureAI <noreply@posmoz.com>";
 const SUPPORT_EMAIL_TO = process.env.SUPPORT_EMAIL || "m789pppp@gmail.com";
 const APP_URL      = process.env.VITE_APP_URL   || "https://postureai-pro-omega-nine.vercel.app";
 
@@ -82,7 +82,7 @@ function baseLayout(content) {
   <div class="card">${content}</div>
   <div class="footer">
     Posmoz PostureAI Pro · <a href="${APP_URL}" style="color:#388bfd;">Open Dashboard</a><br>
-    You're receiving this because you have an account at posmoz.io
+    You're receiving this because you have an account at posmoz.com
   </div>
 </div></body></html>`;
 }

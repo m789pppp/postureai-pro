@@ -63,7 +63,7 @@ export default async function handler(req, res) {
   return res.status(200).json({
     ok: true,
     ref_code,
-    ref_url: `${process.env.VITE_APP_URL||"https://posmoz.io"}?ref=${ref_code}`,
+    ref_url: `${process.env.VITE_APP_URL||"https://posmoz.com"}?ref=${ref_code}`,
     count: referrals.length,
     converted: active,
     pending,
