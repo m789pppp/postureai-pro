@@ -56,7 +56,7 @@ class TestIndividualEmails:
         assert _should_elevate_to_elite("support@posmoz.com")
 
     def test_case_insensitive(self):
-        assert _should_elevate_to_elite("Support@Posmoz.IO")
+        assert _should_elevate_to_elite("Support@Posmoz.COM")
         assert _should_elevate_to_elite("Researcher@Coventry.AC.UK")
 
 
