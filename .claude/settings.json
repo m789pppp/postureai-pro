@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./frontend/src/assets/cairoFont.js)",
+      "Read(./frontend/src/features/analysis/synthetic_poses.json)",
+      "Read(./backend/tests/synthetic_poses.json)",
+      "Read(./**/package-lock.json)",
+      "Read(./**/node_modules/**)",
+      "Read(./frontend/dist/**)",
+      "Read(./**/.env)",
+      "Read(./**/.env.local)",
+      "Read(./**/.env.production)",
+      "Read(./firebase-service-account.json)"
+    ]
+  }
+}
