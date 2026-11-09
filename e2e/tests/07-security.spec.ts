@@ -12,8 +12,11 @@ test.describe("Security", () => {
     // no such route exists anywhere (never did), so this always got a 404
     // instead of the 401/403 it asserted for. Swapped for /api/session/start,
     // a real, core, definitely auth-gated endpoint.
+    // Anonymous demo use is allowed, but it must never reach the database:
+    // real sessions are "sess_" ids, anonymous ones are local-only "local_".
     const resp = await request.post(`${API}/session/start`, { data: { mode: "laptop" } });
-    expect([401, 403]).toContain(resp.status());
+    if (resp.status() === 200) expect((await resp.json()).session_id).toMatch(/^local_/);
+    else expect([401, 403]).toContain(resp.status());
   });
 
   test("invalid token returns 401", async ({ request }) => {
@@ -21,7 +24,12 @@ test.describe("Security", () => {
       data:    { frame_b64: "fake", uid: "test" },
       headers: { Authorization: "Bearer fake_invalid_token_xyz" },
     });
-    expect([401, 403]).toContain(resp.status());
+    // /api/analyze is a no-op kept for old clients; it must return no data.
+    if (resp.status() === 200) {
+      const body = await resp.json();
+      expect(body.overall).toBeNull();
+      expect(body.metrics).toEqual({});
+    } else expect([401, 403]).toContain(resp.status());
   });
 
   test("subscription check requires auth", async ({ request }) => {
