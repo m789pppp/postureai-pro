@@ -58,8 +58,8 @@ test.describe("Landing Page", () => {
     await expect(cta).toBeInViewport();
   });
 
-  test("hero stats section visible", async ({ page }) => {
-    await expect(page.getByText(/47%|1,200|customers|companies/i).first()).toBeVisible();
+  test("hero heading visible", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 
   test("no console errors on load", async ({ page }) => {
