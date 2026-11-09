@@ -165,6 +165,11 @@ body.light {
 /* ── BASE STYLES ───────────────────────────────────────────────── */
 html { scroll-behavior: smooth; }
 
+/* Arabic is a joined script: any tracking separates or crowds its letters.
+   Inline letterSpacing styles are everywhere, so only !important can reach
+   them. Anything explicitly marked dir="ltr" keeps its Latin tracking. */
+html[dir="rtl"] :not([dir="ltr"], [dir="ltr"] *) { letter-spacing: normal !important; }
+
 body {
   font-family: var(--font-body);
   font-size: var(--text-base);
