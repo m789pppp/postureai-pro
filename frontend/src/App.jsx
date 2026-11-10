@@ -106,6 +106,9 @@ import { AccountActivity } from "./AccountActivity.jsx";
 import { HelpCenter }     from "./HelpCenter.jsx";
 import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
+// Live precision layer: RTMW-x + Face Landmarker fusion, iris distance, exposure, confidence.
+import { createLiveEnhancer } from "./features/analysis/liveEnhancer.js";
+import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
 // Example: VITE_API_URL=https://your-backend.example.com/api
@@ -3328,6 +3331,10 @@ export default function App(){
   const streamRef=useRef();const timerRef=useRef();const rafRef=useRef();
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef   = useRef(null);
+  const enhancerRef     = useRef(null);   // live precision layer (second model + exposure)
+  const precTickRef     = useRef(0);
+  const [precision, setPrecision] = useState(null);
+  useEffect(() => () => { enhancerRef.current?.close(); enhancerRef.current = null; }, []);
   const frameBufferRef  = useRef(null); // 60-frame aggregation buffer
   const distSmootherRef = useRef(null); // sliding-median distance smoother
   const lastAnalysisTsRef = useRef(0);  // throttles the analysis loop — see runLoop
@@ -4098,10 +4105,24 @@ export default function App(){
               multiPersonShownRef.current=false; setMultiPersonWarning(false);
             }
           }
-          const lms=lmSmootherRef.current.smooth(rawLms);
+          // 3-model fusion (MediaPipe + RTMW-x, motion-compensated) before smoothing
+          if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData);
+          let fusedLms=rawLms;
+          try{ fusedLms=enhancerRef.current.fuse(rawLms,vidRef.current,W,H,performance.now()); }catch(e){ fusedLms=rawLms; }
+          const lms=lmSmootherRef.current.smooth(fusedLms);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
           clinicalSinkRef.current?.(lms,W,H,rawResult);
+          // Live precision layer: runs beside the engine; it only replaces the distance
+          // when this camera was calibrated with a measured distance (iris + real focal).
+          try{
+            if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData);
+            else enhancerRef.current.setCalibration(calibData);
+            const prec=enhancerRef.current.process(vidRef.current,lms,W,H,performance.now(),lastAnalRef.current?.overall??null);
+            if(rawResult && prec.distCm!=null && prec.distSource==="calibrated") rawResult.distCm=prec.distCm;
+            if(rawResult) rawResult.precision=prec;
+            if(++precTickRef.current%6===0) startTransition(()=>setPrecision(prec));
+          }catch(e){ /* precision layer must never break the main loop */ }
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
           if(rawResult?.distCm && distSmootherRef.current){
             const stableDistCm=distSmootherRef.current.push(rawResult.distCm);
@@ -7800,6 +7821,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
             style={{width:"100%",height:"100%",objectFit:isFs?"contain":"cover",transform:"scaleX(-1)",display:"block"}}/>
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
+          {camActive && precision && <PrecisionHud data={precision} isAr={isAr} calibrated={!!calibData?.calib_version}/>}
 
           {/* Viewfinder frame — this is a computer-vision scanner, so the
               signature visual treatment is a scan reticle (not a generic

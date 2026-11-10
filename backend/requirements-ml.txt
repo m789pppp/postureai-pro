@@ -1,0 +1,10 @@
+# Pose ensemble + validation (ai/ensemble_pose.py, ai/validation.py).
+# Install in a SEPARATE virtualenv: newer mediapipe differs from the
+# mediapipe==0.10.14 that backend.py uses (mp.solutions), so do not mix them.
+# Versions below are the ones the tests passed with.
+mediapipe==0.10.32
+rtmlib==0.0.16
+onnxruntime==1.29.0
+opencv-python-headless==5.0.0.93
+numpy>=2.0
+pytest
