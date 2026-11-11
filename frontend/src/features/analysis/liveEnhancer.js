@@ -22,6 +22,9 @@ import {
   OneEuroFilter, headPoseFromMatrix, irisDiameterPx, distanceFromIris, focalFromHfov,
 } from "./calibrationCore.js";
 import { createRtmwRunner, bboxFromPose } from "./rtmwWeb.js";
+import { RTMW_X_SPEC, scoreToConf } from "./rtmwCore.js";
+import { REFINE_MODELS, refineDecision, refineProviders, deviceFacts, writeVerdict } from "./rtmwPolicy.js";
+import { loadVision, createTask, MP_SOURCES } from "./mediapipeLoader.js";
 import { headProtractionCm, neckLoadKg, shoulderWidthPx } from "./neckModel.js";
 import { captureSignature, loadReferenceSignature, cameraChange } from "./cameraDrift.js";
 import { createPostureStateMachine } from "./postureState.js";
@@ -78,7 +81,7 @@ export function blendEars(pose, ears, faceWeight = 0.5) {
 }
 
 /** RTMW SimCC scores are not 0–1 (confident points ≈ 3–8): map to 0–1. Heuristic. */
-export const rtmwConf = s => Math.min(1, Math.max(0, (s - 0.5) / 2.5));
+export const rtmwConf = (s, spec = RTMW_X_SPEC) => scoreToConf(s, spec);
 
 /**
  * Confidence-weighted fusion of MediaPipe (normalised) and RTMW (source px) points.
@@ -88,16 +91,16 @@ export const rtmwConf = s => Math.min(1, Math.max(0, (s - 0.5) / 2.5));
  * Pure — unit-tested.
  * @returns {{ lms: Array, disagreement: number|null }} disagreement in shoulder-widths
  */
-export function fuseWithRtmw(mp, rt, W, H, ageMs, weights = null, mp0 = null) {
+export function fuseWithRtmw(mp, rt, W, H, ageMs, weights = null, mp0 = null, spec = RTMW_X_SPEC) {
   if (!mp || !rt) return { lms: mp, disagreement: null };
   const age = Math.max(0, 1 - ageMs / 3000);
   const dx = i => (mp0?.[i] ? mp[i].x - mp0[i].x : 0), dy = i => (mp0?.[i] ? mp[i].y - mp0[i].y : 0);
   const out = mp.map(p => ({ ...p }));
   for (const [mi, wi] of Object.entries(WB133_TO_MP33)) {
     const i = +mi, p = mp[i];
-    if (!p) continue;
+    if (!p || wi >= spec.k) continue;            // a body-only model has no face / hand points
     const xr = rt.kpts[2 * wi] / W + dx(i), yr = rt.kpts[2 * wi + 1] / H + dy(i);
-    const cr = rtmwConf(rt.scores[wi]);
+    const cr = rtmwConf(rt.scores[wi], spec);
     if (!(cr > 0) || !Number.isFinite(xr) || xr < -0.1 || xr > 1.1) continue;
     const wm = Math.max(0, p.visibility ?? 1) * (weights?.mp?.[i] ?? 1);
     const wr = cr * (weights?.rtmw?.[i] ?? 1) * age;
@@ -109,16 +112,12 @@ export function fuseWithRtmw(mp, rt, W, H, ageMs, weights = null, mp0 = null) {
   let sum = 0, n = 0;
   for (const i of AGREE_KEYS) {
     const wi = WB133_TO_MP33[i];
-    if (rtmwConf(rt.scores[wi]) < 0.3 || (mp[i]?.visibility ?? 0) < 0.3) continue;
+    if (rtmwConf(rt.scores[wi], spec) < 0.3 || (mp[i]?.visibility ?? 0) < 0.3) continue;
     sum += Math.hypot((mp[i].x - dx(i)) * W - rt.kpts[2 * wi], (mp[i].y - dy(i)) * H - rt.kpts[2 * wi + 1]); n++;
   }
   return { lms: out, disagreement: n && sw > 1 ? sum / n / sw : null };
 }
 
-const TV = "0.10.14";
-const BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TV}/vision_bundle.mjs`;
-const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TV}/wasm`;
-const FACE_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
 // Head pitch sign: + = chin down (flexion). Verified only on synthetic matrices —
 // flip to -1 if looking down shows a negative number on a real camera.
@@ -175,6 +174,12 @@ export function readingConfidence({ pose, faceFresh, calibScore, disagreement = 
   return Math.round(100 * vis * faceF * calF * agreeF);
 }
 
+/**
+ * @param {object|null} initialCalib
+ * @param {object} [o]
+ * @param {object|false} [o.rtmw]  false = never load a refinement model. Otherwise overrides for
+ *   the runner ({ model, providers, maxBenchMs }); `force: true` skips the device policy (bench only).
+ */
 export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } = {}) {
   let calib = initialCalib;
   let face = null, loading = false, failed = false, n = 0, closed = false;
@@ -186,25 +191,43 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
   // camera-moved-since-calibration check (background signature, on-device only)
   const bg = {}; let refSig, drift = null, driftN = 0;
   // third model (RTMW-x) — loaded after the face model, runs async beside the live loop
-  let rtmw = null, rtmwState = "idle", rtmwReason = null, rtmwProgress = 0, rtmwBusy = false, rtmwLast = null, rtmwMs = null, disagreement = null;
+  let rtmw = null, rtmwState = rtmwOpts === false ? "off" : "idle", rtmwReason = rtmwOpts === false ? "disabled" : null;
+  let rtmwProgress = 0, rtmwBusy = false, rtmwLast = null, rtmwMs = null, rtmwBenchMs = null, disagreement = null;
+  const model = (rtmwOpts && rtmwOpts.model) || REFINE_MODELS["rtmw-x"];
+  const spec = model.spec;
   async function loadRtmw() {
-    rtmwState = "loading";
+    rtmwState = "checking";
     try {
-      rtmw = await createRtmwRunner({ ...rtmwOpts, onProgress: p => { rtmwProgress = p; } });
+      // decide before downloading: a device that cannot run the model must not pay for it
+      const facts = await deviceFacts(model);
+      const dec = rtmwOpts.force ? { load: true } : refineDecision(model, facts);
+      if (!dec.load) { rtmwState = "off"; rtmwReason = dec.reason; return; }
+      if (closed) return;
+      rtmwState = "loading";
+      rtmw = await createRtmwRunner({
+        modelUrl: model.url, sha256: model.sha256, spec, maxBenchMs: rtmwOpts.maxBenchMs ?? model.maxBenchMs,
+        providers: rtmwOpts.providers ?? (rtmwOpts.force ? model.providers : refineProviders(model, facts)),
+        onProgress: p => { rtmwProgress = p; },
+      });
       if (closed) { rtmw.close(); rtmw = null; return; }
+      rtmwBenchMs = rtmw.benchMs ?? null;
       rtmwState = "on";
-    } catch (e) { rtmwState = "off"; rtmwReason = e?.reason || "error"; console.warn("RTMW off — running with 2 models:", e?.message); }
+    } catch (e) {
+      rtmwState = "off"; rtmwReason = e?.reason || "error"; rtmwBenchMs = e?.benchMs ?? null;
+      // remember "too slow" so the next session does not rebuild a 229 MB session to learn it again
+      if (e?.reason === "slow" && !rtmwOpts.force) writeVerdict(model.id, "slow", { benchMs: Math.round(e.benchMs ?? 0) });
+      console.warn("RTMW off — running with 2 models:", e?.message);
+    }
   }
 
   async function load() {
     loading = true;
     try {
-      const mod = await import(/* @vite-ignore */ BUNDLE);
-      const fr = await mod.FilesetResolver.forVisionTasks(WASM);
-      const opts = d => ({ baseOptions: { modelAssetPath: FACE_MODEL, delegate: d }, runningMode: "VIDEO",
-                           numFaces: 1, outputFacialTransformationMatrixes: true, outputFaceBlendshapes: false });
-      try { face = await mod.FaceLandmarker.createFromOptions(fr, opts("GPU")); }
-      catch { face = await mod.FaceLandmarker.createFromOptions(fr, opts("CPU")); }
+      // same runtime the pose model already loaded (self-hosted first) — no second download
+      const { mod, fileset, source } = await loadVision();
+      const models = [...new Set([source.face, ...MP_SOURCES.map(m => m.face)])];
+      ({ task: face } = await createTask(mod.FaceLandmarker, fileset, models,
+        { runningMode: "VIDEO", numFaces: 1, outputFacialTransformationMatrixes: true, outputFaceBlendshapes: false }));
       if (closed) { try { face.close(); } catch { /* ignore */ } face = null; }
     } catch (e) { failed = true; console.warn("Face model unavailable — live precision layer off:", e?.message); }
     loading = false;
@@ -259,7 +282,7 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
       }
       let lms = rawLms;
       if (rtmwLast && tMs - rtmwLast.t <= 3000) {
-        const res = fuseWithRtmw(rawLms, rtmwLast, W, H, tMs - rtmwLast.t, calib?.ensemble_weights?.landmark_weights, rtmwLast.mp0);
+        const res = fuseWithRtmw(rawLms, rtmwLast, W, H, tMs - rtmwLast.t, calib?.ensemble_weights?.landmark_weights, rtmwLast.mp0, spec);
         disagreement = res.disagreement;
         lms = res.lms;
       } else disagreement = null;
@@ -316,7 +339,7 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
         confidence: readingConfidence({ pose, faceFresh, calibScore: calib?.calib_quality?.score, disagreement }),
         models: 1 + (face ? 1 : 0) + (rtmwState === "on" ? 1 : 0),
         rtmw: { state: rtmwState, reason: rtmwReason, progress: Math.round(rtmwProgress * 100), ms: rtmwMs == null ? null : Math.round(rtmwMs),
-                ep: rtmw?.ep ?? null, benchMs: rtmw?.benchMs == null ? null : Math.round(rtmw.benchMs) },
+                ep: rtmw?.ep ?? null, benchMs: rtmwBenchMs == null ? null : Math.round(rtmwBenchMs), model: model.id },
         agreement: disagreement == null ? null : Math.max(0, Math.round(100 * (1 - disagreement / 0.25))),
         exposure: exp,
         posture: postureSM.update(tMs, score).state,

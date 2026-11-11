@@ -108,6 +108,7 @@ import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
 // Live precision layer: RTMW-x + Face Landmarker fusion, iris distance, exposure, confidence.
 import { createLiveEnhancer } from "./features/analysis/liveEnhancer.js";
+import { createTask } from "./features/analysis/mediapipeLoader.js";
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
@@ -3954,13 +3955,12 @@ export default function App(){
           runningMode:"VIDEO",numPoses:1,
           minPoseDetectionConfidence:.3,minPosePresenceConfidence:.3,minTrackingConfidence:.3
         };
-        let pl;
-        try{
-          pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"GPU"},...opts});
-        }catch(gpuErr){
-          console.warn("GPU delegate unavailable, falling back to CPU:",gpuErr.message);
-          pl=await mod.PoseLandmarker.createFromOptions(fr,{baseOptions:{modelAssetPath:MODEL,delegate:"CPU"},...opts});
-        }
+        // GPU first, CPU if it fails — except where WebGL is a software
+        // rasteriser (no hardware acceleration): the "GPU" delegate then
+        // loads fine and runs several times slower than the CPU one
+        // (measured 3.6 vs 18 analyses/s, docs/PERFORMANCE.md), so those
+        // devices go straight to CPU. See mediapipeLoader.js.
+        const {task:pl}=await createTask(mod.PoseLandmarker,fr,MODEL,opts);
         mpRef.current=pl;window.__mpPose=pl;setMpStatus("ready");
         if(src.name!=="self-hosted"){
           console.warn("[mediapipe] loaded from the CDN — the self-hosted assets in public/mediapipe are missing. Run `npm run build` (or scripts/fetch-mediapipe.mjs) so filtered networks still work.");

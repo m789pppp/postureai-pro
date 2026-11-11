@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Posmoz pipeline benchmark</title>
+    <meta name="robots" content="noindex" />
+    <style>
+      body { margin: 0; padding: 16px; background: #0b1220; color: #e5ecf5; font: 14px/1.5 system-ui, sans-serif; }
+      main { max-inline-size: 760px; margin-inline: auto; }
+      video { inline-size: 100%; max-block-size: 40vh; background: #000; border-radius: 12px; }
+      button { background: #2563eb; color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; margin-block: 10px; margin-inline-end: 8px; }
+      button:disabled { background: #334155; }
+      pre { background: #111a2e; border-radius: 10px; padding: 10px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+      .muted { color: #93a4bd; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 style="font-size:18px">Posmoz pipeline benchmark</h1>
+      <p class="muted">Sit still in front of the camera for the whole run. Nothing is uploaded: the result is numbers only and stays on this device.</p>
+      <p>
+        <a href="?pipeline=mp" style="color:#93c5fd">MediaPipe only</a> ·
+        <a href="?pipeline=fused&wait=rtmw" style="color:#93c5fd">Full precision layer</a>
+      </p>
+      <p id="cfg" class="muted"></p>
+      <video id="v" playsinline muted></video>
+      <div><button id="go">Start</button><button id="dl" hidden>Download result (JSON)</button> <span id="status" class="muted"></span></div>
+      <pre id="log"></pre>
+      <pre id="out"></pre>
+    </main>
+    <script type="module" src="/src/bench/perfPage.js"></script>
+  </body>
+</html>

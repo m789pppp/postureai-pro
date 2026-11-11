@@ -8,8 +8,7 @@ import { createLiveEnhancer } from "../features/analysis/liveEnhancer.js";
 import PrecisionHud from "../features/analysis/PrecisionHud.jsx";
 import { BENCH_STEPS, frameRecord, sessionEnvelope } from "../features/analysis/benchProtocol.js";
 
-const TV = "0.10.14";
-const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+import { loadVision, createTask, MP_SOURCES } from "../features/analysis/mediapipeLoader.js";
 
 export default function BenchRecorder() {
   const [lang, setLang] = useState("ar");
@@ -33,10 +32,9 @@ export default function BenchRecorder() {
         const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" }, audio: false });
         vid.current.srcObject = s; await vid.current.play();
         dims.current = { W: vid.current.videoWidth, H: vid.current.videoHeight };
-        const mod = await import(/* @vite-ignore */ `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TV}/vision_bundle.mjs`);
-        const fr = await mod.FilesetResolver.forVisionTasks(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TV}/wasm`);
-        const mk = d => mod.PoseLandmarker.createFromOptions(fr, { baseOptions: { modelAssetPath: POSE_MODEL, delegate: d }, runningMode: "VIDEO", numPoses: 1 });
-        poseRef.current = await mk("GPU").catch(() => mk("CPU"));
+        const { mod, fileset, source } = await loadVision();
+        poseRef.current = (await createTask(mod.PoseLandmarker, fileset, [...new Set([source.pose, ...MP_SOURCES.map(m => m.pose)])],
+          { runningMode: "VIDEO", numPoses: 1 })).task;
         try { calibRef.current = JSON.parse(localStorage.getItem("posture_calibration") || "null"); } catch { calibRef.current = null; }
         enh.current = createLiveEnhancer(calibRef.current);
         if (dead) return;

@@ -10,7 +10,7 @@
  * analysis, which is both slower and a privacy regression (it uploads
  * frames). Self-hosting removes the dependency entirely.
  *
- * These files are ~28MB, so they are gitignored and fetched at build time
+ * These files are ~32MB, so they are gitignored and fetched at build time
  * rather than committed. Runs automatically via the `prebuild` script.
  */
 import { mkdir, copyFile, access, stat, writeFile } from "node:fs/promises";
@@ -31,10 +31,16 @@ const WASM_FILES = [
   "vision_wasm_nosimd_internal.wasm",
 ];
 
-const MODEL_NAME = "pose_landmarker_full.task";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
-const MODEL_MIN_BYTES = 5_000_000; // the real file is ~9MB; anything smaller is an error page
+const GCS = "https://storage.googleapis.com/mediapipe-models";
+// minBytes: anything smaller than the real file is an error page, not a model
+const MODELS = [
+  { name: "pose_landmarker_full.task", minBytes: 5_000_000, // ~9MB
+    url: `${GCS}/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task` },
+  // Face model of the live precision layer (head pose, iris distance). It used to be
+  // fetched from the CDN at runtime only, so filtered networks had no precision layer.
+  { name: "face_landmarker.task", minBytes: 2_000_000,      // ~3.7MB
+    url: `${GCS}/face_landmarker/face_landmarker/float16/1/face_landmarker.task` },
+];
 
 const exists = async (p) => {
   try { await access(p, constants.F_OK); return true; } catch { return false; }
@@ -59,31 +65,31 @@ async function copyRuntime() {
   console.log(`[mediapipe] copied bundle + ${WASM_FILES.length} wasm files`);
 }
 
-async function fetchModel() {
-  const dest = join(OUT, MODEL_NAME);
+async function fetchModel({ name, url, minBytes }) {
+  const dest = join(OUT, name);
   if (await exists(dest)) {
     const { size } = await stat(dest);
-    if (size >= MODEL_MIN_BYTES) {
-      console.log(`[mediapipe] model already present (${(size / 1e6).toFixed(1)}MB)`);
+    if (size >= minBytes) {
+      console.log(`[mediapipe] ${name} already present (${(size / 1e6).toFixed(1)}MB)`);
       return;
     }
-    console.log("[mediapipe] cached model looks truncated — refetching");
+    console.log(`[mediapipe] cached ${name} looks truncated — refetching`);
   }
   await mkdir(OUT, { recursive: true });
-  console.log("[mediapipe] downloading pose model…");
-  const res = await fetch(MODEL_URL);
-  if (!res.ok) throw new Error(`model download failed: HTTP ${res.status}`);
+  console.log(`[mediapipe] downloading ${name}…`);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${name} download failed: HTTP ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length < MODEL_MIN_BYTES) {
-    throw new Error(`model download too small (${buf.length} bytes) — refusing to write`);
+  if (buf.length < minBytes) {
+    throw new Error(`${name} download too small (${buf.length} bytes) — refusing to write`);
   }
   await writeFile(dest, buf);
-  console.log(`[mediapipe] model saved (${(buf.length / 1e6).toFixed(1)}MB)`);
+  console.log(`[mediapipe] ${name} saved (${(buf.length / 1e6).toFixed(1)}MB)`);
 }
 
 try {
   await copyRuntime();
-  await fetchModel();
+  for (const m of MODELS) await fetchModel(m);
   console.log("[mediapipe] assets ready in public/mediapipe");
 } catch (err) {
   // Do NOT fail the build. The app falls back to the CDN when a local asset

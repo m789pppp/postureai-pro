@@ -16,7 +16,16 @@
  */
 import { PL } from "./postureEngine.js";
 
-export const MEASURE_VERSION = "clinical-1.0";
+/**
+ * Bump whenever the landmarks that reach this file can differ for the same person and
+ * pose, so trials from different pipelines are never pooled (validation/analyze.mjs warns
+ * on mixed versions).
+ *   clinical-1.0  first precision layer
+ *   clinical-1.1  MediaPipe runs on the CPU delegate where WebGL is a software rasteriser
+ *                 (same model and version, slightly different arithmetic), and the
+ *                 refinement model is no longer loaded on devices without WebGPU.
+ */
+export const MEASURE_VERSION = "clinical-1.1";
 
 const VIS_MIN = 0.55;
 /** Shoulder span / torso length above this means the subject is not in profile. */
