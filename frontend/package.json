@@ -28,7 +28,7 @@
     "test:claims": "node src/lib/claims.test.mjs",
     "test:findings": "node src/lib/findings.test.mjs",
     "test:tiers": "node src/lib/tierQuality.test.mjs",
-    "test:precision": "node --test src/features/analysis/calibrationCore.test.mjs src/features/analysis/liveEnhancer.test.mjs src/features/analysis/drift.test.mjs src/features/analysis/neckModel.test.mjs src/features/analysis/rtmwCore.test.mjs src/features/analysis/correction.test.mjs src/features/analysis/rtmwPolicy.test.mjs src/features/analysis/mediapipeLoader.test.mjs src/bench/perfCore.test.mjs",
+    "test:precision": "node --test src/features/analysis/calibrationCore.test.mjs src/features/analysis/liveEnhancer.test.mjs src/features/analysis/drift.test.mjs src/features/analysis/neckModel.test.mjs src/features/analysis/rtmwCore.test.mjs src/features/analysis/correction.test.mjs src/features/analysis/rtmwPolicy.test.mjs src/features/analysis/mediapipeLoader.test.mjs src/features/analysis/visionClient.test.mjs src/bench/perfCore.test.mjs",
     "bench:perf": "node scripts/perf-bench.mjs",
     "bench:smoothing": "node scripts/smoothing-bench.mjs"
   },

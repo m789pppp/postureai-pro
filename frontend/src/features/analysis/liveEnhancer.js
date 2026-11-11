@@ -223,10 +223,13 @@ export function readingConfidence({ pose, faceFresh, calibScore, disagreement = 
  * @param {object} [o]
  * @param {object|false} [o.rtmw]  false = never load a refinement model. Otherwise overrides for
  *   the runner ({ model, providers, maxBenchMs }); `force: true` skips the device policy (bench only).
+ * @param {object|null} [o.face]   face detector that already runs elsewhere (visionClient's `face`):
+ *   detectForVideo() returns the newest unread result or null.
  */
-export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } = {}) {
+export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, face: externalFace = null } = {}) {
   let calib = initialCalib;
-  let face = null, loading = false, failed = false, n = 0, closed = false;
+  // externalFace: the worker's face detector (visionClient) — nothing is loaded on the main thread then
+  let face = externalFace, external = !!externalFace, loading = false, failed = false, n = 0, closed = false;
   let head = null, irisPx = NaN, distCm = NaN, lastFaceT = -1e9, faceLms = null, lastDetectT = -1e9;
   const f = { pitch: new OneEuroFilter({ minCutoff: 0.8, beta: 0.05 }), yaw: new OneEuroFilter({ minCutoff: 0.8, beta: 0.05 }),
               roll: new OneEuroFilter({ minCutoff: 0.8, beta: 0.05 }), dist: new OneEuroFilter({ minCutoff: 0.4, beta: 0.01 }) };
@@ -286,9 +289,11 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
     if (tMs === lastDetectT) return;            // once per frame, whoever calls first
     lastDetectT = tMs;
     n++;
-    if (!face || n % 2 !== 0) return;
+    if (external && face?.state === "failed") { face = null; external = false; return; }   // worker lost: load our own next frame
+    if (!face || (!external && n % 2 !== 0)) return;           // the worker already runs the face model every 2nd frame
     try {
       const r = face.detectForVideo(video, tMs);
+      if (!r) return;                                          // nothing new from the worker yet
       const lm = r.faceLandmarks?.[0];
       const m = r.facialTransformationMatrixes?.[0];
       if (lm && m) {
@@ -384,7 +389,7 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
       const sample = { headFlexion, distCm: faceFresh ? distCm : NaN, score };
       const exp = exposure.update(tMs, sample);
       return {
-        faceModel: face ? "on" : failed ? "off" : "loading",
+        faceModel: (external ? face.state === "on" : face) ? "on" : failed ? "off" : "loading",
         head: faceFresh ? head : null,
         headFlexion,
         corrected: !!calib?.correction?.targets && Object.keys(calib.correction.targets).length > 0,
@@ -405,6 +410,6 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
       };
     },
     resetExposure() { exposure.reset(); },
-    close() { closed = true; try { face?.close(); } catch { /* ignore */ } face = null; rtmw?.close(); rtmw = null; },
+    close() { closed = true; if (!external) { try { face?.close(); } catch { /* ignore */ } } face = null; rtmw?.close(); rtmw = null; },
   };
 }

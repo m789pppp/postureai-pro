@@ -108,7 +108,7 @@ import { APIChangelog }   from "./APIChangelog.jsx";
 import EmbedWidget        from "./EmbedWidget.jsx";
 // Live precision layer: RTMW-x + Face Landmarker fusion, iris distance, exposure, confidence.
 import { createLiveEnhancer } from "./features/analysis/liveEnhancer.js";
-import { createTask } from "./features/analysis/mediapipeLoader.js";
+import { createVisionClient } from "./features/analysis/visionClient.js";
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
@@ -3928,54 +3928,32 @@ export default function App(){
     if(!user)return;
     if(mpRef.current||window.__mpLoading)return;
     window.__mpLoading=true;
-    const CDN_BASE="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
-    const SOURCES=[
-      { name:"self-hosted",
-        bundle:"/mediapipe/vision_bundle.mjs",
-        wasm:"/mediapipe/wasm",
-        model:"/mediapipe/pose_landmarker_full.task" },
-      { name:"cdn",
-        bundle:`${CDN_BASE}/vision_bundle.mjs`,
-        wasm:`${CDN_BASE}/wasm`,
-        model:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task" },
-    ];
+    // Sources (self-hosted first, CDN second), the delegate (GPU, or CPU
+    // where WebGL is a software rasteriser — the "GPU" delegate loads
+    // fine there and runs several times slower) and where inference runs
+    // are all decided in visionClient.js / mediapipeLoader.js. Inference
+    // runs in a worker: on the main thread each analysed frame blocked
+    // the page for 60–115 ms (docs/PERFORMANCE.md). The client falls
+    // back to the main thread by itself if the worker cannot start.
+    // "full" model: meaningfully more accurate landmarks than "lite",
+    // especially for subtle angles (neck lean, spine lean).
     const load=async()=>{
-      let lastErr=null;
-      for(const src of SOURCES){
       try{
-        const mod=await import(/* @vite-ignore */ src.bundle);
-        const fr=await mod.FilesetResolver.forVisionTasks(src.wasm);
-        // "full" model: meaningfully more accurate landmarks than "lite",
-        // especially for subtle angles (neck lean, spine lean). GPU
-        // delegate is what makes this affordable in real time — CPU alone
-        // is why "lite" was chosen originally. Falls back to CPU delegate
-        // (still on the "full" model) if GPU isn't available on this device.
-        const MODEL=src.model;
-        const opts={
-          runningMode:"VIDEO",numPoses:1,
-          minPoseDetectionConfidence:.3,minPosePresenceConfidence:.3,minTrackingConfidence:.3
-        };
-        // GPU first, CPU if it fails — except where WebGL is a software
-        // rasteriser (no hardware acceleration): the "GPU" delegate then
-        // loads fine and runs several times slower than the CPU one
-        // (measured 3.6 vs 18 analyses/s, docs/PERFORMANCE.md), so those
-        // devices go straight to CPU. See mediapipeLoader.js.
-        const {task:pl}=await createTask(mod.PoseLandmarker,fr,MODEL,opts);
-        mpRef.current=pl;window.__mpPose=pl;setMpStatus("ready");
-        if(src.name!=="self-hosted"){
+        const client=await createVisionClient();
+        // `face` is the worker's face detector, handed to the precision
+        // layer so it does not load a second runtime on the main thread.
+        client.pose.faceDetector=client.face;
+        mpRef.current=client.pose;window.__mpPose=client.pose;setMpStatus("ready");
+        if(client.source!=="self-hosted"){
           console.warn("[mediapipe] loaded from the CDN — the self-hosted assets in public/mediapipe are missing. Run `npm run build` (or scripts/fetch-mediapipe.mjs) so filtered networks still work.");
         }
-        return; // loaded — stop trying sources
       }catch(err){
-        lastErr=err;
-        console.warn(`[mediapipe] ${src.name} source failed:`,err?.message);
+        // Every source failed. The backend is the analysis from here, and the
+        // user needs to know the reading may be degraded rather than silently
+        // watching a frozen number.
+        console.warn("MediaPipe unavailable from all sources, using backend fallback:",err?.message);
+        setMpStatus("fallback");
       }
-      }
-      // Every source failed. The backend is the analysis from here, and the
-      // user needs to know the reading may be degraded rather than silently
-      // watching a frozen number.
-      console.warn("MediaPipe unavailable from all sources, using backend fallback:",lastErr?.message);
-      setMpStatus("fallback");
     };
     load();
     setTimeout(()=>{if(!mpRef.current&&mpStatus==="loading")setMpStatus("fallback");},18000);
@@ -4017,6 +3995,22 @@ export default function App(){
     }
     lastAnalysisTsRef.current = _nowTs;
 
+    // Pose inference runs in a worker (visionClient.js): the call returns
+    // the newest finished result, or `pending` when there is nothing new.
+    // Pending is not "nobody in frame" — and it has to be handled HERE,
+    // before the overlay is cleared, or the skeleton would blink off on
+    // every tick that has no new result. Ask again on the next animation
+    // frame (un-throttled: the call costs nothing).
+    let _det=null;
+    if(mpRef.current){
+      try{ _det=mpRef.current.detectForVideo(vid,performance.now()); }catch{ _det=null; } // a throw is re-raised below, inside the loop's own try
+      if(_det?.pending){
+        lastAnalysisTsRef.current=0;
+        rafRef.current=requestAnimationFrame(runLoop);
+        return;
+      }
+    }
+
     ov.width=W;ov.height=H;
     const ctx=ov.getContext("2d");ctx.clearRect(0,0,W,H);
 
@@ -4047,7 +4041,7 @@ export default function App(){
 
     if(mpRef.current){
       try{
-        const det=mpRef.current.detectForVideo(vidRef.current,performance.now());
+        const det=_det??mpRef.current.detectForVideo(vidRef.current,performance.now());
         if(det.landmarks?.length>0){
           window.__frameHadLandmarksOnce=true;
           // A body is visible again — clear the absence streak/banner (see
@@ -4106,7 +4100,7 @@ export default function App(){
             }
           }
           // 3-model fusion (MediaPipe + RTMW-x, motion-compensated) before smoothing
-          if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData);
+          if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData,{face:mpRef.current?.faceDetector||null});
           let fusedLms=rawLms;
           try{ fusedLms=enhancerRef.current.fuse(rawLms,vidRef.current,W,H,performance.now()); }catch(e){ fusedLms=rawLms; }
           const lms=lmSmootherRef.current.smooth(fusedLms);
@@ -4116,7 +4110,7 @@ export default function App(){
           // Live precision layer: runs beside the engine; it only replaces the distance
           // when this camera was calibrated with a measured distance (iris + real focal).
           try{
-            if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData);
+            if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData,{face:mpRef.current?.faceDetector||null});
             else enhancerRef.current.setCalibration(calibData);
             const prec=enhancerRef.current.process(vidRef.current,lms,W,H,performance.now(),lastAnalRef.current?.overall??null);
             if(rawResult && prec.distCm!=null && prec.distSource==="calibrated") rawResult.distCm=prec.distCm;

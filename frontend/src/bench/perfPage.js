@@ -16,6 +16,7 @@
  *   warmup   = seconds ignored after the first score             (default 3)
  *   wait     = "rtmw" to start measuring only after the third model settled (on/off)
  *   rtmw     = JSON of options for the enhancer's refinement model, e.g. {"force":true,"providers":["wasm"]}
+ *   worker   = 0                 run MediaPipe on the main thread (default: in a worker)
  *   delegate = gpu | cpu         force MediaPipe's delegate (default: chosen by mediapipeLoader)
  *   smoother = euro:<minCutoff>,<beta>   One Euro instead of the tier's EMA
  *   auto     = 1 to start without a click (used by scripts/perf-bench.mjs)
@@ -24,7 +25,8 @@ import { analyzeMP, createLandmarkSmoother, resetProportions } from "../features
 import { createLiveEnhancer } from "../features/analysis/liveEnhancer.js";
 import { qualityFor } from "../lib/tierQuality.js";
 import { createOneEuroLandmarkSmoother } from "../features/analysis/calibrationCore.js";
-import { loadVision, createTask, preferredDelegates, webglRendererName, MP_SOURCES } from "../features/analysis/mediapipeLoader.js";
+import { preferredDelegates, webglRendererName } from "../features/analysis/mediapipeLoader.js";
+import { createVisionClient } from "../features/analysis/visionClient.js";
 import { PERF_VERSION, landmarkJitter, seriesStats, pacing } from "./perfCore.js";
 
 const Q = new URLSearchParams(location.search);
@@ -87,11 +89,9 @@ async function openSource(video) {
 
 // ── models ─────────────────────────────────────────────────────────────────
 async function loadPose() {
-  const { mod, fileset, source } = await loadVision();
-  const opts = { runningMode: "VIDEO", numPoses: 1, minPoseDetectionConfidence: .3, minPosePresenceConfidence: .3, minTrackingConfidence: .3 };
-  const delegates = FORCE_DELEGATE ? [FORCE_DELEGATE, "CPU"] : preferredDelegates();     // delegate=gpu reproduces the old behaviour
-  const { task, delegate } = await createTask(mod.PoseLandmarker, fileset, [...new Set([source.pose, ...MP_SOURCES.map(m => m.pose)])], opts, delegates);
-  return { pl: task, source: source.name, delegate };
+  // worker=0 keeps inference on the main thread; delegate=gpu reproduces the old delegate choice
+  const c = await createVisionClient({ worker: Q.get("worker") !== "0", delegates: FORCE_DELEGATE ? [FORCE_DELEGATE, "CPU"] : preferredDelegates() });
+  return { pl: c.pose, face: c.face, source: c.source, delegate: c.delegate, mode: c.mode, close: c.close };
 }
 
 const heapMb = () => (performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null);
@@ -116,7 +116,7 @@ async function run() {
   try {
     stream = await openSource(video); timings.sourceMs = at();
     const pose = await loadPose(); timings.poseReadyMs = at();
-    res.pose = { source: pose.source, delegate: pose.delegate };
+    res.pose = { source: pose.source, delegate: pose.delegate, mode: pose.mode };
     log(`pose model ready in ${timings.poseReadyMs} ms (${pose.source}, ${pose.delegate})`);
 
     const W = video.videoWidth, H = video.videoHeight;
@@ -125,12 +125,13 @@ async function run() {
     const euro = /^euro:([\d.]+),([\d.]+)$/.exec(Q.get("smoother") || "");            // smoother=euro:1,100 to compare
     const smoother = euro ? createOneEuroLandmarkSmoother({ minCutoff: +euro[1], beta: +euro[2] }) : createLandmarkSmoother(q.smoothingAlpha, q.outlierMaxConsecutive);
     res.smoother = euro ? `one-euro ${euro[1]}/${euro[2]}` : `ema ${q.smoothingAlpha}`;
-    const enh = PIPELINE === "fused" ? createLiveEnhancer(null, { rtmw: RTMW_OPTS }) : null;
+    const enh = PIPELINE === "fused" ? createLiveEnhancer(null, { rtmw: RTMW_OPTS, face: pose.face }) : null;
     resetProportions?.();
     const sess = Date.now();
 
     const rec = { t: [], cost: [], raf: [], raw: [], fused: [], smooth: [], series: {}, heap: [] };
     const push = (k, v) => { (rec.series[k] ||= []).push(Number.isFinite(v) ? v : NaN); };
+    const infer = [];
     let measuring = false, startT = 0, lastT = 0, lastRaf = 0, prec = null, lastScore = null, done;
     const finished = new Promise(r => { done = r; });
 
@@ -141,7 +142,10 @@ async function run() {
       if (now - lastT < 50 || video.readyState < 2) return requestAnimationFrame(tick);   // same 20/s ceiling as the app
       lastT = now;
       const c0 = performance.now();
-      const raw = pose.pl.detectForVideo(video, now).landmarks?.[0];
+      const det = pose.pl.detectForVideo(video, now);
+      if (det.pending) { lastT = 0; return requestAnimationFrame(tick); }     // nothing new from the worker: ask again next frame
+      if (det.ms != null) infer.push(det.ms);
+      const raw = det.landmarks?.[0];
       if (raw) {
         timings.firstLandmarksMs ??= at();
         let fused = raw;
@@ -176,12 +180,13 @@ async function run() {
 
     res.timings = timings;
     res.pacing = pacing(rec.t, rec.cost, rec.raf);
+    res.workerInferMs = infer.length ? Math.round(infer.slice(-100).sort((a, b) => a - b)[Math.floor(Math.min(infer.length, 100) / 2)]) : null;
     res.jitter = { raw: landmarkJitter(rec.raw, W, H), fused: landmarkJitter(rec.fused, W, H), smoothed: landmarkJitter(rec.smooth, W, H) };
     res.stability = seriesStats(rec.series);
     res.heapMb = { end: heapMb(), max: Math.max(...rec.heap.filter(Number.isFinite), 0) || null };
     res.precision = prec ? { faceModel: prec.faceModel, models: prec.models, rtmw: prec.rtmw } : null;
     try { const e = await navigator.storage?.estimate(); res.storageMb = e ? Math.round((e.usage || 0) / 1048576) : null; } catch { res.storageMb = null; }
-    enh?.close();
+    enh?.close(); pose.close?.();
   } catch (e) {
     res.error = String(e?.message || e);
   }

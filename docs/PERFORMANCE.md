@@ -78,6 +78,7 @@ to devices whose WebGL is software.
 | CPU delegate when WebGL is a software rasteriser | `mediapipeLoader.js`, `App.jsx`, `SmartCalibration.jsx`, bench pages | 3.6 → 15.1 analyses/s, first score 4.25 s → 1.44 s |
 | One MediaPipe runtime, self-hosted first; face model staged at build time | `mediapipeLoader.js`, `scripts/fetch-mediapipe.mjs` | face model ready 10.9 s → 2.4 s; works on filtered networks |
 | Model bytes read into one buffer instead of chunks plus a joined copy | `rtmwWorker.js` | one copy of the weights fewer at the end of a download. Not measured here: this machine no longer downloads the model |
+| Pose and face inference in a worker | `visionWorker.js`, `visionClient.js`, `App.jsx`, `liveEnhancer.js` | main-thread time per frame 59 to 112 ms → under 1 ms, no stalls, see below |
 | Second model's offset averaged over time; weight no longer fades between inferences | `liveEnhancer.js` | fused jitter back to MediaPipe's own level, see below |
 | Runner and worker take a model spec | `rtmwCore.js`, `rtmwWeb.js`, `rtmwWorker.js` | needed to benchmark other models; default unchanged |
 
@@ -106,6 +107,33 @@ still no measured benefit to set against 120 to 260 MB of memory, so no small mo
 the real pipeline it fell from 1.17 to 1.07 px and the angle SDs did not move (neck 0.32°
 vs 0.31°, head tilt 0.50° vs 0.51°). Too small to justify changing what every reading is
 computed from. `/perf.html?smoother=euro:1,100` reruns the comparison.
+
+## Inference off the main thread
+
+After the changes above, each analysed frame still blocked the page for 60 to 115 ms,
+because MediaPipe ran on the main thread. Pose and face inference now run in a worker
+(`visionWorker.js`, `visionClient.js`). The live loop makes the same call as before; it
+returns the newest finished result, or "pending" when there is nothing new. If the worker
+cannot start or stops answering, the client continues on the main thread by itself.
+
+Same build, worker off and on, median of 3 runs of 15 s:
+
+| | MediaPipe only, main thread | MediaPipe only, worker | Precision layer, main thread | Precision layer, worker |
+|---|---|---|---|---|
+| Main-thread time per analysed frame, median / p95 | 59 / 75 ms | 0.2 / 0.3 ms | 75 / 112 ms | 0.2 / 0.4 ms |
+| Gap between animation frames, p95 | 78 ms | 19 ms | 113 ms | 19 ms |
+| Page stalls over 100 ms in 15 s | 0 | 0 | 33 | 0 |
+| Analyses per second | 15.8 | 16.3 | 12.3 | 14.2 |
+| First score (cold) | 1.40 s | 1.39 s | 1.37 s | 1.32 s |
+| Peak browser memory | 1076 MB | 1075 MB | 1166 MB | 1173 MB |
+| Landmark jitter, smoothed | 1.19 px | 1.29 px | 1.24 px | 1.19 px |
+| Neck angle SD | 0.31° | 0.31° | 0.30° | 0.22° |
+
+Cost: a reading describes a frame about one inference old (50 to 70 ms here). The jitter
+and angle differences are within run-to-run variation. Measured through `/perf.html`
+only; `App.jsx` uses the same client but its signed-in session was not run. The GPU
+delegate inside a worker was not exercised (this machine uses the CPU delegate).
+`/perf.html?worker=0` reruns the main-thread path.
 
 ## Fusion made landmarks noisier, and why
 
@@ -140,6 +168,7 @@ unmeasured. The small models stay out of the product for the same reason.
 ## Not tested
 
 - Any real device: no laptop with a GPU, no phone, no real camera.
+- The signed-in live session in `App.jsx`, and MediaPipe's GPU delegate inside a worker.
 - RTMW-x on WebGPU: speed, memory, and whether the 8 GB / not-a-phone limits are the right ones.
 - Safari and Firefox. Only headless Chromium 153 was run.
 - Download time on a real connection. At 10 Mbit/s, 229 MB is about 3 minutes; that is arithmetic, not a measurement.
