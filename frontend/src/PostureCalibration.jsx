@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { saveCalibration, getCalibration } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
+// New wizard (iris distance, 3-D head pose, robust baseline). The old one stays as LegacyCalibrationWizard.
+export { CalibrationWizard } from "./SmartCalibration.jsx";
 
 // ── Calibration constants ─────────────────────────────────────────
 const CALIB_DURATION = 10; // seconds
@@ -55,7 +57,7 @@ function neckRefPoint(nose, midEar, noseVis) {
 const LM = { NOSE:0, L_EYE:2, R_EYE:5, L_EAR:7, R_EAR:8, L_SHOULDER:11, R_SHOULDER:12, L_HIP:23, R_HIP:24 };
 
 // ── CalibrationWizard ─────────────────────────────────────────────
-export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
+export function LegacyCalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
   useBodyScrollLock();
   // Close on Escape key anywhere
   useEffect(() => {
