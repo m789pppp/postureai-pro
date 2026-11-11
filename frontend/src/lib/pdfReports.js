@@ -790,7 +790,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...BG2); doc.rect(0,0,W,22,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,2,"F");
     _logo(doc,ml,5,12,_logoSm);
     sf(8.5,"bold"); tc(doc,...TEXT); doc.text("POSMOZ",ml+16,11.5);
-    sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
+    sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("AI POSTURE COACHING",ml+16,16.5);
     sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
     sf(6,"normal"); tc(doc,...TEXT3); doc.text(isAr?"تحليل الوضعية بالذكاء الاصطناعي":"AI-POWERED POSTURE INSIGHTS",60,16);
     // Tier badge
@@ -955,7 +955,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...BG2); doc.rect(0,0,W,15,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,1.6,"F");
     _logo(doc,ml,3,9,_logoSm);
     sf(7.5,"bold"); tc(doc,...TEXT); doc.text("POSMOZ",ml+13,8);
-    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("AI POSTURE COACHING",ml+13,13);
     sf(6,"normal"); tc(doc,...TEXT3);
     doc.text(`${isAr?"جلسة":"Session"} #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
     fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
@@ -1131,7 +1131,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   fc(doc,...BG2); doc.rect(0,0,W,22,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,2,"F");
   _logo(doc,ml,5,12,_logoSm);
   sf(8.5,"bold"); tc(doc,...TEXT); doc.text("POSMOZ",ml+16,11.5);
-  sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+16,16.5);
+  sf(5.5,"normal"); tc(doc,...TEXT2); doc.text("AI POSTURE COACHING",ml+16,16.5);
   sf(9,"bold"); tc(doc,...TEXT); doc.text(isAr?"تقرير تحليل الوضعية الشخصي":"Personal Posture Analysis Report",60,10);
   sf(6,"normal"); tc(doc,...TEXT3); doc.text(isAr?"تحليل الوضعية بالذكاء الاصطناعي":"AI-POWERED POSTURE INSIGHTS",60,16);
   const tbw2=doc.getTextWidth(tierLbl)+10;
@@ -1266,7 +1266,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
   fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
   _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("POSMOZ",ml+13,8);
-  sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
+  sf(4.5,"normal");tc(doc,...TEXT2);doc.text("AI POSTURE COACHING",ml+13,13);
   sf(6,"normal");tc(doc,...TEXT3);doc.text(`${isAr?"جلسة":"Session"} #${realIdx}  •  ${dayStr}, ${timeStr}`,W-mr,10,{align:"right"});
   fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
   y=22;
@@ -1402,7 +1402,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     fc(doc,...BG2); doc.rect(0,0,W,15,"F"); fc(doc,...ACCENT); doc.rect(0,0,W,1.6,"F");
     _logo(doc,ml,3,9,_logoSm);
     sf(7.5,"bold"); tc(doc,...TEXT); doc.text("POSMOZ",ml+13,8);
-    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(4.5,"normal"); tc(doc,...TEXT2); doc.text("AI POSTURE COACHING",ml+13,13);
     sf(6,"bold"); tc(doc,...tierCol); doc.text(String(label),W-mr,10,{align:"right"});
     fc(doc,...BORDER); doc.rect(0,15,W,.5,"F");
     return 24;
@@ -1610,7 +1610,7 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
     doc.addPage(); fc(doc,...BG); doc.rect(0,0,W,H,"F");
     fc(doc,...BG2);doc.rect(0,0,W,15,"F");fc(doc,...ACCENT);doc.rect(0,0,W,1.6,"F");
     _logo(doc,ml,3,9,_logoSm);sf(7.5,"bold");tc(doc,...TEXT);doc.text("POSMOZ",ml+13,8);
-    sf(4.5,"normal");tc(doc,...TEXT2);doc.text("HEALTH INTELLIGENCE",ml+13,13);
+    sf(4.5,"normal");tc(doc,...TEXT2);doc.text("AI POSTURE COACHING",ml+13,13);
     sf(6,"normal");tc(doc,...TEXT3);doc.text(isAr?"رؤى Elite":"ELITE INSIGHTS",W-mr,10,{align:"right"});
     fc(doc,...BORDER);doc.rect(0,15,W,.5,"F");
     y=24;
@@ -3773,7 +3773,7 @@ export async function generateQuarterlyWellnessReport({
 
   // Posmoz logo area
   sf(11, "bold"); tc(doc, 212, 175, 55);
-  doc.text("🦅  POSMOZ HEALTH INTELLIGENCE", ml, 20);
+  doc.text("POSMOZ", ml, 20);
   sf(7, "normal"); tc(doc, 140, 150, 170);
   doc.text(isAr ? "منصة ذكاء صحة بيئة العمل" : "Workplace Health Intelligence Platform", ml, 27);
 
@@ -4023,7 +4023,7 @@ export async function generateQuarterlyWellnessReport({
     doc.setPage(p);
     fc(doc, 10, 15, 30); doc.rect(0, H - 14, W, 14, "F");
     sf(5.5, "normal"); tc(doc, 140, 150, 170);
-    doc.text(isAr ? "🦅 Posmoz · posmoz.com · ليس تشخيصاً طبياً" : "🦅 Posmoz · posmoz.com · Not a medical diagnosis", ml, H - 6);
+    doc.text(isAr ? "Posmoz · posmoz.com · ليس تشخيصاً طبياً" : "Posmoz · posmoz.com · Not a medical diagnosis", ml, H - 6);
     doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 6, { align: "right" });
     doc.text(isAr ? "سري — للاستخدام الداخلي فقط" : "CONFIDENTIAL — Internal Use Only", W / 2, H - 6, { align: "center" });
   }
@@ -4213,7 +4213,7 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
     for (let p = 1; p <= pgs; p++) {
       doc.setPage(p);
       sf(6, "normal"); tc(doc, ...PDF_TOKENS.light);
-      doc.text("🦅 Posmoz", ml, H - 8);
+      doc.text("Posmoz", ml, H - 8);
       doc.text(isAr ? `صفحة ${p} من ${pgs}` : `Page ${p} of ${pgs}`, W - mr, H - 8, { align: "right" });
     }
   };
@@ -4222,7 +4222,7 @@ export async function generatePostureDNAReport({ sessions = [], profile, user, p
   fc(doc, ...PDF_TOKENS.slate); doc.rect(0, 0, W, H, "F");
   fc(doc, 212, 175, 55); doc.rect(0, 78, W, 1.5, "F");
   sf(11, "bold"); tc(doc, 212, 175, 55);
-  doc.text("🦅  POSMOZ", ml, 24);
+  doc.text("POSMOZ", ml, 24);
   sf(24, "bold"); tc(doc, 240, 246, 255);
   doc.text(isAr ? "تقرير بصمة الوضعية" : "Posture DNA Report", W / 2, 130, { align: "center" });
   sf(11, "normal"); tc(doc, 180, 190, 210);

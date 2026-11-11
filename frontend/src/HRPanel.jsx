@@ -753,7 +753,7 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
             {isAr?"->":"<-"} {isAr?"رجوع":"Back"}
           </button>
           <div style={{width:1,height:20,background:"rgba(255,255,255,.08)"}}/>
-          <div style={{width:26,height:26,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>◈</div>
+          <div style={{width:26,height:26,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
           <div>
             <div style={{fontSize:13,fontWeight:700}}>{company?.name||"Company"} . HR</div>
             <div style={{fontSize:10,color:"#64748b"}}>{employees.length} {isAr?"موظف":"employees"} . {isAr?"مدير:":"Manager:"} {profile?.name||user?.email?.split("@")[0]}</div>

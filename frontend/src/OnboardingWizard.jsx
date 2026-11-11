@@ -1158,7 +1158,7 @@ export function OnboardingWizard({ user, lang = "en", onComplete, onSkip }) {
         <div style={{ padding: "16px 22px 14px", borderBottom: "1px solid rgba(148,163,184,.07)", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-              <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff", flexShrink: 0 }}>◈</div>
+              <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#fff", flexShrink: 0 }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
               <span style={{ fontFamily: SYNE, fontSize: 14, fontWeight: 800, letterSpacing: "-.025em", color: "#e8f0fe", whiteSpace: "nowrap" }}>Posmoz <span style={{ color: "#60a5fa" }}>Pro</span></span>
             </div>
             {/* Skip is the escape hatch from a nine-step wizard, and it was

@@ -367,7 +367,7 @@ export default function SharedReportPage() {
       <header style={SRP_TOKENS.header}>
         <div style={SRP_TOKENS.headerInner}>
           <div style={SRP_TOKENS.logo}>
-            <div style={SRP_TOKENS.logoIcon}>◈</div>
+            <div style={SRP_TOKENS.logoIcon}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
             <span style={SRP_TOKENS.logoText}>Posmoz</span>
             {/* Was a hardcoded "Elite" on every shared report — a claim about
                 the account, rendered to a third party, that no data backs. */}

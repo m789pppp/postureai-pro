@@ -48,8 +48,8 @@ export default async function handler(req, res) {
   const to = phone.startsWith("whatsapp:") ? phone : `whatsapp:${phone}`;
 
   const body = lang === "ar"
-    ? `🦅 مرحباً ${name}!\n\nبوسموز بيذكّرك تبدأ جلسة الوضعية بتاعتك النهارده 💪\n\nجلسة واحدة كل يوم بتصنع الفرق.\n\n— فريق Posmoz PostureAI`
-    : `🦅 Hey ${name}!\n\nPosmoz reminder: time for your daily posture session 💪\n\nOne session a day makes all the difference.\n\n— Posmoz PostureAI Team`;
+    ? `مرحباً ${name}!\n\nبوسموز بيذكّرك تبدأ جلسة الوضعية بتاعتك النهارده 💪\n\nجلسة واحدة كل يوم بتصنع الفرق.\n\n— فريق Posmoz PostureAI`
+    : `Hey ${name}!\n\nPosmoz reminder: time for your daily posture session 💪\n\nOne session a day makes all the difference.\n\n— Posmoz PostureAI Team`;
 
   try {
     const r = await fetch(

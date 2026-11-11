@@ -51,7 +51,7 @@ export async function generateCertPDF({ cert_id, name, company_name, type, issue
   // ── Posmoz logo text ──
   doc.setFont("helvetica","bold");
   doc.setFontSize(9); doc.setTextColor(212,175,55);
-  doc.text("🦅 POSMOZ HEALTH INTELLIGENCE", W/2, 18, {align:"center"});
+  doc.text("POSMOZ", W/2, 18, {align:"center"});
 
   // ── Title ──
   doc.setFontSize(7); doc.setTextColor(140,150,170);
@@ -190,7 +190,7 @@ export function CertVerifyPage({ certId: propCertId }) {
 
         {/* Posmoz header */}
         <div style={{fontSize:13,fontWeight:700,color:"#8896ac",letterSpacing:2,marginBottom:24}}>
-          🦅 POSMOZ HEALTH INTELLIGENCE
+          POSMOZ
         </div>
 
         {/* Valid/Invalid badge */}

@@ -1053,7 +1053,7 @@ function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
 
         {/* Logo */}
         <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{width:48,height:48,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontSize:23,margin:"0 auto 10px",boxShadow:"0 8px 24px rgba(26,86,219,.3)"}}>◈</div>
+          <div style={{width:48,height:48,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontSize:23,margin:"0 auto 10px",boxShadow:"0 8px 24px rgba(26,86,219,.3)"}}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
           <div style={{fontSize:20,fontWeight:700,color:cs.text}}>{t.appName}</div>
           <div style={{fontSize:11,color:cs.muted,marginTop:3}}>{t.tagline}</div>
         </div>
@@ -1570,7 +1570,7 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
 
     <div style={{padding:"12px 19px",borderBottom:`0.5px solid ${cs.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",background:cs.card}}>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
-        <div style={{width:25,height:25,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>◈</div>
+        <div style={{width:25,height:25,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
         <div><div style={{fontSize:12,fontWeight:700}}>Posmoz Admin</div><div style={{fontSize:9,color:cs.muted}}>{adminUser?.email}</div></div>
       </div>
       <div style={{display:"flex",gap:9,alignItems:"center"}}>
@@ -2191,7 +2191,7 @@ function AccountTypeSelect({cs,t,lang,onSelect}){
   return <div dir={dir} style={{position:"fixed",inset:0,background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",padding:24}}>
     <div style={{maxWidth:480,width:"100%"}}>
       <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{width:52,height:52,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 14px"}}>◈</div>
+        <div style={{width:52,height:52,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 14px"}}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
         <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:6}}>{t.acctType}</div>
         <div style={{fontSize:12,color:cs.muted}}>Posmoz</div>
       </div>
@@ -6105,7 +6105,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           fontSize: 38, color: "#fff", fontWeight: 800,
           boxShadow: "0 8px 32px rgba(26,86,219,.35)",
           userSelect: "none",
-        }}>◈</div>
+        }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
       </div>
 
       {/* Brand name */}
@@ -6373,7 +6373,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         background:"linear-gradient(135deg,#1a56db,#0891b2)",
         display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,
         boxShadow:"0 8px 24px rgba(26,86,219,.3)",marginBottom:8,
-      }}>◈</div>
+      }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
       <div style={{width:32,height:32,border:"3px solid rgba(26,86,219,.2)",borderTopColor:"#1a56db",
         borderRadius:"50%",animation:"authSpin 1s linear infinite"}}/>
       <div style={{color:cs.muted,fontSize:14}}>
@@ -6524,7 +6524,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         <div style={{width:"100%",maxWidth:520}}>
           {/* Logo */}
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:32,justifyContent:"center"}}>
-            <div style={{width:36,height:36,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>◈</div>
+            <div style={{width:36,height:36,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
             <div style={{fontSize:18,fontWeight:700,color:cs.text}}>{t.appName}</div>
           </div>
 

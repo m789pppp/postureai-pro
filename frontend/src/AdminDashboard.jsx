@@ -468,7 +468,7 @@ export function AdminDashboard({ adminProfile, cs, lang = "en", onBack,
               background:`linear-gradient(135deg, ${TOKENS.blue}, #0891b2)`,
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:18, fontWeight:700, color:"white", letterSpacing:"-1px",
-            }}>◈</div>
+            }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:TOKENS.text, lineHeight:1 }}>Posmoz</div>
               <div style={{ fontSize:9, color:TOKENS.muted, fontWeight:500, letterSpacing:".06em", marginTop:2 }}>INTELLIGENCE CONSOLE</div>

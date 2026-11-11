@@ -435,7 +435,7 @@ export function LoadingState({ label, isAr }) {
       <div style={{ position:"relative", width:48, height:48 }}>
         <Spinner size={48} color="#6366f1" thick={3}/>
         <div style={{ position:"absolute", inset:0, display:"flex",
-          alignItems:"center", justifyContent:"center", fontSize:18 }}>◈</div>
+          alignItems:"center", justifyContent:"center", fontSize:18 }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
       </div>
       <div style={{ fontSize:12, color:UI_TOKENS.muted, fontWeight:500 }}>
         {label || (isAr ? "جارٍ التحميل…" : "Loading…")}

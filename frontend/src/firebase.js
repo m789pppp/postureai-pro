@@ -777,11 +777,20 @@ export const createDepartment  = async (data) => { const r=await addDoc(collecti
 export const deleteDepartment  = async (did) => deleteDoc(doc(db,"departments",did));
 
 export async function getDepartmentEmployees(companyId, departmentId) {
-  const constraints = [where("company_id","==",companyId)];
-  if (departmentId && departmentId!=="all") constraints.push(where("department_id","==",departmentId));
-  const q = query(collection(db,"users"), ...constraints, orderBy("name","asc"), limit(500));
-  const snaps = await getDocs(q);
-  return snaps.docs.map(d=>({id:d.id,...d.data()}));
+  // HR reads the roster through the server, not users/{uid} directly. A
+  // Firestore rule cannot hide fields, so a direct read exposed every
+  // employee's score whatever the organisation's privacy setting.
+  if (!companyId) return [];
+  const tok = await getAuthToken();
+  const r = await fetch(`${API_BASE_URL}/api/company/roster`, {
+    headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+  });
+  if (!r.ok) throw new Error(`roster ${r.status}`);
+  const d = await r.json();
+  const list = Array.isArray(d.employees) ? d.employees : [];
+  return departmentId && departmentId !== "all"
+    ? list.filter(e => e.department_id === departmentId)
+    : list;
 }
 
 // ── Payments ──────────────────────────────────────────────────────
