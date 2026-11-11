@@ -24,6 +24,7 @@ import { PL } from "./postureEngine.js";
  *   clinical-1.1  MediaPipe runs on the CPU delegate where WebGL is a software rasteriser
  *                 (same model and version, slightly different arithmetic), and the
  *                 refinement model is no longer loaded on devices without WebGPU.
+ *                 Where it does run, its offset is averaged over time before fusion.
  */
 export const MEASURE_VERSION = "clinical-1.1";
 

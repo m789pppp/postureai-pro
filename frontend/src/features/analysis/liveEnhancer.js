@@ -118,6 +118,50 @@ export function fuseWithRtmw(mp, rt, W, H, ageMs, weights = null, mp0 = null, sp
   return { lms: out, disagreement: n && sw > 1 ? sum / n / sw : null };
 }
 
+/**
+ * Smooths what the second model contributes before it is fused.
+ *
+ * fuseWithRtmw() adds w · (rtmw − mp0) to the current MediaPipe point. That offset is
+ * measured once per inference and then held, so it carries the noise of BOTH models at one
+ * instant into every frame until the next inference: the fused point can only be noisier
+ * than MediaPipe alone (measured: 1.4 px → 1.6–2.6 px on a still subject, docs/PERFORMANCE.md).
+ * What the second model can add is a correction of MediaPipe's slowly-varying bias, so the
+ * offset and its confidence are averaged over time (time constant tauMs); MediaPipe itself
+ * still follows every frame, so motion is not delayed, only a change in the bias is.
+ * Pure — unit-tested.
+ */
+export function createCorrectionField({ tauMs = 1500, spec = RTMW_X_SPEC } = {}) {
+  const n = spec.k;
+  let off = null, score = null, seen = null, lastT = null;
+  return {
+    /**
+     * @param {{kpts:Float32Array, scores:Float32Array}} rt  result in source px
+     * @param {Array} mp0  MediaPipe landmarks (normalised) of the frame rt was computed on
+     * @param {number} [tau]  time constant for this update, ms (default: the field's tauMs)
+     * @returns {{kpts, scores}} equivalent result carrying the smoothed offset, relative to mp0
+     */
+    update(rt, mp0, W, H, tMs, tau = tauMs) {
+      if (!off) { off = new Float32Array(2 * n); score = new Float32Array(n); seen = new Uint8Array(n); }
+      const a = lastT == null ? 1 : 1 - Math.exp(-Math.max(1, tMs - lastT) / tau);
+      lastT = tMs;
+      const kpts = new Float32Array(rt.kpts), scores = new Float32Array(rt.scores);
+      for (const [mi, wi] of Object.entries(WB133_TO_MP33)) {
+        const p = mp0[+mi];
+        if (wi >= n || !p) continue;
+        const ox = rt.kpts[2 * wi] - p.x * W, oy = rt.kpts[2 * wi + 1] - p.y * H, sc = rt.scores[wi];
+        if (!Number.isFinite(ox) || !Number.isFinite(oy) || !Number.isFinite(sc)) continue;
+        const k = seen[wi] ? a : 1;                       // first sighting of a point starts its average
+        seen[wi] = 1;
+        off[2 * wi] += k * (ox - off[2 * wi]); off[2 * wi + 1] += k * (oy - off[2 * wi + 1]);
+        score[wi] += k * (sc - score[wi]);
+        kpts[2 * wi] = p.x * W + off[2 * wi]; kpts[2 * wi + 1] = p.y * H + off[2 * wi + 1];
+        scores[wi] = score[wi];
+      }
+      return { kpts, scores };
+    },
+    reset() { off = null; lastT = null; },
+  };
+}
 
 // Head pitch sign: + = chin down (flexion). Verified only on synthetic matrices —
 // flip to -1 if looking down shows a negative number on a real camera.
@@ -195,6 +239,10 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
   let rtmwProgress = 0, rtmwBusy = false, rtmwLast = null, rtmwMs = null, rtmwBenchMs = null, disagreement = null;
   const model = (rtmwOpts && rtmwOpts.model) || REFINE_MODELS["rtmw-x"];
   const spec = model.spec;
+  // rtmw: { correctionTauMs: 0 } restores the unsmoothed fusion (benchmark comparison only)
+  const corrTau = (rtmwOpts && rtmwOpts.correctionTauMs) ?? 1500;
+  let rtmwPeriod = null;                              // typical time between results, ms
+  const corrField = corrTau > 0 ? createCorrectionField({ tauMs: corrTau, spec }) : null;
   async function loadRtmw() {
     rtmwState = "checking";
     try {
@@ -276,13 +324,22 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {} } 
         if (box) {
           rtmwBusy = true;
           const t0 = tMs, mp0 = rawLms.map(p => ({ x: p.x, y: p.y }));
-          rtmw.infer(video, box).then(r => { rtmwLast = { ...r, t: t0, mp0 }; rtmwMs = r.ms; })
+          rtmw.infer(video, box).then(r => {
+            if (corrField && rtmwLast) rtmwPeriod = rtmwPeriod == null ? t0 - rtmwLast.t : rtmwPeriod + 0.3 * (t0 - rtmwLast.t - rtmwPeriod);
+            // average over about 8 results: a slow model gets a longer memory, never under corrTau or over 8 s
+            const tau = Math.min(8000, Math.max(corrTau, 8 * (rtmwPeriod ?? 0)));
+            rtmwLast = { ...(corrField ? corrField.update(r, mp0, W, H, t0, tau) : r), t: t0, mp0 }; rtmwMs = r.ms;
+          })
             .catch(() => { /* skip this frame */ }).finally(() => { rtmwBusy = false; });
         }
       }
       let lms = rawLms;
       if (rtmwLast && tMs - rtmwLast.t <= 3000) {
-        const res = fuseWithRtmw(rawLms, rtmwLast, W, H, tMs - rtmwLast.t, calib?.ensemble_weights?.landmark_weights, rtmwLast.mp0, spec);
+        // A result is not "stale" while the next one is still due: fading its weight inside every
+        // inference interval made the fused point saw-tooth at the inference rate. It fades only
+        // once results stop arriving on schedule (person left, worker stalled).
+        const grace = rtmwPeriod == null ? 0 : Math.min(2000, 1.5 * rtmwPeriod);
+        const res = fuseWithRtmw(rawLms, rtmwLast, W, H, Math.max(0, tMs - rtmwLast.t - grace), calib?.ensemble_weights?.landmark_weights, rtmwLast.mp0, spec);
         disagreement = res.disagreement;
         lms = res.lms;
       } else disagreement = null;

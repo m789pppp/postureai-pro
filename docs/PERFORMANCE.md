@@ -78,10 +78,12 @@ to devices whose WebGL is software.
 | CPU delegate when WebGL is a software rasteriser | `mediapipeLoader.js`, `App.jsx`, `SmartCalibration.jsx`, bench pages | 3.6 → 15.1 analyses/s, first score 4.25 s → 1.44 s |
 | One MediaPipe runtime, self-hosted first; face model staged at build time | `mediapipeLoader.js`, `scripts/fetch-mediapipe.mjs` | face model ready 10.9 s → 2.4 s; works on filtered networks |
 | Model bytes read into one buffer instead of chunks plus a joined copy | `rtmwWorker.js` | one copy of the weights fewer at the end of a download. Not measured here: this machine no longer downloads the model |
+| Second model's offset averaged over time; weight no longer fades between inferences | `liveEnhancer.js` | fused jitter back to MediaPipe's own level, see below |
 | Runner and worker take a model spec | `rtmwCore.js`, `rtmwWeb.js`, `rtmwWorker.js` | needed to benchmark other models; default unchanged |
 
 `MEASURE_VERSION` moves from `clinical-1.0` to `clinical-1.1`: the delegate change alters
-the arithmetic on affected devices. The pose model and the MediaPipe version are unchanged.
+the arithmetic on affected devices, and the fusion change alters fused landmarks wherever
+the third model runs. The pose model and the MediaPipe version are unchanged.
 
 ## What was tried and not kept
 
@@ -96,9 +98,8 @@ were run through the same fusion, forced onto WASM, one run of 12 s each:
 | RTMW-x | 1309 ms | 1.46 px | 2.56 px | 2103 MB |
 
 They are fast enough, but in every case the fused landmarks were less stable than
-MediaPipe's own, and the neck, head-tilt and shoulder SDs did not improve. With no ground
-truth for a real person there is no measured benefit to set against 120 to 260 MB of
-memory, so no small model ships.
+MediaPipe's own (fixed since, see below). With no ground truth for a real person there is
+still no measured benefit to set against 120 to 260 MB of memory, so no small model ships.
 
 **One Euro filter in place of the per-tier EMA.** On the synthetic subject (One Euro 1.0 /
 100 against EMA 0.85) landmark jitter fell from 1.81 to 1.14 px at the same 100 ms lag. On
@@ -106,13 +107,35 @@ the real pipeline it fell from 1.17 to 1.07 px and the angle SDs did not move (n
 vs 0.31°, head tilt 0.50° vs 0.51°). Too small to justify changing what every reading is
 computed from. `/perf.html?smoother=euro:1,100` reruns the comparison.
 
-## Open finding
+## Fusion made landmarks noisier, and why
 
-In all four runs above, fusion made a still subject's landmarks noisier, not steadier. That
-includes RTMW-x, though only at 1.3 s per inference, far slower than it would run on
-WebGPU. Whether fusion helps on a WebGPU laptop is unmeasured. Run
-`/perf.html?pipeline=mp` and `/perf.html?pipeline=fused&wait=rtmw` on one and compare
-`jitter.raw` with `jitter.fused` before relying on the third model.
+In every fusion run above the fused landmarks were less stable than MediaPipe's own. The
+cause is in the arithmetic: the fused point is `mediapipe + w · (second model − mediapipe at
+inference time)`. That offset is measured once per inference and then held, so it carries
+the noise of both models at one instant into every frame until the next inference. The
+result can only be noisier than MediaPipe alone. The weight also faded with the age of the
+result inside every inference interval, which added a saw-tooth at the inference rate.
+
+What the second model can contribute is a correction of MediaPipe's slowly varying bias.
+So the offset and its confidence are now averaged over time (1.5 s, or about 8 results for
+a slower model, at most 8 s), and the weight fades only when results stop arriving on
+schedule. MediaPipe still drives every frame, so movement is not delayed; only a change in
+the bias is.
+
+Same build, smoothing off and on, median of 2 runs of 15 s, models forced onto WASM:
+
+| Model (inference) | Raw | Fused, before | Fused, after | Neck SD before → after |
+|---|---|---|---|---|
+| RTMPose-t (40 ms) | 1.37 px | 2.58 px | 1.32 to 1.48 px | 0.66° → 0.47 to 0.49° |
+| RTMPose-s (70 to 90 ms) | 1.32 px | 1.56 px | 1.27 to 1.31 px | 0.48° → 0.30 to 0.35° |
+| RTMPose-m (165 ms) | 1.41 px | 1.72 px | 1.28 px | 0.52° → 0.27° |
+| RTMW-x (1.4 s, one run) | 1.28 px | 2.43 px | 2.18 px | 0.71° → 0.60° |
+
+Up to the 400 ms that the device check allows, fusion is now as stable as MediaPipe alone.
+At 1.4 s per inference it is not, which is one more reason that configuration stays blocked.
+This removes a cost of fusion. It does not show a benefit: whether the second model makes
+readings more correct needs reference measurements on people, and RTMW-x on WebGPU is still
+unmeasured. The small models stay out of the product for the same reason.
 
 ## Not tested
 
