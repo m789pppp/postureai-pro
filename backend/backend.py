@@ -10934,6 +10934,65 @@ def company_alert_employees():
         return safe_error(e)
 
 
+def _roster_rows(users, aggregate_only):
+    """(uid, user_dict) pairs to HR roster rows. Scores only when the
+    organisation opted into individual reporting."""
+    out = []
+    for uid, u in users:
+        row = {
+            "id": uid,
+            "name": u.get("name") or "",
+            "email": u.get("email") or "",
+            "department": u.get("department") or u.get("dept") or "",
+            "department_id": u.get("department_id") or "",
+        }
+        if not aggregate_only:
+            row["avg_score"] = u.get("avg_score") or 0
+            row["sessions_count"] = u.get("sessions_count") or 0
+        out.append(row)
+    out.sort(key=lambda r: (r["name"] or r["email"]).lower())
+    return out
+
+
+@app.route("/api/company/roster", methods=["GET"])
+@require_auth
+@_require_b2b
+@limiter.limit("30 per minute")
+def company_roster():
+    """
+    Employee list for the HR panel.
+
+    HR accounts used to read users/{uid} directly through a Firestore rule.
+    A rule cannot hide fields, so that also exposed each employee's
+    avg_score and session history regardless of the organisation's
+    aggregate_only setting. The rule is removed and HR reads this list
+    instead. Scores are included only when the organisation has opted into
+    individual reporting.
+    """
+    try:
+        company_id = g.company_id
+        _org = {}
+        try:
+            _snap = db.collection("companies").document(company_id).get()
+            if _snap.exists:
+                _org = _snap.to_dict() or {}
+        except Exception:
+            _org = {}
+        aggregate_only = bool(_org.get("aggregate_only", True))
+        docs = (db.collection("users")
+                  .where("company_id", "==", company_id)
+                  .limit(500).stream())
+        out = _roster_rows(((d.id, d.to_dict() or {}) for d in docs), aggregate_only)
+        return jsonify({
+            "ok": True,
+            "privacy_mode": "aggregate_only" if aggregate_only else "individual",
+            "employees": out,
+        })
+    except Exception as e:
+        print(f"[company_roster] {e}", file=sys.stderr)
+        return jsonify({"ok": False, "error": "roster_unavailable"}), 500
+
+
 @app.route("/api/company/stats", methods=["GET"])
 @require_auth
 @_require_b2b

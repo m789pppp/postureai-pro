@@ -3418,7 +3418,7 @@ function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamer
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:30, height:30, background:"linear-gradient(135deg,#1a56db,#0891b2)",
             borderRadius:7, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:16, flexShrink:0 }}>◈</div>
+            fontSize:16, flexShrink:0 }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
           <div>
             <div style={{ fontSize:13, fontWeight:800, color:cs.text, letterSpacing:"-.01em" }}>Posmoz</div>
             <div style={{ fontSize:9, fontWeight:600, textTransform:"uppercase", letterSpacing:".06em",
@@ -4102,7 +4102,7 @@ export default function HomePage({
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <div style={{ width:26, height:26, background:"linear-gradient(135deg,#1a56db,#0891b2)",
                 borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:14 }}>◈</div>
+                fontSize:14 }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
               <span style={{ fontSize:13, fontWeight:800, color:cs.text }}>Posmoz</span>
             </div>
           )}

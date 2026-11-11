@@ -83,9 +83,10 @@ service cloud.firestore {
     // ── Users Collection ────────────────────────────────────────
     match /users/{uid} {
       // Read: own profile OR admin OR HR within same company
+      // HR does not read user documents: they hold individual scores. The
+      // HR panel gets its roster from /api/company/roster instead.
       allow read: if isOwner(uid)
-                  || isAdmin()
-                  || (isHR() && isSameCompany(resource.data.get('company_id', '')));
+                  || isAdmin();
 
       // Create: own profile on signup
       allow create: if isOwner(uid)
@@ -405,7 +406,7 @@ service cloud.firestore {
 
     // ── Company Members Subcollection ─────────────────────────────
     match /companies/{companyId}/members/{uid} {
-      allow read: if isAdmin() || isHR();
+      allow read: if isAdmin() || (isHR() && isSameCompany(companyId));
       allow create, update, delete: if false; // Admin SDK only
     }
 

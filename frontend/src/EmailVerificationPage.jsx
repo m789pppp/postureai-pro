@@ -76,7 +76,7 @@ export default function EmailVerificationPage({ oobCode, user, darkMode, lang, o
         <div style={{width:48,height:48,borderRadius:13,margin:"0 auto 20px",
           background:"linear-gradient(135deg,#1a56db,#0891b2)",
           display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,
-          boxShadow:"0 8px 24px rgba(26,86,219,.3)"}}>◈</div>
+          boxShadow:"0 8px 24px rgba(26,86,219,.3)"}}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
 
         {/* Verifying */}
         {step==="verifying" && (

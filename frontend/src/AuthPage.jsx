@@ -633,7 +633,7 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
             background:"linear-gradient(135deg,#1a56db 0%,#0891b2 100%)",
             display:"flex",alignItems:"center",justifyContent:"center",
             fontSize:19,color:"#fff",boxShadow:"0 6px 20px rgba(26,86,219,.35)",
-          }}>◈</div>
+          }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
           <div style={{lineHeight:1.1}}>
             <div style={{fontSize:17,fontWeight:800,color:t.text,letterSpacing:"-.025em"}}>Posmoz</div>
             <div style={{fontSize:10.5,color:t.muted,marginTop:2,letterSpacing:".05em",textTransform:"uppercase"}}>

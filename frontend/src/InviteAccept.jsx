@@ -124,7 +124,7 @@ export default function InviteAccept({ token, cs, lang, onAccepted, onError }) {
       <div style={{ width: "100%", maxWidth: 420, textAlign: "center" }}>
 
         {/* Logo */}
-        <div style={{ width: 56, height: 56, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 20, boxShadow: "0 8px 32px rgba(26,86,219,.35)" }}>◈</div>
+        <div style={{ width: 56, height: 56, background: "linear-gradient(135deg,#1a56db,#0891b2)", borderRadius: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 20, boxShadow: "0 8px 32px rgba(26,86,219,.35)" }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
         <div style={{ fontSize: 22, fontWeight: 800, color: "#f0f6ff", marginBottom: 6, letterSpacing: "-.025em" }}>Posmoz</div>
 
         {/* Loading */}

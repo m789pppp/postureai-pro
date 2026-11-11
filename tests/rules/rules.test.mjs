@@ -65,6 +65,13 @@ await t("HR in the same company CANNOT read an employee's session",
 await t("owner writes own session",       () => assertSucceeds(setDoc(doc(alice, "sessions/new1"), { uid: "alice", avg_score: 80 })));
 await t("cannot write session as another user", () => assertFails(setDoc(doc(bob, "sessions/new2"), { uid: "alice", avg_score: 99 })));
 
+console.log("\nUser documents — they hold individual scores");
+await t("HR in the same company CANNOT read an employee's user document",
+        () => assertFails(getDoc(doc(hilda, "users/alice"))));
+await t("HR CANNOT list the company's user documents",
+        () => assertFails(getDocs(query(collection(hilda, "users"), where("company_id", "==", "acme")))));
+await t("owner still reads own user document", () => assertSucceeds(getDoc(doc(alice, "users/alice"))));
+
 console.log("\nInvites — the duplicate-rule leak that was removed");
 await t("unrelated user CANNOT read an invite", () => assertFails(getDoc(doc(bob, "invites/i1"))));
 await t("unrelated user CANNOT list invites",   () => assertFails(getDocs(collection(bob, "invites"))));

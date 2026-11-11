@@ -153,11 +153,11 @@ export default async function handler(req, res) {
     if (isNew) {
       const ackBody = isElite
         ? (lang === "ar"
-            ? `🦅 وصلتنا رسالتك! فريق دعم Elite بيراجعها دلوقتي وهيردّ خلال ساعة.`
-            : `🦅 Got your message! Our Elite support team is on it — you'll hear back within an hour.`)
+            ? `وصلتنا رسالتك! فريق دعم Elite بيراجعها دلوقتي وهيردّ خلال ساعة.`
+            : `Got your message! Our Elite support team is on it — you'll hear back within an hour.`)
         : (lang === "ar"
-            ? `🦅 وصلتنا رسالتك، فريقنا هيراجعها ويرد عليك قريب.`
-            : `🦅 Got your message — our team will get back to you soon.`);
+            ? `وصلتنا رسالتك، فريقنا هيراجعها ويرد عليك قريب.`
+            : `Got your message — our team will get back to you soon.`);
       await sendWhatsApp(TWILIO_SID, TWILIO_TOKEN, WA_FROM, fromRaw, ackBody).catch(() => {});
     }
 

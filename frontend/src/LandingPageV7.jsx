@@ -517,7 +517,7 @@ function Nav({ lang, setLang, onCTA }) {
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:18, color:"#fff", fontWeight:900,
               boxShadow:"0 4px 16px rgba(26,86,219,.45)",
-            }}>◈</div>
+            }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
             <div style={{ lineHeight:1.15 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Posmoz</div>
               <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase", marginTop:1 }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>
@@ -2618,7 +2618,7 @@ function FinalCTA({ lang, onCTA }) {
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:30, color:"#fff", fontWeight:800,
               boxShadow:"0 8px 28px rgba(26,86,219,.45)",
-            }}>◈</div>
+            }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
             <h2 style={{ ...TYPE.h2, color:LPV7_TOKENS.text, margin:"0 0 14px", fontFamily:FONT_DISPLAY,
               fontSize:"clamp(22px,3vw,34px)" }}>
               {ar ? "ابدأ تحسين صحة فريقك اليوم" : "Start improving your team's health today"}
@@ -2827,7 +2827,7 @@ function Footer({ lang }) {
                 display:"flex", alignItems:"center", justifyContent:"center",
                 fontSize:17, color:"#fff", fontWeight:900,
                 boxShadow:"0 4px 14px rgba(26,86,219,.4)",
-              }}>◈</div>
+              }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
               <div style={{ lineHeight:1.2 }}>
                 <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FONT_DISPLAY }}>Posmoz</div>
                 <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>{ar ? "تدريب الوضعية بالذكاء الاصطناعي" : "AI Posture Coaching"}</div>

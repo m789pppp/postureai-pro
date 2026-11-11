@@ -81,8 +81,8 @@ export default async function handler(req, res) {
     const lang = u.lang || "en";
     const name = u.name || "User";
     const body = lang === "ar"
-      ? `🦅 صباح الخير ${name}!\n\nوقت جلسة الوضعية اليومية بتاعتك مع Posmoz 💪\n\nافتح التطبيق وابدأ جلستك دلوقتي.`
-      : `🦅 Good morning ${name}!\n\nTime for your daily posture session with Posmoz 💪\n\nOpen the app and start your session now.`;
+      ? `صباح الخير ${name}!\n\nوقت جلسة الوضعية اليومية بتاعتك مع Posmoz 💪\n\nافتح التطبيق وابدأ جلستك دلوقتي.`
+      : `Good morning ${name}!\n\nTime for your daily posture session with Posmoz 💪\n\nOpen the app and start your session now.`;
     try {
       results.push({ uid: doc.id, type: "daily", ok: await sendWhatsApp(u.whatsapp_phone, body) });
     } catch (e) {
@@ -109,8 +109,8 @@ export default async function handler(req, res) {
     const name = u.name || "User";
     const region = lang === "ar" ? (pr.region_ar || "وضعيتك") : (pr.region_en || "your posture");
     const body = lang === "ar"
-      ? `🦅 تذكير وقائي من Posmoz\n\nنمطك الأخير بيوضح إجهاد في الوضعية حوالين ${region}. خد كام دقيقة تتحرك وتعدّل قعدتك.\n\nافتح التطبيق لتمارين مقترحة.`
-      : `🦅 Preventive reminder from Posmoz\n\nYour recent pattern shows posture strain around the ${region}. Take a few minutes to move and reset your posture.\n\nOpen the app for suggested stretches.`;
+      ? `تذكير وقائي من Posmoz\n\nنمطك الأخير بيوضح إجهاد في الوضعية حوالين ${region}. خد كام دقيقة تتحرك وتعدّل قعدتك.\n\nافتح التطبيق لتمارين مقترحة.`
+      : `Preventive reminder from Posmoz\n\nYour recent pattern shows posture strain around the ${region}. Take a few minutes to move and reset your posture.\n\nOpen the app for suggested stretches.`;
     try {
       results.push({ uid: doc.id, type: "predictive", ok: await sendWhatsApp(u.whatsapp_phone, body) });
     } catch (e) {

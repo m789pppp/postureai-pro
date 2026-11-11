@@ -114,7 +114,7 @@ export function SharedNav({ lang, setLang, activePage }) {
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:18, color:"#fff", fontWeight:900,
               boxShadow:"0 4px 14px rgba(26,86,219,.4)",
-            }}>◈</div>
+            }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
             <div style={{ lineHeight:1.2 }}>
               <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.025em", fontFamily:FD }}>Posmoz</div>
               <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>
@@ -284,7 +284,7 @@ export function SharedFooter({ lang }) {
                   display:"flex", alignItems:"center", justifyContent:"center",
                   fontSize:16, color:"#fff", fontWeight:900,
                   boxShadow:"0 4px 12px rgba(26,86,219,.3)",
-                }}>◈</div>
+                }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
                 <div>
                   <div style={{ fontWeight:800, fontSize:15, color:"#f1f5f9", letterSpacing:"-.02em", fontFamily:FD }}>Posmoz</div>
                   <div style={{ fontSize:10.5, color:"#8896ac", letterSpacing:".05em", textTransform:"uppercase" }}>AI Posture Coaching</div>

@@ -74,7 +74,7 @@ export default function TrialExpiredPage({ profile, darkMode, lang, onUpgrade, o
             background:"linear-gradient(135deg,#1a56db,#0891b2)",
             display:"flex",alignItems:"center",justifyContent:"center",
             fontSize:28,boxShadow:"0 12px 40px rgba(26,86,219,.35)",
-          }}>◈</div>
+          }}><img src="/posmoz-mark-128.png" alt="Posmoz" style={{width:"100%",height:"100%",objectFit:"contain",padding:"12%",boxSizing:"border-box",background:"#0b1430",borderRadius:"inherit",display:"block"}}/></div>
 
           <div style={{
             display:"inline-flex",alignItems:"center",gap:8,
