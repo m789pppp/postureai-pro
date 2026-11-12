@@ -40,13 +40,18 @@ async function mainThreadPose(delegates) {
  * @param {boolean} [o.worker=true]   false = main thread only
  * @param {string[]} [o.delegates]    default: chosen from the WebGL renderer
  * @param {number} [o.minIntervalMs=50]  at most one inference per this many ms (the app's 20/s ceiling)
+ * @param {number} [o.staleMs=1000]   a finished result nobody read for this long is dropped (the loop was
+ *                                    paused; it must not resume on a frame from before the pause)
+ * @param {Function} [o.mainThread]   creates the main-thread task; replaceable in tests
  * @param {number} [o.stallMs=8000]   a frame unanswered for this long means the worker is dead
  * @returns {Promise<{ pose, face, mode: "worker"|"main", delegate, source, close }>}
  *   pose.detectForVideo(video, ts) → { landmarks: [[…]] } | { landmarks: [] } | { pending: true, landmarks: [] }
  *   face  null on the main thread (the precision layer loads its own model); in the worker an
  *         object whose detectForVideo() returns the newest unread face result or null.
  */
-export async function createVisionClient({ worker: useWorker = true, delegates = preferredDelegates(), stallMs = 8000, minIntervalMs = 50 } = {}) {
+export async function createVisionClient({ worker: useWorker = true, delegates, stallMs = 8000, minIntervalMs = 50, staleMs = 1000,
+                                          mainThread = mainThreadPose } = {}) {
+  delegates ||= preferredDelegates();
   const canWork = useWorker && typeof Worker !== "undefined" && typeof createImageBitmap !== "undefined";
   let w = null, info = null;
   if (canWork) {
@@ -63,7 +68,7 @@ export async function createVisionClient({ worker: useWorker = true, delegates =
     } catch (e) { try { w?.terminate(); } catch { /* ignore */ } w = null; console.warn("[vision] worker unavailable, using the main thread:", e?.message); }
   }
   if (!w) {
-    const m = await mainThreadPose(delegates);
+    const m = await mainThread(delegates);
     return { pose: m.task, face: null, mode: "main", delegate: m.delegate, source: m.source, close() { try { m.task.close(); } catch { /* ignore */ } } };
   }
 
@@ -76,14 +81,14 @@ export async function createVisionClient({ worker: useWorker = true, delegates =
     console.warn("[vision] worker lost, continuing on the main thread:", why);
     try { w.terminate(); } catch { /* ignore */ }
     fallback = { task: null };
-    mainThreadPose(delegates).then(m => { if (closed) { try { m.task.close(); } catch { /* ignore */ } } else fallback.task = m.task; }, () => { /* stays pending; the app's own watchdog reports it */ });
+    mainThread(delegates).then(m => { if (closed) { try { m.task.close(); } catch { /* ignore */ } } else fallback.task = m.task; }, () => { /* stays pending; the app's own watchdog reports it */ });
   };
   w.onerror = e => die(e.message);
   w.onmessage = ({ data }) => {
     if (data.type !== "result") return;
     busy = false;
     if (!data.error) {
-      fresh = { landmarks: data.pose ? [unpackPose(data.pose)] : [], ms: data.ms };
+      fresh = { landmarks: data.pose ? [unpackPose(data.pose)] : [], ms: data.ms, at: performance.now() };
       if (data.faceState) faceState = data.faceState;
       if (data.face) faceFresh = unpackFace(data.face);
     }
@@ -109,6 +114,7 @@ export async function createVisionClient({ worker: useWorker = true, delegates =
         if (busy && performance.now() - sentAt > stallMs) { die("no answer"); return PENDING; }
         lastVideo = video; polledAt = performance.now();
         if (!busy && polledAt - sentAt >= minIntervalMs) kick(video, ts);
+        if (fresh && polledAt - fresh.at > staleMs) fresh = null;
         if (!fresh) return PENDING;
         const r = fresh; fresh = null; return r;
       },

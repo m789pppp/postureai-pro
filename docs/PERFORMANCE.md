@@ -132,7 +132,11 @@ Same build, worker off and on, median of 3 runs of 15 s:
 Cost: a reading describes a frame about one inference old (50 to 70 ms here). The jitter
 and angle differences are within run-to-run variation. Measured through `/perf.html`
 only; `App.jsx` uses the same client but its signed-in session was not run. The GPU
-delegate inside a worker was not exercised (this machine uses the CPU delegate).
+delegate was forced on once inside the worker: pose and face both produced results (313 ms
+per inference on software WebGL, page still painting every 19 ms). A real GPU was not tried.
+The client's own logic (pending, one result handed out once, rate cap, pause, face every
+second frame, worker that fails or stalls) is covered by `visionClient.test.mjs` with a fake
+worker.
 `/perf.html?worker=0` reruns the main-thread path.
 
 ## Fusion made landmarks noisier, and why
@@ -168,7 +172,7 @@ unmeasured. The small models stay out of the product for the same reason.
 ## Not tested
 
 - Any real device: no laptop with a GPU, no phone, no real camera.
-- The signed-in live session in `App.jsx`, and MediaPipe's GPU delegate inside a worker.
+- The signed-in live session in `App.jsx` (it needs an account on the production Firebase project), and MediaPipe's GPU delegate in a worker on a real GPU.
 - RTMW-x on WebGPU: speed, memory, and whether the 8 GB / not-a-phone limits are the right ones.
 - Safari and Firefox. Only headless Chromium 153 was run.
 - Download time on a real connection. At 10 Mbit/s, 229 MB is about 3 minutes; that is arithmetic, not a measurement.
