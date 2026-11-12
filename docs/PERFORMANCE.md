@@ -79,6 +79,8 @@ to devices whose WebGL is software.
 | One MediaPipe runtime, self-hosted first; face model staged at build time | `mediapipeLoader.js`, `scripts/fetch-mediapipe.mjs` | face model ready 10.9 s → 2.4 s; works on filtered networks |
 | Model bytes read into one buffer instead of chunks plus a joined copy | `rtmwWorker.js` | one copy of the weights fewer at the end of a download. Not measured here: this machine no longer downloads the model |
 | Pose and face inference in a worker | `visionWorker.js`, `visionClient.js`, `App.jsx`, `liveEnhancer.js` | main-thread time per frame 59 to 112 ms → under 1 ms, no stalls, see below |
+| Analysis rate follows movement | `analysisRate.js`, `App.jsx`, `visionClient.js` | CPU on a still subject 121% → 60% of a core, see below |
+| Pipeline id on every trial and bench step | `pipelineInfo.js`, `clinicalMeasure.js`, `ClinicalCapture.jsx`, `BenchRecorder.jsx`, `validation/analyze.mjs` | keeps data from different pipelines apart |
 | Second model's offset averaged over time; weight no longer fades between inferences | `liveEnhancer.js` | fused jitter back to MediaPipe's own level, see below |
 | Runner and worker take a model spec | `rtmwCore.js`, `rtmwWeb.js`, `rtmwWorker.js` | needed to benchmark other models; default unchanged |
 
@@ -138,6 +140,55 @@ The client's own logic (pending, one result handed out once, rate cap, pause, fa
 second frame, worker that fails or stalls) is covered by `visionClient.test.mjs` with a fake
 worker.
 `/perf.html?worker=0` reruns the main-thread path.
+
+## Adaptive analysis rate
+
+The loop analysed up to 20 frames a second for as long as a session ran, whether or not the
+person moved. `analysisRate.js` keeps that rate while the nose, ears or shoulders move more
+than 5% of the shoulder width (about 2 cm) from where they last settled, and drops to one
+analysis per 150 ms after 2 s of stillness. Movement, including a slow drift, returns to
+the full rate on the next sample. Validation captures keep the full rate.
+
+Still subject, worker on, median of 3 runs of 20 s. CPU is what the browser's processes used
+while measuring, in percent of one core:
+
+| | MediaPipe only, fixed | MediaPipe only, adaptive | Precision layer, fixed | Precision layer, adaptive |
+|---|---|---|---|---|
+| CPU | 121% | 60% | 122% | 67% |
+| Analyses per second | 17.0 | 7.3 | 15.0 | 7.0 |
+| Share of analyses at the slow rate | 0 | 80% | 0 | 84% |
+| Landmark jitter, smoothed | 1.15 px | 1.35 px | 1.22 px | 1.27 px |
+| Neck angle SD | 0.25° | 0.38° | 0.26° | 0.27° |
+| Head tilt SD | 0.44° | 0.60° | 0.48° | 0.51° |
+| Shoulder level SD | 0.36° | 0.39° | 0.34° | 0.44° |
+| Score SD | 1.07 | 1.00 | 1.15 | 1.16 |
+
+The cost is real: readings of a still subject are slightly less steady, because fewer
+samples go into each smoothing window. The displayed score is not affected. A slow rate of
+250 ms saved more CPU (46 to 61%) and cost more stability (landmark jitter up to 1.57 px),
+100 ms saved less (85%); 150 ms was the middle. `/perf.html?rate=fixed` reruns the fixed rate.
+
+Not measured: a real person. Someone who sways or fidgets will spend less time at the slow
+rate than a photograph does, so the saving on people will be smaller than in this table.
+
+## Which pipeline produced a reading
+
+`MEASURE_VERSION` names the code. It does not say which models ran: one device runs
+MediaPipe alone on the CPU, another fuses a third model on WebGPU. Every validation trial
+(`pipeline` column of the CSV) and every bench step now carries an id such as
+`mp0.10.14-pose_full/cpu/worker+face`. A recording during which the pipeline changed is
+marked `mixed(...)`. `validation/analyze.mjs` and `backend/ai/bench_train.py` warn about, and
+never pool, data from different pipelines.
+
+## Bench report
+
+`python -m ai.bench_train --sessions <folder> [--participants participants.csv]` (from
+`backend/`) now writes `bench_report.md` next to `correction.json`: per target the bias,
+SD, 95% limits of agreement, mean absolute error and worst case of the camera estimate
+against the hand measurement, and the same split by every column of `participants.csv`
+(`subject` plus conditions such as `hijab`, `glasses`, `lighting`, `device`). The correction
+is trained on the pipeline with the most subjects only. The figures describe the people
+recorded; they are not a validation study.
 
 ## Fusion made landmarks noisier, and why
 

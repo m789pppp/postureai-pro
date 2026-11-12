@@ -16,6 +16,7 @@
  *   warmup   = seconds ignored after the first score             (default 3)
  *   wait     = "rtmw" to start measuring only after the third model settled (on/off)
  *   rtmw     = JSON of options for the enhancer's refinement model, e.g. {"force":true,"providers":["wasm"]}
+ *   rate     = fixed             always 20 analyses/s (default: adaptive, slower once the subject is still)
  *   worker   = 0                 run MediaPipe on the main thread (default: in a worker)
  *   delegate = gpu | cpu         force MediaPipe's delegate (default: chosen by mediapipeLoader)
  *   smoother = euro:<minCutoff>,<beta>   One Euro instead of the tier's EMA
@@ -27,6 +28,8 @@ import { qualityFor } from "../lib/tierQuality.js";
 import { createOneEuroLandmarkSmoother } from "../features/analysis/calibrationCore.js";
 import { preferredDelegates, webglRendererName } from "../features/analysis/mediapipeLoader.js";
 import { createVisionClient } from "../features/analysis/visionClient.js";
+import { createRateController } from "../features/analysis/analysisRate.js";
+import { pipelineId } from "../features/analysis/pipelineInfo.js";
 import { PERF_VERSION, landmarkJitter, seriesStats, pacing } from "./perfCore.js";
 
 const Q = new URLSearchParams(location.search);
@@ -131,7 +134,11 @@ async function run() {
 
     const rec = { t: [], cost: [], raf: [], raw: [], fused: [], smooth: [], series: {}, heap: [] };
     const push = (k, v) => { (rec.series[k] ||= []).push(Number.isFinite(v) ? v : NaN); };
-    const infer = [];
+    const infer = [], intervals = [];
+    let rateOpts = {};
+    try { rateOpts = JSON.parse(Q.get("rateOpts") || "{}"); } catch { /* defaults */ }      // tuning only, e.g. {"slowMs":150}
+    const rate = Q.get("rate") === "fixed" ? null : createRateController(rateOpts);
+    let intervalMs = 50;
     let measuring = false, startT = 0, lastT = 0, lastRaf = 0, prec = null, lastScore = null, done;
     const finished = new Promise(r => { done = r; });
 
@@ -139,12 +146,15 @@ async function run() {
       const now = performance.now();
       if (measuring && lastRaf) rec.raf.push(now - lastRaf);
       lastRaf = now;
-      if (now - lastT < 50 || video.readyState < 2) return requestAnimationFrame(tick);   // same 20/s ceiling as the app
+      if (now - lastT < intervalMs || video.readyState < 2) return requestAnimationFrame(tick);   // same pacing as the app
       lastT = now;
       const c0 = performance.now();
       const det = pose.pl.detectForVideo(video, now);
       if (det.pending) { lastT = 0; return requestAnimationFrame(tick); }     // nothing new from the worker: ask again next frame
       if (det.ms != null) infer.push(det.ms);
+      intervalMs = rate ? rate.update(det.landmarks?.[0] || null, now) : 50;
+      pose.pl.setMinInterval?.(intervalMs);
+      if (measuring) intervals.push(intervalMs);
       const raw = det.landmarks?.[0];
       if (raw) {
         timings.firstLandmarksMs ??= at();
@@ -160,7 +170,7 @@ async function run() {
         }
         const rtmwSettled = !enh || !WAIT_RTMW || timings.rtmwSettledMs != null || at() > RTMW_WAIT_MAX_MS;
         if (!measuring && timings.firstScoreMs != null && rtmwSettled && now - t0 > (timings.measureFromMs ??= at() + WARMUP * 1000)) {
-          measuring = true; startT = now; lastRaf = 0;
+          measuring = true; startT = now; lastRaf = 0; window.__perfMeasuring = true;
         }
         if (measuring) {
           rec.t.push(now); rec.cost.push(performance.now() - c0);
@@ -180,6 +190,8 @@ async function run() {
 
     res.timings = timings;
     res.pacing = pacing(rec.t, rec.cost, rec.raf);
+    res.rate = { mode: rate ? "adaptive" : "fixed", slowShare: intervals.length ? Math.round(100 * intervals.filter(i => i > 50).length / intervals.length) / 100 : null };
+    res.pipeline = pipelineId({ vision: pose.pl.info || { mode: pose.mode, delegate: pose.delegate }, precision: prec });
     res.workerInferMs = infer.length ? Math.round(infer.slice(-100).sort((a, b) => a - b)[Math.floor(Math.min(infer.length, 100) / 2)]) : null;
     res.jitter = { raw: landmarkJitter(rec.raw, W, H), fused: landmarkJitter(rec.fused, W, H), smoothed: landmarkJitter(rec.smooth, W, H) };
     res.stability = seriesStats(rec.series);

@@ -37,10 +37,13 @@ export function frameRecord(tMs, rawLms, fusedLms, prec) {
 }
 
 /** Session envelope written to the downloaded JSON. */
-export function sessionEnvelope({ subject, camera, calib, steps }) {
+export function sessionEnvelope({ subject, camera, calib, steps, measureVersion = null }) {
   return {
     bench_version: BENCH_VERSION,
     recorded_at: new Date().toISOString(),
+    measure_version: measureVersion,
+    // every step also carries `pipeline` (pipelineInfo.js): sessions from different pipelines are not pooled
+
     subject,                                 // pseudonymous code, e.g. "S07" — never a name
     camera,                                  // { width, height, focal_px, focal_source }
     calib: calib ? { head_pose_neutral: calib.head_pose_neutral, iris_px_neutral: calib.iris_px_neutral,

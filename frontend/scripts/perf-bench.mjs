@@ -14,7 +14,8 @@
  *
  * Each pipeline is run cold (empty browser profile: every model is downloaded) and then
  * warm (same profile again: models come from the HTTP cache / Cache Storage).
- * Memory is the peak proportional set size (PSS) summed over the browser's processes.
+ * Memory is the peak proportional set size (PSS) summed over the browser's processes;
+ * CPU is what those processes used during the measured window, in percent of one core.
  *
  * Numbers describe THIS machine. A cloud container has no GPU, so MediaPipe runs on
  * the CPU delegate and WebGPU is unavailable — treat it as a weak laptop, not a typical one.
@@ -79,6 +80,21 @@ function watchMemory(rootPid) {
   return () => { clearInterval(t); sample(); return { mb: Math.round(peak), kind }; };
 }
 
+/** CPU time (seconds) used so far by the browser's processes. Linux only; null elsewhere. */
+function browserCpuSeconds() {
+  try {
+    const rows = execSync("ps -eo pid=,ppid=,comm=", { encoding: "utf8" }).trim().split("\n").map(l => l.trim().split(/\s+/));
+    const kids = new Set([process.pid]); let grew = true;
+    while (grew) { grew = false; for (const [pid, ppid] of rows) if (kids.has(+ppid) && !kids.has(+pid)) { kids.add(+pid); grew = true; } }
+    let ticks = 0;
+    for (const [pid, , comm] of rows) {
+      if (!kids.has(+pid) || !/chrom|headless/i.test(comm || "")) continue;
+      try { const f = readFileSync(`/proc/${pid}/stat`, "utf8"); const a = f.slice(f.lastIndexOf(")") + 2).split(" "); ticks += Number(a[11]) + Number(a[12]); } catch { /* exited */ }
+    }
+    return ticks / 100;                                   // USER_HZ
+  } catch { return null; }
+}
+
 const imgBody = await readFile(IMAGE);
 const imgType = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[extname(IMAGE).toLowerCase()] || "image/jpeg";
 
@@ -98,10 +114,15 @@ async function once(pipeline, profile) {
   if (RTMW) q.set("rtmw", RTMW);
   for (const [k, v] of EXTRA) q.set(k, v);
   await page.goto(`${base}/perf.html?${q}`);
+  await page.waitForFunction(() => window.__perfMeasuring || window.__perfResult, null, { timeout: 15 * 60 * 1000 });
+  const c0 = browserCpuSeconds(), w0 = Date.now();
   await page.waitForFunction(() => window.__perfResult, null, { timeout: 15 * 60 * 1000 });
+  const c1 = browserCpuSeconds(), wall = (Date.now() - w0) / 1000;
   const res = await page.evaluate(() => window.__perfResult);
   const mem = stop();
   res.memPeakMb = mem.mb; res.memKind = mem.kind;
+  // CPU the browser used while measuring, as a percentage of one core (400 = four cores busy)
+  res.cpuPct = c0 != null && c1 != null && wall > 1 ? Math.round(100 * (c1 - c0) / wall) : null;
   res.downloadedMb = Math.round(bytes / 1048576 * 10) / 10;
   await ctx.close();
   return res;

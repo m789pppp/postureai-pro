@@ -109,6 +109,8 @@ import EmbedWidget        from "./EmbedWidget.jsx";
 // Live precision layer: RTMW-x + Face Landmarker fusion, iris distance, exposure, confidence.
 import { createLiveEnhancer } from "./features/analysis/liveEnhancer.js";
 import { createVisionClient } from "./features/analysis/visionClient.js";
+import { createRateController } from "./features/analysis/analysisRate.js";
+import { pipelineId } from "./features/analysis/pipelineInfo.js";
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
@@ -3333,6 +3335,9 @@ export default function App(){
   const mpRef=useRef();const badRef=useRef(null);const lastAlRef=useRef(0);
   const lmSmootherRef   = useRef(null);
   const enhancerRef     = useRef(null);   // live precision layer (second model + exposure)
+  const rateRef         = useRef(null);   // adaptive analysis rate (analysisRate.js)
+  const analysisIntervalRef = useRef(50); // ms between analyses: 50 while moving, slower once still
+  const pipelineRef     = useRef(null);   // id of the models that produced the current reading
   const precTickRef     = useRef(0);
   const [precision, setPrecision] = useState(null);
   useEffect(() => () => { enhancerRef.current?.close(); enhancerRef.current = null; }, []);
@@ -3993,6 +3998,13 @@ export default function App(){
       rafRef.current = requestAnimationFrame(runLoop);
       return;
     }
+    // Below that ceiling the rate follows the person: 50 ms while they
+    // move, slower once they have been still for a couple of seconds —
+    // see analysisRate.js and the update further down.
+    if (_nowTs - lastAnalysisTsRef.current < analysisIntervalRef.current) {
+      rafRef.current = requestAnimationFrame(runLoop);
+      return;
+    }
     lastAnalysisTsRef.current = _nowTs;
 
     // Pose inference runs in a worker (visionClient.js): the call returns
@@ -4042,6 +4054,13 @@ export default function App(){
     if(mpRef.current){
       try{
         const det=_det??mpRef.current.detectForVideo(vidRef.current,performance.now());
+        // Adaptive rate: posture changes over seconds, so a still person
+        // does not need 20 analyses a second. Any movement returns to the
+        // full rate on the next sample. Validation captures keep the full
+        // rate so their frame counts stay as specified.
+        if(!rateRef.current) rateRef.current=createRateController();
+        analysisIntervalRef.current = clinicalSinkRef.current ? 50 : rateRef.current.update(det.landmarks?.[0]||null,_nowTs);
+        mpRef.current.setMinInterval?.(analysisIntervalRef.current);
         if(det.landmarks?.length>0){
           window.__frameHadLandmarksOnce=true;
           // A body is visible again — clear the absence streak/banner (see
@@ -4106,6 +4125,7 @@ export default function App(){
           const lms=lmSmootherRef.current.smooth(fusedLms);
           totalRef.current++;setTotalF(totalRef.current);
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
+          if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Live precision layer: runs beside the engine; it only replaces the distance
           // when this camera was calibrated with a measured distance (iris + real focal).
@@ -4115,6 +4135,7 @@ export default function App(){
             const prec=enhancerRef.current.process(vidRef.current,lms,W,H,performance.now(),lastAnalRef.current?.overall??null);
             if(rawResult && prec.distCm!=null && prec.distSource==="calibrated") rawResult.distCm=prec.distCm;
             if(rawResult) rawResult.precision=prec;
+            pipelineRef.current=pipelineId({vision:mpRef.current?.info,precision:prec});
             if(++precTickRef.current%6===0) startTransition(()=>setPrecision(prec));
           }catch(e){ /* precision layer must never break the main loop */ }
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter

@@ -9,6 +9,8 @@ import PrecisionHud from "../features/analysis/PrecisionHud.jsx";
 import { BENCH_STEPS, frameRecord, sessionEnvelope } from "../features/analysis/benchProtocol.js";
 
 import { loadVision, createTask, MP_SOURCES } from "../features/analysis/mediapipeLoader.js";
+import { pipelineId, pipelineOfFrames } from "../features/analysis/pipelineInfo.js";
+import { MEASURE_VERSION } from "../features/analysis/clinicalMeasure.js";
 
 export default function BenchRecorder() {
   const [lang, setLang] = useState("ar");
@@ -33,8 +35,10 @@ export default function BenchRecorder() {
         vid.current.srcObject = s; await vid.current.play();
         dims.current = { W: vid.current.videoWidth, H: vid.current.videoHeight };
         const { mod, fileset, source } = await loadVision();
-        poseRef.current = (await createTask(mod.PoseLandmarker, fileset, [...new Set([source.pose, ...MP_SOURCES.map(m => m.pose)])],
-          { runningMode: "VIDEO", numPoses: 1 })).task;
+        const made = await createTask(mod.PoseLandmarker, fileset, [...new Set([source.pose, ...MP_SOURCES.map(m => m.pose)])],
+          { runningMode: "VIDEO", numPoses: 1 });
+        poseRef.current = made.task;
+        const vision = { mode: "main", delegate: made.delegate };
         try { calibRef.current = JSON.parse(localStorage.getItem("posture_calibration") || "null"); } catch { calibRef.current = null; }
         enh.current = createLiveEnhancer(calibRef.current);
         if (dead) return;
@@ -49,11 +53,11 @@ export default function BenchRecorder() {
           const fused = enh.current.fuse(raw, v, W, H, t);
           const p = enh.current.process(v, fused, W, H, t, null);
           const r = rec.current;
-          if (r.frames && t <= r.until) r.frames.push(frameRecord(t, raw, fused, p));
+          if (r.frames && t <= r.until) { r.frames.push(frameRecord(t, raw, fused, p)); r.pipes.push(pipelineId({ vision, precision: p })); }
           if (++n % 6 === 0) { setPrec(p); if (r.frames) setLeft(Math.max(0, Math.ceil((r.until - t) / 1000))); }
           if (r.frames && t > r.until) {
             const cur = BENCH_STEPS[stepRef.current];
-            steps.current.push({ id: cur.id, target: cur.target, measured: r.measured, frames: r.frames });
+            steps.current.push({ id: cur.id, target: cur.target, measured: r.measured, pipeline: pipelineOfFrames(r.pipes), frames: r.frames });
             r.frames = null;
             setMeasured("");
             const nx = stepRef.current + 1;
@@ -71,7 +75,7 @@ export default function BenchRecorder() {
     if (!Number.isFinite(m)) { setError(isAr ? "اكتب القيمة المقاسة الأول" : "Enter the measured value first"); return; }
     setError(""); setStatus("countdown");
     setTimeout(() => {
-      rec.current = { frames: [], until: performance.now() + step.holdSec * 1000, measured: m };
+      rec.current = { frames: [], pipes: [], until: performance.now() + step.holdSec * 1000, measured: m };
       setStatus("recording");
     }, 2000);
   };
@@ -79,7 +83,7 @@ export default function BenchRecorder() {
   const download = () => {
     const { W, H } = dims.current, c = calibRef.current;
     const cam = c?.camera && c.camera.width === W ? c.camera : { width: W, height: H, focal_px: null, focal_source: "unknown" };
-    const env = sessionEnvelope({ subject: subject.trim() || "S00", camera: cam, calib: c, steps: steps.current });
+    const env = sessionEnvelope({ subject: subject.trim() || "S00", camera: cam, calib: c, steps: steps.current, measureVersion: MEASURE_VERSION });
     const blob = new Blob([JSON.stringify(env)], { type: "application/json" });
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `posmoz-bench-${env.subject}-${Date.now()}.json` });
     a.click(); URL.revokeObjectURL(a.href);

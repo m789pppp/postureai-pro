@@ -69,6 +69,7 @@ export async function createVisionClient({ worker: useWorker = true, delegates, 
   }
   if (!w) {
     const m = await mainThread(delegates);
+    m.task.info = { mode: "main", delegate: m.delegate };
     return { pose: m.task, face: null, mode: "main", delegate: m.delegate, source: m.source, close() { try { m.task.close(); } catch { /* ignore */ } } };
   }
 
@@ -95,7 +96,7 @@ export async function createVisionClient({ worker: useWorker = true, delegates, 
     // Start the next inference now instead of waiting for the caller's next tick, which would
     // idle the worker for up to one tick per frame. Only while the caller is still polling,
     // and never faster than minIntervalMs.
-    if (lastVideo && performance.now() - polledAt < 500) {
+    if (lastVideo && performance.now() - polledAt < Math.max(500, 3 * minIntervalMs)) {
       const wait = minIntervalMs - (performance.now() - sentAt);
       if (wait <= 0) kick(lastVideo, performance.now()); else setTimeout(() => { if (!busy && !closed && !fallback && lastVideo) kick(lastVideo, performance.now()); }, wait);
     }
@@ -109,6 +110,9 @@ export async function createVisionClient({ worker: useWorker = true, delegates, 
   return {
     mode: "worker", delegate: info.delegate, source: info.source,
     pose: {
+      get info() { return { mode: fallback ? "main" : "worker", delegate: info.delegate }; },
+      /** Change the rate cap (adaptive rate: 50 ms while moving, slower once still). */
+      setMinInterval(ms) { if (ms > 0) minIntervalMs = ms; },
       detectForVideo(video, ts) {
         if (fallback) return fallback.task ? fallback.task.detectForVideo(video, ts) : PENDING;
         if (busy && performance.now() - sentAt > stallMs) { die("no answer"); return PENDING; }

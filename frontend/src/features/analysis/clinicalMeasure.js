@@ -145,9 +145,13 @@ const csvText = v => {
 };
 const csvNum = v => (v == null ? "" : String(v));
 
-const CSV_HEADER = ["participant_id","trial","view","posture","rater","captured_at","measure_version","metric","unit","method","median","mean","sd","n_frames","n_excluded","usable","reference_value","notes"];
+const CSV_HEADER = ["participant_id","trial","view","posture","rater","captured_at","measure_version","metric","unit","method","median","mean","sd","n_frames","n_excluded","usable","pipeline","reference_value","notes"];
 
-/** Long format, one row per metric, with reference_value left for the assessor. */
+/**
+ * Long format, one row per metric, with reference_value left for the assessor.
+ * `pipeline` names the models that ran during the trial — see pipelineInfo.js.
+ * Trials with different pipelines must not be pooled, even under one measure_version.
+ */
 export function trialsToCsv(trials) {
   const rows = [CSV_HEADER.join(",")];
   for (const t of trials || []) {
@@ -156,7 +160,7 @@ export function trialsToCsv(trials) {
         csvText(t.participantId), csvNum(t.trial), csvText(t.view), csvText(t.posture), csvText(t.rater),
         csvText(t.capturedAt), csvText(MEASURE_VERSION), csvText(metric), csvText(m.unit), csvText(m.method),
         csvNum(m.median), csvNum(m.mean), csvNum(m.sd), csvNum(m.n), csvNum(m.excluded),
-        m.usable ? "1" : "0", "", "",
+        m.usable ? "1" : "0", csvText(t.pipeline || "unknown"), "", "",
       ].join(","));
     }
   }
