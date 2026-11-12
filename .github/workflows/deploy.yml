@@ -94,27 +94,26 @@ jobs:
         with:
           node-version: 20
 
-      # `vercel build` installs the Python function's dependencies (api/main.py,
-      # requirements.txt) with uv. Vercel's own builders ship uv; a GitHub
-      # runner does not, and the build died in its first seconds with
-      # "Error: [ENOENT] spawn uv ENOENT" — on every push to main since at
-      # least #6. Python is pinned to 3.12 to match pyproject.toml and
-      # .python-version (mediapipe has no wheels for 3.13+).
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install uv
-        run: python -m pip install --upgrade uv && uv --version
-
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
       - name: Pull Vercel project config
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: Build project artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-
-      - name: Deploy prebuilt artifacts
-        run: vercel deploy --prebuilt --prod --archive=tgz --token=${{ secrets.VERCEL_TOKEN }}
+      # Build on Vercel, not on this runner.
+      #
+      # This job used to run `vercel build` here and upload the result with
+      # `vercel deploy --prebuilt`. A runner cannot do that for this project:
+      #   1. `vercel pull` cannot download the project's Sensitive environment
+      #      variables. It writes the literal text "[SENSITIVE]" in their place
+      #      (10 of them), so a build on the runner is made with placeholder
+      #      values. Had it succeeded it would have published a site built
+      #      from those placeholders.
+      #   2. It never did succeed: first "spawn uv ENOENT" (no uv on the
+      #      runner), and with uv installed, "No interpreter found for
+      #      executable name `[SENSITIVE]`" — one of those placeholders used
+      #      as the Python interpreter.
+      # Uploading the source and letting Vercel build it uses the real
+      # environment variables and Vercel's own Python and uv.
+      - name: Deploy to production (built on Vercel)
+        run: vercel deploy --prod --archive=tgz --token=${{ secrets.VERCEL_TOKEN }}
