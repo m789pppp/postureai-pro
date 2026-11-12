@@ -9,6 +9,10 @@
  * Weights (~229 MB) are downloaded once, SHA-256 verified and kept in Cache Storage.
  * Inference runs in a Web Worker (rtmwWorker.js) so the UI thread never blocks;
  * devices too slow for real-time refinement are detected by a benchmark and skipped.
+ * Whether a device should download the model at all is decided first, in rtmwPolicy.js.
+ *
+ * Both runners take an optional `spec` (input size, keypoint count — see rtmwCore) so the
+ * same code can run another SimCC model, e.g. a smaller one on the benchmark page.
  */
 
 const ORT_VER = "1.31.1";
@@ -18,7 +22,7 @@ export const RTMW_MODEL_URL =
 export const RTMW_SHA256 = "bd033156e5104c4f5d2edfe0453e02661e30a2f3da453ec93c8764d561b83054";
 const CACHE_NAME = "posmoz-models-v1";
 
-import { INPUT_W, INPUT_H, MEAN, STD, cropRect, cropRectInt, decodeSimcc, toSource } from "./rtmwCore.js";
+import { RTMW_X_SPEC, MEAN, STD, cropRect, cropRectInt, decodeFor, toSource } from "./rtmwCore.js";
 export * from "./rtmwCore.js";
 
 // ── runtime ────────────────────────────────────────────────────────────────
@@ -51,7 +55,8 @@ async function fetchModelCached(url, onProgress) {
  * @param {(p:number)=>void} [o.onProgress] download progress 0..1
  * @param {string[]} [o.providers] execution providers, default WebGPU then WASM
  */
-export async function createRtmwRunnerMain({ onProgress, providers = ["webgpu", "wasm"], modelUrl = RTMW_MODEL_URL } = {}) {
+export async function createRtmwRunnerMain({ onProgress, providers = ["webgpu", "wasm"], modelUrl = RTMW_MODEL_URL, spec = RTMW_X_SPEC } = {}) {
+  const INPUT_W = spec.inputW, INPUT_H = spec.inputH;
   const ort = await import(/* @vite-ignore */ `${ORT_BASE}ort.all.min.mjs`);
   ort.env.wasm.wasmPaths = ORT_BASE;
   const bytes = await fetchModelCached(modelUrl, onProgress);
@@ -73,7 +78,7 @@ export async function createRtmwRunnerMain({ onProgress, providers = ["webgpu", 
     /** @returns {{kpts: Float32Array, scores: Float32Array, ms: number}} keypoints in source px */
     async infer(source, bboxXyxy) {
       const t0 = performance.now();
-      const rect = cropRect(bboxXyxy);
+      const rect = cropRect(bboxXyxy, 1.25, spec);
       ctx.fillStyle = "#000"; ctx.fillRect(0, 0, INPUT_W, INPUT_H);
       ctx.drawImage(source, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, INPUT_W, INPUT_H);
       const px = ctx.getImageData(0, 0, INPUT_W, INPUT_H).data;
@@ -84,8 +89,8 @@ export async function createRtmwRunnerMain({ onProgress, providers = ["webgpu", 
       }
       const feeds = { [session.inputNames[0]]: new ort.Tensor("float32", input, [1, 3, INPUT_H, INPUT_W]) };
       const out = await session.run(feeds);
-      const { locs, scores } = decodeSimcc(out[outX].data, out[outY].data);
-      return { kpts: toSource(locs, rect), scores, ms: performance.now() - t0 };
+      const { locs, scores } = decodeFor(spec, out[outX].data, out[outY].data);
+      return { kpts: toSource(locs, rect, spec), scores, ms: performance.now() - t0 };
     },
     async close() { try { await session.release(); } catch { /* ignore */ } },
   };
@@ -101,9 +106,9 @@ export async function createRtmwRunnerMain({ onProgress, providers = ["webgpu", 
  * @param {number} [o.maxBenchMs]    refuse devices slower than this per inference (default 400)
  */
 export function createRtmwRunner({ onProgress, providers = ["webgpu", "wasm"], modelUrl = RTMW_MODEL_URL,
-                                   sha256 = RTMW_SHA256, maxBenchMs = 400 } = {}) {
+                                   sha256 = RTMW_SHA256, maxBenchMs = 400, spec = RTMW_X_SPEC } = {}) {
   if (typeof Worker === "undefined" || typeof createImageBitmap === "undefined") {
-    return createRtmwRunnerMain({ onProgress, providers, modelUrl });
+    return createRtmwRunnerMain({ onProgress, providers, modelUrl, spec });
   }
   const worker = new Worker(new URL("./rtmwWorker.js", import.meta.url), { type: "module" });
   const pending = new Map();
@@ -119,13 +124,13 @@ export function createRtmwRunner({ onProgress, providers = ["webgpu", "wasm"], m
           ep: data.ep,
           benchMs: data.benchMs,
           async infer(source, bbox) {
-            const rect = cropRectInt(bbox);
+            const rect = cropRectInt(bbox, spec);
             const bitmap = await createImageBitmap(source, rect.sx, rect.sy, rect.sw, rect.sh,
-              { resizeWidth: INPUT_W, resizeHeight: INPUT_H, resizeQuality: "medium" });
+              { resizeWidth: spec.inputW, resizeHeight: spec.inputH, resizeQuality: "medium" });
             const id = nextId++;
             const res = await new Promise(done => { pending.set(id, done); worker.postMessage({ type: "infer", id, bitmap }, [bitmap]); });
             if (res.error) throw new Error(res.error);
-            return { kpts: toSource(res.locs, rect), scores: res.scores, ms: res.ms };
+            return { kpts: toSource(res.locs, rect, spec), scores: res.scores, ms: res.ms };
           },
           close() { worker.terminate(); pending.clear(); },
         });
@@ -133,6 +138,6 @@ export function createRtmwRunner({ onProgress, providers = ["webgpu", "wasm"], m
     };
     // resolve against the page — inside the worker a relative URL would resolve against the worker script
     const absUrl = new URL(modelUrl, globalThis.location?.href).href;
-    worker.postMessage({ type: "init", modelUrl: absUrl, sha256, providers, maxBenchMs });
+    worker.postMessage({ type: "init", modelUrl: absUrl, sha256, providers, maxBenchMs, spec });
   });
 }

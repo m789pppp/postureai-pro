@@ -22,11 +22,8 @@ import {
 import { captureSignature, saveReferenceSignature } from "./features/analysis/cameraDrift.js";
 import { bboxFromPose } from "./features/analysis/rtmwCore.js";
 
-const TV = "0.10.14";                                   // same tasks-vision as App.jsx
-const BUNDLE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TV}/vision_bundle.mjs`;
-const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TV}/wasm`;
-const POSE_MODEL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
-const FACE_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+// runtime + models: self-hosted first, CDN second; CPU delegate where WebGL is software
+import { loadVision, createTask, MP_SOURCES } from "./features/analysis/mediapipeLoader.js";
 
 const CAPTURE_MS = 3000;       // seconds of *good* (all-green) time we measure
 const TARGET_FRAMES = 30;      // frames expected in that time even on a slow CPU-only laptop
@@ -302,12 +299,10 @@ export function CalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }) {
         st.current.camKey = `${set.deviceId || "default"}@${v.videoWidth}x${v.videoHeight}`;
       } catch { setError(t.errCam); return; }
 
-      const mod = await import(/* @vite-ignore */ BUNDLE);
-      const fr = await mod.FilesetResolver.forVisionTasks(WASM);
-      const make = async (Cls, model, extra) => {
-        try { return await Cls.createFromOptions(fr, { baseOptions: { modelAssetPath: model, delegate: "GPU" }, runningMode: "VIDEO", ...extra }); }
-        catch { return await Cls.createFromOptions(fr, { baseOptions: { modelAssetPath: model, delegate: "CPU" }, runningMode: "VIDEO", ...extra }); }
-      };
+      const { mod, fileset: fr, source } = await loadVision();
+      const urls = k => [...new Set([source[k], ...MP_SOURCES.map(m => m[k])])];
+      const make = async (Cls, model, extra) => (await createTask(Cls, fr, model, { runningMode: "VIDEO", ...extra })).task;
+      const POSE_MODEL = urls("pose"), FACE_MODEL = urls("face");
       poseRef.current = await make(mod.PoseLandmarker, POSE_MODEL, {
         numPoses: 2, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.5 });
       try {

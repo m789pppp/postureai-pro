@@ -16,7 +16,17 @@
  */
 import { PL } from "./postureEngine.js";
 
-export const MEASURE_VERSION = "clinical-1.0";
+/**
+ * Bump whenever the landmarks that reach this file can differ for the same person and
+ * pose, so trials from different pipelines are never pooled (validation/analyze.mjs warns
+ * on mixed versions).
+ *   clinical-1.0  first precision layer
+ *   clinical-1.1  MediaPipe runs on the CPU delegate where WebGL is a software rasteriser
+ *                 (same model and version, slightly different arithmetic), and the
+ *                 refinement model is no longer loaded on devices without WebGPU.
+ *                 Where it does run, its offset is averaged over time before fusion.
+ */
+export const MEASURE_VERSION = "clinical-1.1";
 
 const VIS_MIN = 0.55;
 /** Shoulder span / torso length above this means the subject is not in profile. */
@@ -135,9 +145,13 @@ const csvText = v => {
 };
 const csvNum = v => (v == null ? "" : String(v));
 
-const CSV_HEADER = ["participant_id","trial","view","posture","rater","captured_at","measure_version","metric","unit","method","median","mean","sd","n_frames","n_excluded","usable","reference_value","notes"];
+const CSV_HEADER = ["participant_id","trial","view","posture","rater","captured_at","measure_version","metric","unit","method","median","mean","sd","n_frames","n_excluded","usable","pipeline","reference_value","notes"];
 
-/** Long format, one row per metric, with reference_value left for the assessor. */
+/**
+ * Long format, one row per metric, with reference_value left for the assessor.
+ * `pipeline` names the models that ran during the trial — see pipelineInfo.js.
+ * Trials with different pipelines must not be pooled, even under one measure_version.
+ */
 export function trialsToCsv(trials) {
   const rows = [CSV_HEADER.join(",")];
   for (const t of trials || []) {
@@ -146,7 +160,7 @@ export function trialsToCsv(trials) {
         csvText(t.participantId), csvNum(t.trial), csvText(t.view), csvText(t.posture), csvText(t.rater),
         csvText(t.capturedAt), csvText(MEASURE_VERSION), csvText(metric), csvText(m.unit), csvText(m.method),
         csvNum(m.median), csvNum(m.mean), csvNum(m.sd), csvNum(m.n), csvNum(m.excluded),
-        m.usable ? "1" : "0", "", "",
+        m.usable ? "1" : "0", csvText(t.pipeline || "unknown"), "", "",
       ].join(","));
     }
   }

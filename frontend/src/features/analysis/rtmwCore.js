@@ -5,15 +5,22 @@
  */
 
 export const INPUT_W = 288, INPUT_H = 384, K = 133, SPLIT = 2;
+/**
+ * Geometry of a top-down SimCC model. Every helper below takes one as its last argument
+ * and defaults to RTMW-x, so existing callers are unchanged.
+ *   confLo / confHi  SimCC score mapped to confidence 0 / 1. The score scale differs per
+ *                    model family: RTMW-x peaks around 3–8, RTMPose body models around 0–1.
+ */
+export const RTMW_X_SPEC = { inputW: INPUT_W, inputH: INPUT_H, k: K, confLo: 0.5, confHi: 3.0 };
 export const MEAN = [123.675, 116.28, 103.53];   // applied in B,G,R order — same as rtmlib
 export const STD = [58.395, 57.12, 57.375];
 
 // ── pure helpers (unit-tested in Node) ─────────────────────────────────────
 /** rtmlib bbox_xyxy2cs + top_down_affine aspect fix → crop rect in source px. */
-export function cropRect([x1, y1, x2, y2], padding = 1.25) {
+export function cropRect([x1, y1, x2, y2], padding = 1.25, spec = RTMW_X_SPEC) {
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
   let w = (x2 - x1) * padding, h = (y2 - y1) * padding;
-  const aspect = INPUT_W / INPUT_H;
+  const aspect = spec.inputW / spec.inputH;
   if (w > h * aspect) h = w / aspect; else w = h * aspect;
   return { sx: cx - w / 2, sy: cy - h / 2, sw: w, sh: h };
 }
@@ -35,11 +42,11 @@ export function decodeSimcc(simccX, simccY, k = K, wx = INPUT_W * SPLIT, wy = IN
 }
 
 /** Map decoded input-space points back to source pixels. */
-export function toSource(locs, { sx, sy, sw, sh }) {
+export function toSource(locs, { sx, sy, sw, sh }, spec = RTMW_X_SPEC) {
   const out = new Float32Array(locs.length);
   for (let j = 0; j < locs.length; j += 2) {
-    out[j] = sx + (locs[j] * sw) / INPUT_W;
-    out[j + 1] = sy + (locs[j + 1] * sh) / INPUT_H;
+    out[j] = sx + (locs[j] * sw) / spec.inputW;
+    out[j + 1] = sy + (locs[j + 1] * sh) / spec.inputH;
   }
   return out;
 }
@@ -61,7 +68,17 @@ export function bboxFromPose(lms, W, H, minVis = 0.4) {
 }
 
 /** Integer crop rect (createImageBitmap takes whole pixels); mapping uses the same numbers. */
-export function cropRectInt(bbox) {
-  const r = cropRect(bbox);
+export function cropRectInt(bbox, spec = RTMW_X_SPEC) {
+  const r = cropRect(bbox, 1.25, spec);
   return { sx: Math.round(r.sx), sy: Math.round(r.sy), sw: Math.max(1, Math.round(r.sw)), sh: Math.max(1, Math.round(r.sh)) };
+}
+
+/** Decode a model's two SimCC outputs using its own geometry. */
+export function decodeFor(spec, simccX, simccY) {
+  return decodeSimcc(simccX, simccY, spec.k, spec.inputW * SPLIT, spec.inputH * SPLIT);
+}
+
+/** SimCC score → confidence 0–1 for this model. Heuristic, per model family. */
+export function scoreToConf(s, spec = RTMW_X_SPEC) {
+  return Math.min(1, Math.max(0, (s - spec.confLo) / (spec.confHi - spec.confLo)));
 }

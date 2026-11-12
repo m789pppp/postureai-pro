@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { measureSideView, summarizeTrial, trialsToCsv, MEASURE_VERSION } from "./features/analysis/clinicalMeasure.js";
+import { pipelineOfFrames } from "./features/analysis/pipelineInfo.js";
 
 const HOLD_MS = 15000;
 const SETTLE_MS = 3000;
@@ -47,7 +48,7 @@ export default function ClinicalCapture({ sinkRef, camActive, isAr, cs, onClose 
         reason = values ? null : (result?.qualityReason || "no_reading");
       }
       const t = performance.now();
-      if (framesRef.current) framesRef.current.push({ t, values: values || {} });
+      if (framesRef.current) framesRef.current.push({ t, values: values || {}, pipeline: result?.pipeline || null });
       if (t - lastPaint.current > 250) { lastPaint.current = t; setLive({ values, reason }); }
     };
     return () => { sinkRef.current = null; };
@@ -56,9 +57,11 @@ export default function ClinicalCapture({ sinkRef, camActive, isAr, cs, onClose 
   const finish = useCallback(() => {
     const frames = framesRef.current; framesRef.current = null;
     const summary = summarizeTrial(frames, { settleMs: SETTLE_MS });
+    const t0 = frames?.[0]?.t ?? 0;
+    const pipeline = pipelineOfFrames((frames || []).filter(f => f.t - t0 >= SETTLE_MS).map(f => f.pipeline));
     setTrials(prev => {
       const trial = prev.filter(t => t.participantId === participantId.trim()).length + 1;
-      const next = [...prev, { participantId: participantId.trim(), trial, view: viewRef.current, posture: posture.trim(), rater: rater.trim(), capturedAt: new Date().toISOString(), summary }];
+      const next = [...prev, { participantId: participantId.trim(), trial, view: viewRef.current, posture: posture.trim(), rater: rater.trim(), capturedAt: new Date().toISOString(), summary, pipeline }];
       save(next);
       return next;
     });

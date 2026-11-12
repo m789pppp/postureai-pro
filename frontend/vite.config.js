@@ -35,6 +35,9 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 400,
     rollupOptions: {
+      // perf.html is the pipeline benchmark (noindex): it has to be in the build so it
+      // can be run on real phones and laptops from a preview deployment.
+      input: { main: 'index.html', perf: 'perf.html' },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',

@@ -75,6 +75,9 @@ check("thin metric unusable", s.b.usable === false && s.b.median === null && s.b
 const csv = trialsToCsv([{ participantId: "=cmd()", trial: 1, view: "side", posture: 'a"b', rater: "R1", capturedAt: "2026-11-08", summary: s }]);
 check("formula neutralised", csv.includes(`"'=cmd()"`));
 check("quote escaped", csv.includes(`"a""b"`));
+check("pipeline column: recorded value, or unknown when the trial has none",
+  csv.split("\r\n")[0].split(",").includes("pipeline") && csv.includes(`"unknown"`) &&
+  trialsToCsv([{ participantId: "P1", trial: 1, view: "side", posture: "p", rater: "R", capturedAt: "x", summary: s, pipeline: "mp0.10.14-pose_full/cpu/worker" }]).includes(`"mp0.10.14-pose_full/cpu/worker"`));
 check("reference column present and blank", csv.split("\r\n")[0].includes("reference_value") && csv.split("\r\n")[1].endsWith(",,"));
 
 console.log(`\n${pass} passed, ${fail} failed`);

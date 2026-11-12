@@ -55,7 +55,7 @@ export function loadRows(records) {
     return {
       participant: stripFormulaGuard(r.participant_id), view: r.view, posture: r.posture, rater: r.rater,
       capturedAt: r.captured_at, trial: Number(r.trial), metric: r.metric, unit: r.unit, method: r.method,
-      version: r.measure_version, usable: r.usable === "1",
+      version: r.measure_version, pipeline: r.pipeline || "", usable: r.usable === "1",
       app: toNumber(r.median, `line ${line} median`, errors),
       reference: toNumber(r.reference_value, `line ${line} reference_value`, errors),
     };
@@ -158,6 +158,8 @@ function resultsCsv(results) {
 function summaryMd({ verdicts, results }, meta) {
   const L = [`# Posmoz validation results`, ``, `Input: ${meta.input}`, `Measure version: ${meta.versions.join(", ")}`,
     meta.versions.length > 1 ? `\n**WARNING: this dataset mixes measurement versions and should not be pooled.**\n` : ``,
+    `Pipeline: ${meta.pipelines?.length ? meta.pipelines.join(", ") : "not recorded"}`,
+    (meta.pipelines?.length || 0) > 1 || meta.pipelines?.some(p => p.startsWith("mixed(")) ? `\n**WARNING: this dataset mixes pipelines (different models or delegates ran) and should not be pooled.**\n` : ``,
     `Criteria: ICC(3,1) lower 95% bound >= ${meta.criteria.icc_lower_min}, n >= ${meta.criteria.min_participants}, posture "${meta.criteria.primary_posture}".`, ``,
     `## Verdicts (pre-specified criteria)`, ``,
     `| View | Metric | Verdict | n | ICC(3,1) | Lower bound | Max abs LoA | Limit | Usable | Reason |`, `|---|---|---|---|---|---|---|---|---|---|`];
@@ -180,12 +182,13 @@ function main(argv) {
   fs.mkdirSync(outDir, { recursive: true });
 
   const versions = [...new Set(rows.map(r => r.version))].filter(Boolean);
+  const pipelines = [...new Set(rows.map(r => r.pipeline))].filter(Boolean);
   const write = (subset, suffix) => {
     const out = analyse(subset, criteria);
     fs.writeFileSync(path.join(outDir, `results${suffix}.csv`), resultsCsv(out.results));
     fs.writeFileSync(path.join(outDir, `bland_altman_points${suffix}.csv`),
       "view,posture,metric,participant,app,reference,mean,diff\n" + out.points.map(p => [p.view, p.posture, p.metric, p.participant, f(p.app, 2), f(p.reference, 2), f(p.mean, 2), f(p.diff, 2)].join(",")).join("\n") + "\n");
-    fs.writeFileSync(path.join(outDir, `summary${suffix}.md`), summaryMd(out, { input: path.basename(input) + (suffix ? ` (${suffix.slice(1)})` : ""), criteria, versions }));
+    fs.writeFileSync(path.join(outDir, `summary${suffix}.md`), summaryMd(out, { input: path.basename(input) + (suffix ? ` (${suffix.slice(1)})` : ""), criteria, versions, pipelines }));
     return out;
   };
   const all = write(rows, "");
