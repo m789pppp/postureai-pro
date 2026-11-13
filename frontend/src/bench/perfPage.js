@@ -16,8 +16,9 @@
  *   warmup   = seconds ignored after the first score             (default 3)
  *   wait     = "rtmw" to start measuring only after the third model settled (on/off)
  *   rtmw     = JSON of options for the enhancer's refinement model, e.g. {"force":true,"providers":["wasm"]}
- *   rate     = fixed             always 20 analyses/s (default: adaptive, slower once the subject is still)
- *   worker   = 0                 run MediaPipe on the main thread (default: in a worker)
+ *   exp      = worker,adaptive,head3d   the app's experiments (experiments.js); all off by default
+ *   rate     = fixed | adaptive  override the "adaptive" experiment for this run
+ *   worker   = 0 | 1             override the "worker" experiment for this run
  *   delegate = gpu | cpu         force MediaPipe's delegate (default: chosen by mediapipeLoader)
  *   smoother = euro:<minCutoff>,<beta>   One Euro instead of the tier's EMA
  *   auto     = 1 to start without a click (used by scripts/perf-bench.mjs)
@@ -30,6 +31,8 @@ import { preferredDelegates, webglRendererName } from "../features/analysis/medi
 import { createVisionClient } from "../features/analysis/visionClient.js";
 import { createRateController } from "../features/analysis/analysisRate.js";
 import { pipelineId } from "../features/analysis/pipelineInfo.js";
+import { experimentEnabled } from "../features/analysis/experiments.js";
+const HEAD3D = experimentEnabled("head3d");            // add &exp=head3d to measure the experiment
 import { PERF_VERSION, landmarkJitter, seriesStats, pacing } from "./perfCore.js";
 
 const Q = new URLSearchParams(location.search);
@@ -93,7 +96,7 @@ async function openSource(video) {
 // ── models ─────────────────────────────────────────────────────────────────
 async function loadPose() {
   // worker=0 keeps inference on the main thread; delegate=gpu reproduces the old delegate choice
-  const c = await createVisionClient({ worker: Q.get("worker") !== "0", delegates: FORCE_DELEGATE ? [FORCE_DELEGATE, "CPU"] : preferredDelegates() });
+  const c = await createVisionClient({ worker: Q.get("worker") != null ? Q.get("worker") !== "0" : experimentEnabled("worker"), delegates: FORCE_DELEGATE ? [FORCE_DELEGATE, "CPU"] : preferredDelegates() });
   return { pl: c.pose, face: c.face, source: c.source, delegate: c.delegate, mode: c.mode, close: c.close };
 }
 
@@ -128,7 +131,7 @@ async function run() {
     const euro = /^euro:([\d.]+),([\d.]+)$/.exec(Q.get("smoother") || "");            // smoother=euro:1,100 to compare
     const smoother = euro ? createOneEuroLandmarkSmoother({ minCutoff: +euro[1], beta: +euro[2] }) : createLandmarkSmoother(q.smoothingAlpha, q.outlierMaxConsecutive);
     res.smoother = euro ? `one-euro ${euro[1]}/${euro[2]}` : `ema ${q.smoothingAlpha}`;
-    const enh = PIPELINE === "fused" ? createLiveEnhancer(null, { rtmw: RTMW_OPTS, face: pose.face }) : null;
+    const enh = PIPELINE === "fused" ? createLiveEnhancer(null, { rtmw: RTMW_OPTS, face: pose.face, learnNeutral: HEAD3D }) : null;
     resetProportions?.();
     const sess = Date.now();
 
@@ -137,7 +140,8 @@ async function run() {
     const infer = [], intervals = [], pitchMethods = {};
     let rateOpts = {};
     try { rateOpts = JSON.parse(Q.get("rateOpts") || "{}"); } catch { /* defaults */ }      // tuning only, e.g. {"slowMs":150}
-    const rate = Q.get("rate") === "fixed" ? null : createRateController(rateOpts);
+    const adaptive = Q.get("rate") != null ? Q.get("rate") !== "fixed" : experimentEnabled("adaptive");
+    const rate = adaptive ? createRateController(rateOpts) : null;
     let intervalMs = 50;
     let measuring = false, startT = 0, lastT = 0, lastRaf = 0, prec = null, lastScore = null, done;
     const finished = new Promise(r => { done = r; });
@@ -161,8 +165,8 @@ async function run() {
         let fused = raw;
         if (enh) { try { fused = enh.fuse(raw, video, W, H, now); } catch { fused = raw; } }
         const lms = smoother.smooth(fused);
-        const headPose = enh?.headPitch?.(now) ?? null;                       // same hand-over as App.jsx
-        const r = analyzeMP(lms, W, H, "laptop", null, sess, null, null, headPose ? { head: headPose } : null);
+        const headPose = HEAD3D ? (enh?.headPitch?.(now) ?? null) : null;     // same hand-over as App.jsx, same switch
+        const r = analyzeMP(lms, W, H, "laptop", null, sess, null, null, HEAD3D ? { head: headPose, moderateCap: true } : null);
         if (measuring && r?.bodyModules?.monitor) { const mm = r.bodyModules.monitor; pitchMethods[mm.method || "landmark_proxy"] = (pitchMethods[mm.method || "landmark_proxy"] || 0) + 1; push("headPitch.relDeg", mm.pitchDeg); if (headPose) push("headPitch.absDeg", headPose.pitchDeg); }
         if (enh) { try { prec = enh.process(video, lms, W, H, now, lastScore); } catch { /* keep going */ } }
         if (r?.score != null) { lastScore = r.score; timings.firstScoreMs ??= at(); }

@@ -3134,7 +3134,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // harsher one; the weighted average still decides how far below that a
   // frame with other real faults lands.
   const overall = _anySevereSustained ? Math.min(_rawOverall, 69)
-    : _anyModerateSustained ? Math.min(_rawOverall, 84) : _rawOverall;
+    : (_anyModerateSustained && ext?.moderateCap) ? Math.min(_rawOverall, 84) : _rawOverall;   // opt-in: see experiments.js
 
   // Mispositioning is charged twice — once by capping distSc (which makes the
   // distance metric reflect reality) and once by positionPenalty (the ergonomic

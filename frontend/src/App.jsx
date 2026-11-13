@@ -111,6 +111,10 @@ import { createLiveEnhancer } from "./features/analysis/liveEnhancer.js";
 import { createVisionClient } from "./features/analysis/visionClient.js";
 import { createRateController } from "./features/analysis/analysisRate.js";
 import { pipelineId } from "./features/analysis/pipelineInfo.js";
+import { experimentEnabled } from "./features/analysis/experiments.js";
+const HEAD3D = experimentEnabled("head3d");
+const EXP_WORKER = experimentEnabled("worker");
+const EXP_ADAPTIVE = experimentEnabled("adaptive");
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
@@ -3944,7 +3948,10 @@ export default function App(){
     // especially for subtle angles (neck lean, spine lean).
     const load=async()=>{
       try{
-        const client=await createVisionClient();
+        // EXPERIMENT "worker": inference in a worker measured well on one machine
+        // with no GPU, and was never run on a real GPU before it reached users.
+        // Off by default again: inference runs on the main thread as it always had.
+        const client=await createVisionClient({worker:EXP_WORKER});
         // `face` is the worker's face detector, handed to the precision
         // layer so it does not load a second runtime on the main thread.
         client.pose.faceDetector=client.face;
@@ -4059,7 +4066,9 @@ export default function App(){
         // full rate on the next sample. Validation captures keep the full
         // rate so their frame counts stay as specified.
         if(!rateRef.current) rateRef.current=createRateController();
-        analysisIntervalRef.current = clinicalSinkRef.current ? 50 : rateRef.current.update(det.landmarks?.[0]||null,_nowTs);
+        // EXPERIMENT "adaptive": measured on a photograph only. Off by default: a
+        // fixed 20 analyses/s, as before.
+        analysisIntervalRef.current = (!EXP_ADAPTIVE || clinicalSinkRef.current) ? 50 : rateRef.current.update(det.landmarks?.[0]||null,_nowTs);
         mpRef.current.setMinInterval?.(analysisIntervalRef.current);
         if(det.landmarks?.length>0){
           window.__frameHadLandmarksOnce=true;
@@ -4119,7 +4128,7 @@ export default function App(){
             }
           }
           // 3-model fusion (MediaPipe + RTMW-x, motion-compensated) before smoothing
-          if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData,{face:mpRef.current?.faceDetector||null});
+          if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData,{face:mpRef.current?.faceDetector||null,learnNeutral:HEAD3D});
           let fusedLms=rawLms;
           try{ fusedLms=enhancerRef.current.fuse(rawLms,vidRef.current,W,H,performance.now()); }catch(e){ fusedLms=rawLms; }
           const lms=lmSmootherRef.current.smooth(fusedLms);
@@ -4127,14 +4136,17 @@ export default function App(){
           // Head pitch (looking down / up) comes from the face model's 3-D head
           // pose when it is fresh; the engine falls back to its landmark proxy
           // otherwise. See analyzeMonitorHeight in postureEngine.js.
-          const headPose=enhancerRef.current?.headPitch?.(performance.now())??null;
-          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,headPose?{head:headPose}:null); // Side mode removed app-wide
+          // EXPERIMENT "head3d" — off unless switched on per device (experiments.js).
+          // It went to everyone once and real sessions got worse, so until it is
+          // proven on people the engine scores head pitch as it did before.
+          const headPose=HEAD3D?(enhancerRef.current?.headPitch?.(performance.now())??null):null;
+          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,HEAD3D?{head:headPose,moderateCap:true}:null); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Live precision layer: runs beside the engine; it only replaces the distance
           // when this camera was calibrated with a measured distance (iris + real focal).
           try{
-            if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData,{face:mpRef.current?.faceDetector||null});
+            if(!enhancerRef.current) enhancerRef.current=createLiveEnhancer(calibData,{face:mpRef.current?.faceDetector||null,learnNeutral:HEAD3D});
             else enhancerRef.current.setCalibration(calibData);
             const prec=enhancerRef.current.process(vidRef.current,lms,W,H,performance.now(),lastAnalRef.current?.overall??null);
             if(rawResult && prec.distCm!=null && prec.distSource==="calibrated") rawResult.distCm=prec.distCm;

@@ -3,7 +3,7 @@
  * run-live-session.mjs — smoke test of the REAL live session (App.jsx) in a browser.
  *
  *   npx vite build --config scripts/livetest/vite.config.livetest.js
- *   node scripts/livetest/run-live-session.mjs --image <person.jpg> [--seconds 20] [--shots dir]
+ *   node scripts/livetest/run-live-session.mjs --image <person.jpg> [--seconds 20] [--shots dir] [--exp worker,adaptive,head3d]
  *
  * The build signs in a fake user (scripts/livetest/src/firebase.js). The camera is replaced by a still
  * photo with sensor noise, served from this machine. Nothing is uploaded.
@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const arg = (k, d = null) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ? process.argv[i + 1] : d; };
 const IMAGE = arg("image"), SECONDS = Number(arg("seconds", 20)), SHOTS = arg("shots");
+const EXP = arg("exp", "");                 // e.g. --exp worker,adaptive,head3d (experiments.js); default: none, as shipped
 if (!IMAGE) { console.error("usage: node scripts/livetest/run-live-session.mjs --image <person.jpg>"); process.exit(2); }
 process.env.PLAYWRIGHT_DISABLE_FORCED_CHROMIUM_PROXIED_LOOPBACK ??= "1";
 
@@ -37,6 +38,7 @@ page.on("requestfailed", r => { if (r.url().includes("localhost")) errors.push(`
 page.on("response", r => { if (r.url().includes("localhost") && r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url().slice(-70)}`); });
 await page.route(/__live_subject/, r => r.fulfill({ body: img, contentType: /png$/i.test(IMAGE) ? "image/png" : "image/jpeg" }));
 // camera → still photo with seeded noise (same idea as /perf.html)
+await page.addInitScript(exp => { try { if (exp) localStorage.setItem("posmoz_exp", exp); else localStorage.removeItem("posmoz_exp"); } catch { /* ignore */ } }, EXP);
 await page.addInitScript(() => {
   // a chunk that fails to load is otherwise swallowed by the app's stale-deploy handler
   window.addEventListener("vite:preloadError", e => { (window.__preloadErrors ||= []).push(String(e.payload?.stack || e.payload?.message || e.payload)); }, true);
@@ -111,5 +113,5 @@ const checks = [
 let failed = 0;
 for (const [name, ok, detail] of checks) { if (!ok) failed++; console.log(`${ok ? "  ok  " : "  FAIL"}  ${name}${detail ? " — " + detail : ""}`); }
 if (process.argv.includes("--verbose") || failed) console.log(JSON.stringify(out, null, 1).slice(0, 6000));
-console.log(`\n${checks.length - failed} passed · ${failed} failed`);
+console.log(`\n${checks.length - failed} passed · ${failed} failed   (experiments: ${EXP || "none"})`);
 await browser.close(); stop(); process.exit(failed ? 1 : 0);

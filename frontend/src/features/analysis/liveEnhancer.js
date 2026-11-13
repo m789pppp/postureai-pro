@@ -226,10 +226,12 @@ export function readingConfidence({ pose, faceFresh, calibScore, disagreement = 
  * @param {object} [o]
  * @param {object|false} [o.rtmw]  false = never load a refinement model. Otherwise overrides for
  *   the runner ({ model, providers, maxBenchMs }); `force: true` skips the device policy (bench only).
+ * @param {boolean} [o.learnNeutral=false]  learn the head-pitch neutral in the first seconds when
+ *   there is no calibrated one (experiment "head3d"); otherwise an uncalibrated neutral is 0.
  * @param {object|null} [o.face]   face detector that already runs elsewhere (visionClient's `face`):
  *   detectForVideo() returns the newest unread result or null.
  */
-export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, face: externalFace = null } = {}) {
+export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, face: externalFace = null, learnNeutral = false } = {}) {
   let calib = initialCalib;
   // externalFace: the worker's face detector (visionClient) — nothing is loaded on the main thread then
   let face = externalFace, external = !!externalFace, loading = false, failed = false, n = 0, closed = false;
@@ -241,7 +243,8 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, f
   // the neutral. An absolute angle includes the camera's own tilt: on a laptop whose lid
   // leans back, a level head read as "+13° head flexion" and counted toward "head down".
   const pitchNeutral = createNeutralLearner();
-  const neutralPitch = () => { const n = calib?.head_pose_neutral?.pitch; return typeof n === "number" ? n : pitchNeutral.value; };
+  // learnNeutral is opt-in (experiment "head3d"). Off, an uncalibrated session reads against 0 as it always did.
+  const neutralPitch = () => { const n = calib?.head_pose_neutral?.pitch; return typeof n === "number" ? n : learnNeutral ? pitchNeutral.value : 0; };
   const postureSM = createPostureStateMachine();
   // camera-moved-since-calibration check (background signature, on-device only)
   const bg = {}; let refSig, drift = null, driftN = 0;
