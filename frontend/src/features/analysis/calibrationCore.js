@@ -236,3 +236,29 @@ export function calibrationQuality({ validFrames, targetFrames, spreads = {}, di
   const grade = score >= 85 ? "high" : score >= 65 ? "good" : "low";
   return { score, grade, reasons };
 }
+
+// ── Neutral learned at the start of a session ───────────────────────────────
+/**
+ * Learns a person's settled value of some reading (e.g. head pitch) at the start of a
+ * session, by TIME rather than by a count of samples: the first `skipMs` are ignored
+ * (the person is still settling), the next `learnMs` are sampled, and the median becomes
+ * the neutral. Used when no calibrated neutral exists, so that a tilted camera does not
+ * read as a tilted head. Pure — unit-tested.
+ */
+export function createNeutralLearner({ skipMs = 1000, learnMs = 2000, minSamples = 6 } = {}) {
+  let t0 = null, samples = [], value = null;
+  return {
+    /** @returns {number|null} the neutral once learned, else null */
+    feed(v, tMs) {
+      if (value !== null || !Number.isFinite(v)) return value;
+      if (t0 === null) t0 = tMs;
+      const age = tMs - t0;
+      if (age < skipMs) return null;
+      samples.push(v);
+      if (age >= skipMs + learnMs && samples.length >= minSamples) value = median(samples);
+      return value;
+    },
+    get value() { return value; },
+    reset() { t0 = null; samples = []; value = null; },
+  };
+}

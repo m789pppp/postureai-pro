@@ -5,6 +5,7 @@ import {
   OneEuroFilter, robustMean, median, headPoseFromMatrix, irisDiameterPx,
   focalFromKnownDistance, distanceFromIris, focalFromHfov, framingChecks,
   calibrationQuality, poseMotion,
+  createNeutralLearner,
 } from "./calibrationCore.js";
 
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ""} ${a} vs ${b}`);
@@ -103,4 +104,22 @@ test("quality score", () => {
   const weak = calibrationQuality({ validFrames: 30, targetFrames: 90, spreads: { a: 4 },
     distanceMeasured: false, faceTracked: false, rejectedRatio: 0.3 });
   assert.ok(weak.score < 65 && weak.grade === "low", JSON.stringify(weak));
+});
+
+test("neutral learner: skips the first second, then takes the median of the next two", () => {
+  const n = createNeutralLearner();
+  assert.equal(n.feed(40, 0), null);                 // settling: ignored
+  assert.equal(n.feed(40, 900), null);
+  let v = null;
+  for (let t = 1000; t <= 3100; t += 150) v = n.feed(12 + (t % 300 ? 0.4 : -0.4), t);
+  assert.ok(Math.abs(v - 12) < 0.5, String(v));      // the 40s never entered
+  assert.equal(n.feed(99, 5000), v);                 // fixed once learned
+  n.reset(); assert.equal(n.value, null);
+});
+
+test("neutral learner: works at a slow, uneven sample rate and ignores bad values", () => {
+  const n = createNeutralLearner();
+  let v = null;
+  for (const t of [0, 400, 1100, 1500, 1900, 2300, 2700, 3050, 3400]) v = n.feed(t === 1500 ? NaN : -5, t);
+  assert.equal(v, -5);
 });

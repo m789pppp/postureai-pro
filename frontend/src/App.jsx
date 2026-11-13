@@ -5013,6 +5013,7 @@ export default function App(){
       frameBufferRef.current?.clear();
       distSmootherRef.current?.reset();
       resetProportions();
+      enhancerRef.current?.resetSession?.(); // new session: relearn the head-pitch neutral
       resetScore();
       resetPainPrediction();
       insightsRef.current=null;setSessionInsights([]);
@@ -5182,6 +5183,7 @@ export default function App(){
     frameBufferRef.current?.clear();
     distSmootherRef.current?.reset();
     resetProportions();
+    enhancerRef.current?.resetSession?.(); // new session: relearn the head-pitch neutral
     lightCheckRef.current={t:0,canvas:lightCheckRef.current.canvas,wasLow:false};setLowLight(false);
     // Also clear on Stop (not just at the next session's beginScoring()) so
     // the "another person detected" banner doesn't linger on the idle

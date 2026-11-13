@@ -19,7 +19,7 @@
  *   - A 0–100 confidence for the current reading.
  */
 import {
-  OneEuroFilter, headPoseFromMatrix, irisDiameterPx, distanceFromIris, focalFromHfov,
+  OneEuroFilter, headPoseFromMatrix, irisDiameterPx, distanceFromIris, focalFromHfov, createNeutralLearner,
 } from "./calibrationCore.js";
 import { createRtmwRunner, bboxFromPose } from "./rtmwWeb.js";
 import { RTMW_X_SPEC, scoreToConf } from "./rtmwCore.js";
@@ -237,6 +237,11 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, f
   const f = { pitch: new OneEuroFilter({ minCutoff: 0.8, beta: 0.05 }), yaw: new OneEuroFilter({ minCutoff: 0.8, beta: 0.05 }),
               roll: new OneEuroFilter({ minCutoff: 0.8, beta: 0.05 }), dist: new OneEuroFilter({ minCutoff: 0.4, beta: 0.01 }) };
   const exposure = createExposureTracker();
+  // Without a calibrated neutral, the head's settled pitch at the start of the session is
+  // the neutral. An absolute angle includes the camera's own tilt: on a laptop whose lid
+  // leans back, a level head read as "+13° head flexion" and counted toward "head down".
+  const pitchNeutral = createNeutralLearner();
+  const neutralPitch = () => { const n = calib?.head_pose_neutral?.pitch; return typeof n === "number" ? n : pitchNeutral.value; };
   const postureSM = createPostureStateMachine();
   // camera-moved-since-calibration check (background signature, on-device only)
   const bg = {}; let refSig, drift = null, driftN = 0;
@@ -303,6 +308,7 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, f
         const hp = headPoseFromMatrix(m.data);
         const t = tMs / 1000;
         head = { pitch: f.pitch.filter(hp.pitch, t), yaw: f.yaw.filter(hp.yaw, t), roll: f.roll.filter(hp.roll, t) };
+        pitchNeutral.feed(head.pitch, tMs);
         const ip = irisDiameterPx(lm, W, H);
         if (Number.isFinite(ip)) {
           irisPx = ip;
@@ -374,8 +380,8 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, f
     process(video, pose, W, H, tMs, score = null) {
       detectFace(video, W, H, tMs);             // no-op if fuse() already ran this frame
       const faceFresh = tMs - lastFaceT < 500;
-      const neutral = calib?.head_pose_neutral?.pitch ?? 0;
-      const pitchRel = faceFresh && head ? HEAD_PITCH_SIGN * (head.pitch - neutral) : null;
+      const neutral = neutralPitch();              // null for the first ~3 s of an uncalibrated session
+      const pitchRel = faceFresh && head && neutral != null ? HEAD_PITCH_SIGN * (head.pitch - neutral) : null;
       // bench-learned correction (calib.correction = correction.json) when one exists for this target
       const flexCorr = pitchRel == null ? null : applyCorrection(calib?.correction, "head_flexion_deg", { pitch_rel: pitchRel });
       const headFlexion = pitchRel == null ? null : Math.round((flexCorr ?? pitchRel) * 10) / 10;
@@ -418,10 +424,12 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, f
      */
     headPitch(tMs) {
       if (!head || tMs - lastFaceT > 500) return null;
-      const n = calib?.head_pose_neutral?.pitch;
-      return { pitchDeg: HEAD_PITCH_SIGN * head.pitch, neutralDeg: typeof n === "number" ? HEAD_PITCH_SIGN * n : null };
+      const n = neutralPitch();                    // the same neutral the HUD and the exposure timer use
+      return { pitchDeg: HEAD_PITCH_SIGN * head.pitch, neutralDeg: n != null ? HEAD_PITCH_SIGN * n : null };
     },
     resetExposure() { exposure.reset(); },
+    /** New session: forget the learned neutral (a calibrated one is unaffected) and the exposure totals. */
+    resetSession() { pitchNeutral.reset(); exposure.reset(); },
     close() { closed = true; if (!external) { try { face?.close(); } catch { /* ignore */ } } face = null; rtmw?.close(); rtmw = null; },
   };
 }

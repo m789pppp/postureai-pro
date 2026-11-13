@@ -34,3 +34,6 @@ public/mediapipe/
 
 # Benchmark output (scripts/perf-bench.mjs)
 perf-results/
+
+# Live-session smoke test build (scripts/livetest)
+dist-livetest/
