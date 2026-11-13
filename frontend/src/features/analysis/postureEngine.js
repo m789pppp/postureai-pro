@@ -758,6 +758,9 @@ let _protractBase = _makeBaseline(12, 25);
 // down" — so without a calibrated neutral the user's own settled pitch is
 // learned and the CHANGE from it is scored.
 let _headPitchBase = _makeBaseline(15, 30);
+let _headPitchLast = null;                 // last 3-D reading { t, out } — see the hold in analyzeMonitorHeight
+const HEAD_PITCH_HOLD_MS = 5000;
+const _engineNow = () => analyzeMP.__testNowMs ?? Date.now();
 
 let _yawWin      = [];
 let _yawUsedZ    = false;  // which estimator produced the last reading
@@ -963,6 +966,7 @@ export function resetProportions() {
   _headShBase = _makeBaseline(15, 30);
   _protractBase = _makeBaseline(12, 25);
   _headPitchBase = _makeBaseline(15, 30);
+  _headPitchLast = null;
   _depthWin = [];
   _depthOK = false;
   _depthNoiseCm = 0;
@@ -984,6 +988,7 @@ export function resetProportions() {
   analyzeMP._alertDwell = null;
   analyzeMP._hipsState = null;
   analyzeMP._severeDwell = null;
+  analyzeMP._moderateDwell = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2351,11 +2356,13 @@ function analyzeMonitorHeight(lms, W, H, distCm, calib = null, head = null) {
       const direction = Math.abs(pitchDeg) > 2 ? (pitchDeg > 0 ? "below" : "above") : "ok";
       const offsetCm = direction !== "ok" && distCm > 20
         ? Math.round(distCm * Math.tan(Math.min(60, Math.abs(pitchDeg)) * Math.PI / 180) * 10) / 10 : 0;
-      return { offsetCm, direction, pitchDeg,
+      const out = { offsetCm, direction, pitchDeg,
                score: scoreMetric(Math.max(0, eff - HEAD_PITCH_3D.free), 0, HEAD_PITCH_3D.ok, HEAD_PITCH_3D.bad),
                severity: classify(eff, HEAD_PITCH_3D.sev),
                confidence: Number.isFinite(head.neutralDeg) ? 88 : 80,
                reliable: true, personalised: true, method: "face_3d" };
+      _headPitchLast = { t: _engineNow(), out };
+      return out;
     }
     // neutral still being learned: fall through to the landmark proxy for these first seconds
   }
@@ -2407,6 +2414,18 @@ function analyzeMonitorHeight(lms, W, H, distCm, calib = null, head = null) {
   const severity = classify(Math.abs(pitchDeg), personalNeutral != null
     ? SEV.MONITOR_PITCH
     : { mild: 12, moderate: 18, severe: 25 });
+  // The face model tends to lose the face exactly when the head is turned far
+  // down or up. Dropping to this proxy at that moment would turn a 45 deg
+  // reading into about 14 deg and clear the alert while the posture is at its
+  // worst. So a recent 3-D reading that was already outside the normal band is
+  // held for a few seconds, for as long as this proxy still points the same way.
+  // Once the proxy says the head is back near level, or the hold expires, the
+  // proxy takes over as before.
+  const held = _headPitchLast;
+  if (held && held.out.severity !== "normal" && _engineNow() - held.t <= HEAD_PITCH_HOLD_MS &&
+      direction !== "ok" && direction === held.out.direction) {
+    return { ...held.out, confidence: 60, method: "face_3d_held" };
+  }
   return { offsetCm, direction, pitchDeg, score, severity,
            confidence: personalNeutral != null ? 72 : 55,
            reliable: true, personalised: personalNeutral != null };
@@ -2572,8 +2591,8 @@ function buildAlerts(modules, distCm, lo, hi, nowMs = Date.now()) {
     // With the 3-D head pose the angle is real, so the alert follows its severity
     // band (20 deg down / 10 deg up from neutral) instead of a centimetre offset
     // tuned for the compressed landmark proxy.
-    add("mon_low",   monitor.reliable && monitor.direction === "below" && (monitor.method === "face_3d" ? monitor.severity !== "normal" : monitor.offsetCm > (monitor.personalised ? 5 : 14)), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`, imp("monitor", monitor)),
-    add("mon_hi",    monitor.reliable && monitor.direction === "above" && (monitor.method === "face_3d" ? monitor.severity !== "normal" : monitor.offsetCm > (monitor.personalised ? 5 : 14)), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`, imp("monitor", monitor)),
+    add("mon_low",   monitor.reliable && monitor.direction === "below" && (String(monitor.method).startsWith("face_3d") ? monitor.severity !== "normal" : monitor.offsetCm > (monitor.personalised ? 5 : 14)), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`, imp("monitor", monitor)),
+    add("mon_hi",    monitor.reliable && monitor.direction === "above" && (String(monitor.method).startsWith("face_3d") ? monitor.severity !== "normal" : monitor.offsetCm > (monitor.personalised ? 5 : 14)), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`, imp("monitor", monitor)),
     // Hand/chin-prop occlusion — see analyzeMP() for detection logic. This
     // is deliberately informational-only (no score weight): we can't
     // quantify the actual neck angle once an ear is occluded, so this just
@@ -3059,11 +3078,32 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       _severeDwell[_k] = null;
     }
   }
+  // The same argument one band down. A sustained MODERATE fault in a
+  // low-weight metric barely moves a weighted average either: measured on
+  // the synthetic subject, a head held 35 deg down (moderate, alert firing)
+  // with everything else clean scored 95 — "Excellent posture, keep it up"
+  // printed under a standing instruction to stop looking down. A moderate
+  // fault that persists must not read as Excellent. It may still read as
+  // Good: the cap is one point under that boundary (85), nothing harsher.
+  // Same per-module dwell as above, so a noisy frame cannot trip it.
+  if (!analyzeMP._moderateDwell) analyzeMP._moderateDwell = Object.create(null);
+  const _moderateDwell = analyzeMP._moderateDwell;
+  let _anyModerateSustained = false;
+  for (const _k in _severeCandidates) {
+    const _m = _severeCandidates[_k];
+    if (_m?.reliable && (_m?.severity === "moderate" || _m?.severity === "severe")) {
+      if (_moderateDwell[_k] == null) _moderateDwell[_k] = _nowMs;
+      if (_nowMs - _moderateDwell[_k] >= ALERT_DWELL_MS) _anyModerateSustained = true;
+    } else {
+      _moderateDwell[_k] = null;
+    }
+  }
   // 69 — one point under gradeScore()'s "Good" boundary (70). The minimal
   // cap that satisfies "cannot read as Good/Excellent", not an arbitrarily
   // harsher one; the weighted average still decides how far below that a
   // frame with other real faults lands.
-  const overall = _anySevereSustained ? Math.min(_rawOverall, 69) : _rawOverall;
+  const overall = _anySevereSustained ? Math.min(_rawOverall, 69)
+    : _anyModerateSustained ? Math.min(_rawOverall, 84) : _rawOverall;
 
   // Mispositioning is charged twice — once by capping distSc (which makes the
   // distance metric reflect reality) and once by positionPenalty (the ergonomic

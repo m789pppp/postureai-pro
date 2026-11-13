@@ -937,6 +937,42 @@ console.log("\nHEAD PITCH — looking down / up, read from the 3-D face pose");
   const ns = stats(noisy);
   check("±1.5° of noise on the head pose keeps the reading within 2.5° of the truth", ns.min >= 22.5 && ns.max <= 27.5, `${fmt(ns.min)}–${fmt(ns.max)}°`);
 
+  // A sustained moderate fault must not read as Excellent. Head rotation only,
+  // landmarks neutral, so nothing else in the composite moves.
+  const isolated = (deg, frames = 40) => {
+    resetProportions(); _startFakeClock(); let r = null;
+    const f = d => { _tick(); r = analyzeMP(renderSubject({}), W, H, "front", null, null, null, null, { head: { pitchDeg: d, neutralDeg: null } }); };
+    for (let i = 0; i < 120; i++) f(0);
+    for (let i = 0; i < frames; i++) f(deg);
+    _stopFakeClock();
+    return r;
+  };
+  const mod = isolated(35), mild = isolated(25), norm = isolated(15);
+  if (VERBOSE) console.log(`    head only: 15° → ${norm?.score}, 25° → ${mild?.score}, 35° → ${mod?.score}, 45° → ${isolated(45)?.score}`);
+  check("A head held 35° down (moderate) cannot read as Excellent", mod?.score <= 84 && mod?.score >= 70, `score ${mod?.score}`);
+  check("A mild or normal head pitch is not capped", mild?.score >= 85 && norm?.score >= 85, `25° → ${mild?.score}, 15° → ${norm?.score}`);
+  check("A brief moderate reading (under the dwell time) is not capped", isolated(35, 6)?.score >= 85, `score ${isolated(35, 6)?.score}`);
+
+  // Face lost at a steep angle: the reading is held while the landmarks still say "down".
+  {
+    resetProportions(); _startFakeClock(); let r = null;
+    const f = (d, face) => { _tick(); r = analyzeMP(renderSubject({ neckFlexDeg: Math.max(0, d) }), W, H, "front", null, null, null, null, face ? { head: { pitchDeg: d, neutralDeg: null } } : null); };
+    for (let i = 0; i < 120; i++) f(0, true);
+    for (let i = 0; i < 40; i++) f(45, true);
+    for (let i = 0; i < 40; i++) f(45, false);                 // 2 s without the face, head still down
+    const heldM = mon(r), heldAlert = has(r, "mon_low");
+    for (let i = 0; i < 80; i++) f(45, false);                 // 6 s in total: the hold has expired
+    const expired = mon(r);
+    for (let i = 0; i < 40; i++) f(45, true);
+    for (let i = 0; i < 10; i++) f(0, false);                  // head back up, face still missing
+    const released = mon(r);
+    _stopFakeClock();
+    check("Face lost while looking 45° down: the reading and alert are held", heldM?.method === "face_3d_held" && heldM?.severity === "severe" && heldAlert,
+      `${heldM?.method} ${heldM?.severity} alert=${heldAlert}`);
+    check("The hold expires after 5 s", expired?.method !== "face_3d_held", String(expired?.method));
+    check("The hold is released as soon as the landmarks show the head level again", released?.method !== "face_3d_held", String(released?.method));
+  }
+
   // no face model: behaviour is exactly the old one
   const without = mon(read({ neckFlexDeg: 30 }));
   check("Without a face reading the landmark proxy is still used", without?.method !== "face_3d" && without?.reliable !== undefined, String(without?.method));
