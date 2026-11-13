@@ -876,6 +876,75 @@ console.log("\nINVARIANCE — same posture, irrelevant variable changed");
 }
 
 // ═══════════════════════════════════════════════════════════════════
+console.log("\nHEAD PITCH — looking down / up, read from the 3-D face pose");
+
+{
+  // The landmark proxy reads a true 30° as about 9.5° (see the monitor block
+  // above), so looking down or up barely moved the score. With the face
+  // model's head pose supplied through `ext.head`, the engine must report the
+  // true angle from the user's neutral, score it, and raise the right alert.
+  // The rig's neckFlexDeg is the true angle; `cameraTilt` is added to the
+  // absolute reading to stand in for a laptop lid that is not vertical.
+  const readPitch = (deg, { cameraTilt = 0, neutralDeg = null, settle = 120, hold = 40, noise = 0, seed = 5 } = {}) => {
+    resetProportions();
+    _startFakeClock();
+    const rng = mulberry32(seed);
+    const n = () => (noise ? (rng() - 0.5) * 2 * noise : 0);
+    let r = null;
+    const frame = d => { _tick(); r = analyzeMP(renderSubject({ neckFlexDeg: Math.max(0, d) }), W, H, "front", null, null, null, null,
+      { head: { pitchDeg: d + cameraTilt + n(), neutralDeg } }); };
+    for (let i = 0; i < settle; i++) frame(0);
+    for (let i = 0; i < hold; i++) frame(deg);
+    _stopFakeClock();
+    return r;
+  };
+  const mon = r => r?.bodyModules?.monitor;
+  const has = (r, key) => (r?.alertKeys || r?.alerts || []).some(a => (a?.key ?? a?.id ?? a) === key || String(a?.text ?? a?.message ?? a).includes(key === "mon_low" ? "Looking down" : "Looking up"));
+
+  const rows = [0, 10, 20, 30, 40].map(d => ({ d, m: mon(readPitch(d)) }));
+  if (VERBOSE) rows.forEach(x => console.log(`    true ${String(x.d).padStart(2)}°  ->  ${fmt(x.m?.pitchDeg)}°  score ${x.m?.score}  ${x.m?.severity}  (${x.m?.method})`));
+  check("3-D head pitch is used when supplied", rows.every(x => x.m?.method === "face_3d"), rows.map(x => x.m?.method).join(","));
+  check("A true 30° reads as 30° (the proxy read ~9.5°)", Math.abs((rows[3].m?.pitchDeg ?? 0) - 30) <= 1, `${fmt(rows[3].m?.pitchDeg)}°`);
+  check("Every tested angle reads within 1° of the truth", rows.every(x => Math.abs((x.m?.pitchDeg ?? 99) - x.d) <= 1),
+    rows.map(x => `${x.d}→${fmt(x.m?.pitchDeg)}`).join(" "));
+  check("The first 10° of looking down cost nothing", rows[1].m?.score === 100 && rows[1].m?.severity === "normal", `score ${rows[1].m?.score}`);
+  check("Score falls steadily from 10° to 40°", rows[2].m?.score < rows[1].m?.score && rows[3].m?.score < rows[2].m?.score && rows[4].m?.score < rows[3].m?.score,
+    rows.map(x => x.m?.score).join(" > "));
+  check("Severity: normal below 20°, mild at 20°, moderate at 30°, severe at 40°",
+    rows[1].m?.severity === "normal" && rows[2].m?.severity === "mild" && rows[3].m?.severity === "moderate" && rows[4].m?.severity === "severe",
+    rows.map(x => x.m?.severity).join(","));
+
+  const r30 = readPitch(30), r10 = readPitch(10);
+  check("Looking down 30° raises the looking-down alert", has(r30, "mon_low") && !has(r30, "mon_hi"), JSON.stringify((r30?.alerts || []).slice(0, 3)).slice(0, 160));
+  check("Looking down 10° raises no gaze alert", !has(r10, "mon_low") && !has(r10, "mon_hi"));
+
+  const up = mon(readPitch(-15)), down15 = mon(readPitch(15));
+  check("Looking up reads negative and says 'above'", up?.pitchDeg <= -14 && up?.direction === "above", `${fmt(up?.pitchDeg)}° ${up?.direction}`);
+  check("Looking up 15° costs more than looking down 15°", up?.score < down15?.score, `up ${up?.score} vs down ${down15?.score}`);
+  const rUp = readPitch(-15);
+  check("Looking up 15° raises the looking-up alert", has(rUp, "mon_hi") && !has(rUp, "mon_low"));
+
+  // camera tilt: the same posture through a lid leaning 12° back must read the same
+  const flat = mon(readPitch(25)), tilted = mon(readPitch(25, { cameraTilt: 12 }));
+  check("A tilted camera does not change the reading (neutral is learned)", Math.abs((flat?.pitchDeg ?? 0) - (tilted?.pitchDeg ?? 99)) <= 0.5,
+    `${fmt(flat?.pitchDeg)}° vs ${fmt(tilted?.pitchDeg)}°`);
+  const cal = mon(readPitch(25, { cameraTilt: 12, neutralDeg: 12, settle: 5 }));
+  check("A calibrated neutral is used at once, without the learning period", cal?.method === "face_3d" && Math.abs((cal?.pitchDeg ?? 0) - 25) <= 0.5, `${fmt(cal?.pitchDeg)}°`);
+
+  // noise on the face model's angle must not flicker the reading
+  const noisy = [];
+  for (let i = 0; i < 12; i++) noisy.push(mon(readPitch(25, { noise: 1.5, seed: 40 + i }))?.pitchDeg);
+  const ns = stats(noisy);
+  check("±1.5° of noise on the head pose keeps the reading within 2.5° of the truth", ns.min >= 22.5 && ns.max <= 27.5, `${fmt(ns.min)}–${fmt(ns.max)}°`);
+
+  // no face model: behaviour is exactly the old one
+  const without = mon(read({ neckFlexDeg: 30 }));
+  check("Without a face reading the landmark proxy is still used", without?.method !== "face_3d" && without?.reliable !== undefined, String(without?.method));
+  const stale = (() => { resetProportions(); _startFakeClock(); let r; for (let i = 0; i < 60; i++) { _tick(); r = analyzeMP(renderSubject({}), W, H, "front", null, null, null, null, { head: null }); } _stopFakeClock(); return mon(r); })();
+  check("A missing head reading (face lost) falls back without error", stale?.method !== "face_3d");
+}
+
+// ═══════════════════════════════════════════════════════════════════
 console.log("\n" + "─".repeat(64));
 console.log(`${pass} passed · ${fail} failed`);
 if (fail) { console.log("\nFailures:"); failures.forEach(f => console.log("  · " + f)); }

@@ -163,8 +163,11 @@ export function createCorrectionField({ tauMs = 1500, spec = RTMW_X_SPEC } = {})
   };
 }
 
-// Head pitch sign: + = chin down (flexion). Verified only on synthetic matrices —
-// flip to -1 if looking down shows a negative number on a real camera.
+// Head pitch sign: + = chin down (flexion). Checked on a real photograph, two independent
+// ways: the matrix is column-major with the face at z ≈ −68 and y ≈ +22 (camera looks down
+// −Z, Y up), its nose axis pointed 18° below level, and the same face's forehead landmarks
+// were nearer the camera than its chin. headPoseFromMatrix() returned +18°. Not yet
+// checked on a live camera with a person nodding.
 export const HEAD_PITCH_SIGN = 1;
 
 export const RISK_ZONES = {
@@ -408,6 +411,15 @@ export function createLiveEnhancer(initialCalib = null, { rtmw: rtmwOpts = {}, f
         camera: drift && drift.ok ? { pitch: Math.round(drift.pitch * 10) / 10, roll: Math.round(drift.roll * 10) / 10,
           moved: Math.abs(drift.pitch) > 3 || Math.abs(drift.roll) > 2 } : null,
       };
+    },
+    /**
+     * Head pitch for the scoring engine, or null when the face model has no fresh reading.
+     * @returns {{pitchDeg:number, neutralDeg:number|null}|null} + = chin down
+     */
+    headPitch(tMs) {
+      if (!head || tMs - lastFaceT > 500) return null;
+      const n = calib?.head_pose_neutral?.pitch;
+      return { pitchDeg: HEAD_PITCH_SIGN * head.pitch, neutralDeg: typeof n === "number" ? HEAD_PITCH_SIGN * n : null };
     },
     resetExposure() { exposure.reset(); },
     close() { closed = true; if (!external) { try { face?.close(); } catch { /* ignore */ } } face = null; rtmw?.close(); rtmw = null; },

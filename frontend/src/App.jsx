@@ -363,10 +363,10 @@ async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code
 }
 
 // ── Local MediaPipe analysis (adapters for postureEngine result shape) ────
-function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib){
+function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib,ext){
   // postureEngine returns {score, metrics, alerts, recommendations, detected, lms(named), raw}
   // App expects  {overall, distCm, lo, hi, metrics, lms(landmark refs), raw}
-  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib);
+  const eng = _engAnalyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib,ext);
   if(!eng) return null;
   const dist = eng.metrics?.screen_distance;
   // lo/hi come from engine (no duplication)
@@ -4124,7 +4124,11 @@ export default function App(){
           try{ fusedLms=enhancerRef.current.fuse(rawLms,vidRef.current,W,H,performance.now()); }catch(e){ fusedLms=rawLms; }
           const lms=lmSmootherRef.current.smooth(fusedLms);
           totalRef.current++;setTotalF(totalRef.current);
-          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
+          // Head pitch (looking down / up) comes from the face model's 3-D head
+          // pose when it is fresh; the engine falls back to its landmark proxy
+          // otherwise. See analyzeMonitorHeight in postureEngine.js.
+          const headPose=enhancerRef.current?.headPitch?.(performance.now())??null;
+          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,headPose?{head:headPose}:null); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Live precision layer: runs beside the engine; it only replaces the distance

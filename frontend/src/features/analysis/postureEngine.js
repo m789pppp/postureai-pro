@@ -753,6 +753,11 @@ function _updateDepthUsable(g, vis, W) {
 }
 
 let _protractBase = _makeBaseline(12, 25);
+// Head pitch from the face model (see analyzeMonitorHeight). The absolute angle
+// includes the camera's own tilt — a laptop lid leaning back reads as "looking
+// down" — so without a calibrated neutral the user's own settled pitch is
+// learned and the CHANGE from it is scored.
+let _headPitchBase = _makeBaseline(15, 30);
 
 let _yawWin      = [];
 let _yawUsedZ    = false;  // which estimator produced the last reading
@@ -957,6 +962,7 @@ export function resetProportions() {
   _earShBaseR = _makeBaseline(20, 35);
   _headShBase = _makeBaseline(15, 30);
   _protractBase = _makeBaseline(12, 25);
+  _headPitchBase = _makeBaseline(15, 30);
   _depthWin = [];
   _depthOK = false;
   _depthNoiseCm = 0;
@@ -2316,7 +2322,44 @@ function analyzeElbow(lms, W, H) {
   return { angle: avg, idealMin: 90, idealMax: 120, score, severity, confidence: 80, reliable: true };
 }
 
-function analyzeMonitorHeight(lms, W, H, distCm, calib = null) {
+// Head pitch from the face model, in true degrees from the user's neutral.
+// RULA scores the neck 1 below 10 deg of flexion, 2 from 10 to 20, 3 above 20,
+// and any extension 4. The reading here is relative to the user's own neutral,
+// which already contains their normal downward gaze at the screen (OSHA
+// recommends the screen centre 15-20 deg below eye level). So the first 10 deg
+// of looking further down cost nothing, the score then falls to 75 at 20 deg
+// and 30 at 40 deg, and severity (and the alert) starts at 20 deg. Looking UP
+// counts double, following RULA's treatment of extension.
+const HEAD_PITCH_3D = { free: 10, ok: 10, bad: 30, sev: { mild: 20, moderate: 30, severe: 40 }, upFactor: 2 };
+
+/**
+ * @param {object|null} head  { pitchDeg, neutralDeg } from the face model:
+ *   pitchDeg    absolute head pitch, + = chin down (3-D head pose, not a landmark proxy)
+ *   neutralDeg  the calibrated neutral in the same convention, or null
+ */
+function analyzeMonitorHeight(lms, W, H, distCm, calib = null, head = null) {
+  // ── Preferred: the face model's 3-D head pose ───────────────────────────
+  // The landmark proxy further down reads a true 30 deg of pitch as about
+  // 9.5 deg and shifts by up to +/-10 deg with the shape of the face, so
+  // looking down or up barely moved the score. The face model measures the
+  // rotation itself. It is used whenever it is fresh and a neutral is known.
+  if (head && Number.isFinite(head.pitchDeg)) {
+    const neutral = Number.isFinite(head.neutralDeg) ? head.neutralDeg : _feedBaseline(_headPitchBase, head.pitchDeg);
+    if (neutral != null) {
+      const pitchDeg = Math.round((head.pitchDeg - neutral) * 10) / 10;
+      const eff = pitchDeg >= 0 ? pitchDeg : -pitchDeg * HEAD_PITCH_3D.upFactor;
+      const direction = Math.abs(pitchDeg) > 2 ? (pitchDeg > 0 ? "below" : "above") : "ok";
+      const offsetCm = direction !== "ok" && distCm > 20
+        ? Math.round(distCm * Math.tan(Math.min(60, Math.abs(pitchDeg)) * Math.PI / 180) * 10) / 10 : 0;
+      return { offsetCm, direction, pitchDeg,
+               score: scoreMetric(Math.max(0, eff - HEAD_PITCH_3D.free), 0, HEAD_PITCH_3D.ok, HEAD_PITCH_3D.bad),
+               severity: classify(eff, HEAD_PITCH_3D.sev),
+               confidence: Number.isFinite(head.neutralDeg) ? 88 : 80,
+               reliable: true, personalised: true, method: "face_3d" };
+    }
+    // neutral still being learned: fall through to the landmark proxy for these first seconds
+  }
+
   const g   = i => lms[i];
   const vis = i => (g(i)?.visibility ?? 0) >= VIS_MIN;
   if (!vis(PL.L_EYE) || !vis(PL.R_EYE)) return { offsetCm: 0, direction: "ok", score: 90, severity: "normal", confidence: 0, reliable: false };
@@ -2526,8 +2569,11 @@ function buildAlerts(modules, distCm, lo, hi, nowMs = Date.now()) {
     // (~10cm of phantom offset at 60cm), which sailed past a flat 5cm trigger
     // and gave a large subset of users a permanent, unclearable instruction to
     // move a monitor that was already at eye level.
-    add("mon_low",   monitor.reliable && monitor.direction === "below" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`, imp("monitor", monitor)),
-    add("mon_hi",    monitor.reliable && monitor.direction === "above" && monitor.offsetCm > (monitor.personalised ? 5 : 14), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`, imp("monitor", monitor)),
+    // With the 3-D head pose the angle is real, so the alert follows its severity
+    // band (20 deg down / 10 deg up from neutral) instead of a centimetre offset
+    // tuned for the compressed landmark proxy.
+    add("mon_low",   monitor.reliable && monitor.direction === "below" && (monitor.method === "face_3d" ? monitor.severity !== "normal" : monitor.offsetCm > (monitor.personalised ? 5 : 14)), `Looking down ~${monitor.offsetCm}cm below eye level — raise your monitor, or if you're checking a phone/notes, keep it brief`, imp("monitor", monitor)),
+    add("mon_hi",    monitor.reliable && monitor.direction === "above" && (monitor.method === "face_3d" ? monitor.severity !== "normal" : monitor.offsetCm > (monitor.personalised ? 5 : 14)), `Looking up ~${monitor.offsetCm}cm above eye level — lower your monitor`, imp("monitor", monitor)),
     // Hand/chin-prop occlusion — see analyzeMP() for detection logic. This
     // is deliberately informational-only (no score weight): we can't
     // quantify the actual neck angle once an ear is occluded, so this just
@@ -2601,7 +2647,7 @@ function buildMeasurements({ neck, headTilt, shoulder, spine, yaw, trunkRot, elb
   };
 }
 
-export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null, calib = null) {
+export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartMs = null, calibKnownDistCm = null, calib = null, ext = null) {
   if (!lms || lms.length < 25) return null;
 
   // Quality gate — split into HARD blocks (genuinely nothing measurable —
@@ -2731,7 +2777,7 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     fhp     = analyzeFHP(lms, W, H, prop);
 
     elbow   = analyzeElbow(lms, W, H);
-    monitor = analyzeMonitorHeight(lms, W, H, distCm, calib);
+    monitor = analyzeMonitorHeight(lms, W, H, distCm, calib, ext?.head ?? null);
     // Keep each analyzer's OWN verdict before the debounce below overwrites
     // it. These four objects are cached and reused on the two skipped frames
     // out of every three, and the debounce assigns its output straight back
