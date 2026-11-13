@@ -134,7 +134,7 @@ async function run() {
 
     const rec = { t: [], cost: [], raf: [], raw: [], fused: [], smooth: [], series: {}, heap: [] };
     const push = (k, v) => { (rec.series[k] ||= []).push(Number.isFinite(v) ? v : NaN); };
-    const infer = [], intervals = [];
+    const infer = [], intervals = [], pitchMethods = {};
     let rateOpts = {};
     try { rateOpts = JSON.parse(Q.get("rateOpts") || "{}"); } catch { /* defaults */ }      // tuning only, e.g. {"slowMs":150}
     const rate = Q.get("rate") === "fixed" ? null : createRateController(rateOpts);
@@ -161,7 +161,9 @@ async function run() {
         let fused = raw;
         if (enh) { try { fused = enh.fuse(raw, video, W, H, now); } catch { fused = raw; } }
         const lms = smoother.smooth(fused);
-        const r = analyzeMP(lms, W, H, "laptop", null, sess, null, null);
+        const headPose = enh?.headPitch?.(now) ?? null;                       // same hand-over as App.jsx
+        const r = analyzeMP(lms, W, H, "laptop", null, sess, null, null, headPose ? { head: headPose } : null);
+        if (measuring && r?.bodyModules?.monitor) { const mm = r.bodyModules.monitor; pitchMethods[mm.method || "landmark_proxy"] = (pitchMethods[mm.method || "landmark_proxy"] || 0) + 1; push("headPitch.relDeg", mm.pitchDeg); if (headPose) push("headPitch.absDeg", headPose.pitchDeg); }
         if (enh) { try { prec = enh.process(video, lms, W, H, now, lastScore); } catch { /* keep going */ } }
         if (r?.score != null) { lastScore = r.score; timings.firstScoreMs ??= at(); }
         if (prec) {
@@ -190,6 +192,7 @@ async function run() {
 
     res.timings = timings;
     res.pacing = pacing(rec.t, rec.cost, rec.raf);
+    res.headPitchMethods = pitchMethods;          // how often the engine used the 3-D head pose vs the landmark proxy
     res.rate = { mode: rate ? "adaptive" : "fixed", slowShare: intervals.length ? Math.round(100 * intervals.filter(i => i > 50).length / intervals.length) / 100 : null };
     res.pipeline = pipelineId({ vision: pose.pl.info || { mode: pose.mode, delegate: pose.delegate }, precision: prec });
     res.workerInferMs = infer.length ? Math.round(infer.slice(-100).sort((a, b) => a - b)[Math.floor(Math.min(infer.length, 100) / 2)]) : null;

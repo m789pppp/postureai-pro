@@ -973,6 +973,24 @@ console.log("\nHEAD PITCH — looking down / up, read from the 3-D face pose");
     check("The hold is released as soon as the landmarks show the head level again", released?.method !== "face_3d_held", String(released?.method));
   }
 
+  // The neutral must be learned by time. A count of analyzer calls took 8-20 s on the
+  // real pipeline (one call in three frames, fewer frames when the person is still).
+  {
+    const engagedAfter = stepMs => {
+      resetProportions(); _startFakeClock(); let r = null, at = null;
+      for (let i = 1; i <= 200 && at === null; i++) {
+        _tick(stepMs);
+        r = analyzeMP(renderSubject({}), W, H, "front", null, null, null, null, { head: { pitchDeg: 7, neutralDeg: null } });
+        if (mon(r)?.method === "face_3d") at = i * stepMs;
+      }
+      _stopFakeClock();
+      return at;
+    };
+    const fast = engagedAfter(50), slow = engagedAfter(150);
+    check("The 3-D head pitch takes over within 3.5 s at 20 analyses/s", fast !== null && fast <= 3500, `${fast} ms`);
+    check("…and within 3.5 s at the slow rate (one analysis per 150 ms)", slow !== null && slow <= 3500, `${slow} ms`);
+  }
+
   // no face model: behaviour is exactly the old one
   const without = mon(read({ neckFlexDeg: 30 }));
   check("Without a face reading the landmark proxy is still used", without?.method !== "face_3d" && without?.reliable !== undefined, String(without?.method));

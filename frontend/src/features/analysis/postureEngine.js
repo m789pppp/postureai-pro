@@ -757,7 +757,27 @@ let _protractBase = _makeBaseline(12, 25);
 // includes the camera's own tilt — a laptop lid leaning back reads as "looking
 // down" — so without a calibrated neutral the user's own settled pitch is
 // learned and the CHANGE from it is scored.
-let _headPitchBase = _makeBaseline(15, 30);
+// Learned by TIME, not by a count of calls: analyzeMonitorHeight runs on one frame in
+// three and the loop slows down for a still person, so a count-based baseline (45
+// calls) took 8 to 20 s to settle on a real pipeline and the 3-D reading sat unused
+// for all of it. The first second is skipped (the person is still settling), the next
+// two are sampled, and the median becomes the neutral.
+const HEAD_NEUTRAL_SKIP_MS = 1000, HEAD_NEUTRAL_LEARN_MS = 2000, HEAD_NEUTRAL_MIN_SAMPLES = 6;
+let _headNeutral = { t0: null, samples: [], value: null };
+function _learnHeadNeutral(pitchDeg) {
+  const h = _headNeutral;
+  if (h.value !== null || !Number.isFinite(pitchDeg)) return h.value;
+  const now = _engineNow();
+  if (h.t0 === null) h.t0 = now;
+  const age = now - h.t0;
+  if (age < HEAD_NEUTRAL_SKIP_MS) return null;
+  h.samples.push(pitchDeg);
+  if (age >= HEAD_NEUTRAL_SKIP_MS + HEAD_NEUTRAL_LEARN_MS && h.samples.length >= HEAD_NEUTRAL_MIN_SAMPLES) {
+    const sorted = h.samples.slice().sort((a, b) => a - b);
+    h.value = sorted[Math.floor(sorted.length / 2)];
+  }
+  return h.value;
+}
 let _headPitchLast = null;                 // last 3-D reading { t, out } — see the hold in analyzeMonitorHeight
 const HEAD_PITCH_HOLD_MS = 5000;
 const _engineNow = () => analyzeMP.__testNowMs ?? Date.now();
@@ -965,7 +985,7 @@ export function resetProportions() {
   _earShBaseR = _makeBaseline(20, 35);
   _headShBase = _makeBaseline(15, 30);
   _protractBase = _makeBaseline(12, 25);
-  _headPitchBase = _makeBaseline(15, 30);
+  _headNeutral = { t0: null, samples: [], value: null };
   _headPitchLast = null;
   _depthWin = [];
   _depthOK = false;
@@ -2349,7 +2369,7 @@ function analyzeMonitorHeight(lms, W, H, distCm, calib = null, head = null) {
   // looking down or up barely moved the score. The face model measures the
   // rotation itself. It is used whenever it is fresh and a neutral is known.
   if (head && Number.isFinite(head.pitchDeg)) {
-    const neutral = Number.isFinite(head.neutralDeg) ? head.neutralDeg : _feedBaseline(_headPitchBase, head.pitchDeg);
+    const neutral = Number.isFinite(head.neutralDeg) ? head.neutralDeg : _headNeutral.value;   // learned every frame in analyzeMP
     if (neutral != null) {
       const pitchDeg = Math.round((head.pitchDeg - neutral) * 10) / 10;
       const eff = pitchDeg >= 0 ? pitchDeg : -pitchDeg * HEAD_PITCH_3D.upFactor;
@@ -2790,6 +2810,8 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // IMPORTANT: rounded must be computed BEFORE spine because analyzeSpineLean
   // uses rounded.score as input. On non-skip frames, compute rounded fresh and
   // pass it directly to spine. On skip frames, use the cached value.
+  // Head-pitch neutral: fed on EVERY frame that carries a face reading (see _learnHeadNeutral).
+  if (ext?.head && !Number.isFinite(ext.head.neutralDeg)) _learnHeadNeutral(ext.head.pitchDeg);
   let rounded, fhp, elbow, monitor;
   if (!skipExpensive || !analyzeMP._cachedRounded) {
     rounded = analyzeRoundedShoulders(lms, prop, H, calib, torsoFlex?.angle);
@@ -2827,6 +2849,15 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
     fhp     = analyzeMP._cachedFhp;
     elbow   = analyzeMP._cachedElbow;
     monitor = analyzeMP._cachedMonitor;
+  }
+
+  // With a face reading the head-pitch metric is one subtraction, so it is refreshed
+  // every frame instead of every third: at the slow analysis rate a cached value would
+  // lag a nod by almost half a second.
+  if (ext?.head) {
+    monitor = analyzeMonitorHeight(lms, W, H, distCm, calib, ext.head);
+    monitor._rawReliable = monitor.reliable;
+    analyzeMP._cachedMonitor = monitor;
   }
 
   // Sagittal forward-head, computed EVERY frame rather than inside the
