@@ -7,18 +7,45 @@
  * The training script (backend/ai/bench_train.py) pairs the per-step median of the
  * camera features with the measured value.
  */
-export const BENCH_VERSION = 1;
+export const BENCH_VERSION = 2;
 
+/**
+ * Each step: hold the posture, type the measured value, record `holdSec` seconds.
+ *   expectAny  alert keys of which at least one should fire once the posture is held
+ *   forbid     alert keys that must NOT fire (cross-talk: e.g. a head turn read as a tilt)
+ * Used by scripts/replay-bench.mjs to judge the engine on real recordings.
+ * v2 adds looking up, turning left/right and leaning sideways, so every direction a
+ * tester moves in is covered, and the expectations.
+ */
+const POSTURE_ALERTS = ["neck_mid", "neck_sev", "tilt", "sh", "spine_mid", "spine_sev", "yaw", "fhp_mid", "fhp_sev",
+  "round_mid", "round_sev", "shrug_mid", "shrug_sev", "slouch_mid", "slouch_sev", "twist_mid", "twist_sev", "mon_low", "mon_hi"];
 export const BENCH_STEPS = [
-  { id: "neutral",        target: "head_flexion_deg", unit: "°",  holdSec: 5, en: "Sit upright, look at the screen",          ar: "اقعد مستقيم وبص للشاشة" },
-  { id: "flex_15",        target: "head_flexion_deg", unit: "°",  holdSec: 5, en: "Bend the head down ~15°",                  ar: "اثني راسك لتحت حوالي ١٥°" },
-  { id: "flex_30",        target: "head_flexion_deg", unit: "°",  holdSec: 5, en: "Bend the head down ~30°",                  ar: "اثني راسك لتحت حوالي ٣٠°" },
-  { id: "forward_head",   target: "protraction_cm",   unit: "cm", holdSec: 5, en: "Push the head forward, eyes level",        ar: "زق راسك لقدام وعينك مستوية" },
-  { id: "tilt_left",      target: "head_tilt_deg",    unit: "°",  holdSec: 5, en: "Tilt the head toward the left shoulder",   ar: "ميّل راسك ناحية كتفك الشمال" },
-  { id: "tilt_right",     target: "head_tilt_deg",    unit: "°",  holdSec: 5, en: "Tilt the head toward the right shoulder",  ar: "ميّل راسك ناحية كتفك اليمين" },
-  { id: "shoulder_raise", target: "shoulder_level_deg", unit: "°", holdSec: 5, en: "Raise one shoulder",                      ar: "ارفع كتف واحد" },
-  { id: "lean_forward",   target: "protraction_cm",   unit: "cm", holdSec: 5, en: "Lean the whole trunk toward the screen",   ar: "ميّل جسمك كله ناحية الشاشة" },
-  { id: "slouch",         target: "head_flexion_deg", unit: "°",  holdSec: 5, en: "Slouch the way you usually do",            ar: "اقعد مكسّل زي ما بتقعد عادةً" },
+  { id: "neutral",        target: "head_flexion_deg",   unit: "°",  holdSec: 5, en: "Sit upright, look at the screen",          ar: "اقعد مستقيم وبص للشاشة",
+    expectAny: [], forbid: POSTURE_ALERTS },
+  { id: "flex_15",        target: "head_flexion_deg",   unit: "°",  holdSec: 5, en: "Bend the head down ~15°",                  ar: "اثني راسك لتحت حوالي ١٥°",
+    expectAny: [], forbid: ["mon_hi", "yaw", "tilt"] },
+  { id: "flex_30",        target: "head_flexion_deg",   unit: "°",  holdSec: 5, en: "Bend the head down ~30°",                  ar: "اثني راسك لتحت حوالي ٣٠°",
+    expectAny: ["mon_low", "neck_mid", "neck_sev", "fhp_mid", "fhp_sev"], forbid: ["mon_hi", "yaw", "tilt"] },
+  { id: "look_up",        target: "head_flexion_deg",   unit: "°",  holdSec: 5, en: "Look up ~20° (measured value is negative)", ar: "بص لفوق حوالي ٢٠° (اكتب الرقم بالسالب)",
+    expectAny: ["mon_hi"], forbid: ["mon_low", "yaw", "tilt"] },
+  { id: "forward_head",   target: "protraction_cm",     unit: "cm", holdSec: 5, en: "Push the head forward, eyes level",        ar: "زق راسك لقدام وعينك مستوية",
+    expectAny: ["fhp_mid", "fhp_sev"], forbid: ["tilt", "yaw", "sh"] },
+  { id: "tilt_left",      target: "head_tilt_deg",      unit: "°",  holdSec: 5, en: "Tilt the head toward the left shoulder",   ar: "ميّل راسك ناحية كتفك الشمال",
+    expectAny: ["tilt"], forbid: ["yaw", "mon_low", "mon_hi"] },
+  { id: "tilt_right",     target: "head_tilt_deg",      unit: "°",  holdSec: 5, en: "Tilt the head toward the right shoulder",  ar: "ميّل راسك ناحية كتفك اليمين",
+    expectAny: ["tilt"], forbid: ["yaw", "mon_low", "mon_hi"] },
+  { id: "turn_left",      target: "head_yaw_deg",       unit: "°",  holdSec: 5, en: "Turn the head ~30° to the left",           ar: "لف راسك شمال حوالي ٣٠°",
+    expectAny: ["yaw"], forbid: ["tilt", "mon_low", "mon_hi"] },
+  { id: "turn_right",     target: "head_yaw_deg",       unit: "°",  holdSec: 5, en: "Turn the head ~30° to the right",          ar: "لف راسك يمين حوالي ٣٠°",
+    expectAny: ["yaw"], forbid: ["tilt", "mon_low", "mon_hi"] },
+  { id: "lean_side",      target: "spine_lateral_deg",  unit: "°",  holdSec: 5, en: "Lean the upper body to one side",          ar: "ميّل جسمك كله لجنب واحد",
+    expectAny: ["spine_mid", "spine_sev"], forbid: ["fhp_mid", "fhp_sev", "mon_low", "mon_hi"] },
+  { id: "shoulder_raise", target: "shoulder_level_deg", unit: "°",  holdSec: 5, en: "Raise one shoulder",                       ar: "ارفع كتف واحد",
+    expectAny: ["sh", "shrug_mid", "shrug_sev"], forbid: ["yaw", "mon_low", "mon_hi"] },
+  { id: "lean_forward",   target: "protraction_cm",     unit: "cm", holdSec: 5, en: "Lean the whole trunk toward the screen",   ar: "ميّل جسمك كله ناحية الشاشة",
+    expectAny: ["dist_c", "dist_cl", "fhp_mid", "fhp_sev", "slouch_mid", "slouch_sev"], forbid: ["yaw", "tilt"] },
+  { id: "slouch",         target: "head_flexion_deg",   unit: "°",  holdSec: 5, en: "Slouch the way you usually do",            ar: "اقعد مكسّل زي ما بتقعد عادةً",
+    expectAny: ["slouch_mid", "slouch_sev", "fhp_mid", "fhp_sev", "round_mid", "round_sev", "neck_mid", "neck_sev", "mon_low"], forbid: ["yaw", "mon_hi"] },
 ];
 
 const r4 = v => (Number.isFinite(v) ? Math.round(v * 1e4) / 1e4 : null);

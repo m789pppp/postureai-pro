@@ -43,21 +43,68 @@ Off for everyone. A device turns them on by opening the site once with `?exp=a,b
   9.5° and does not react to looking up.
 - Everything was measured on one cloud machine without a GPU, on still photographs.
 
-## How to run the guided test
+## The analysis loop
 
-Use the built-in browser on the live site. One step at a time; after each step write the
-result to `docs/CAMP_FINDINGS.md` (date, device, browser, switches, what happened, diag
-text, screenshot description). Do not change code until a problem is reproduced and
-written down.
+The session acts as the scientific analyst: the tester moves, the session measures, keeps
+the record, finds the problems, fixes them, and the tester checks the fix. Every finding
+is written to `docs/CAMP_FINDINGS.md` (date, device, browser, switches, what happened,
+numbers). No code changes until a problem has been reproduced and written down.
 
-1. **Baseline, switches off.** Sign in, start a session, one minute still. Record whether
-   it runs, analyses/s from `?exp=diag`, any errors, and how the score behaves.
-2. **Movements.** Look down slowly, look up, tilt left and right, lean in, lean back,
-   slouch. For each: does the skeleton follow, does the right alert appear, how long does
-   it take, does anything freeze.
-3. **Each switch alone** (`diag,worker`, `diag,adaptive`, `diag,head3d`), repeating 1–2.
-4. **Long run.** Ten minutes with switches off: memory and analyses/s at the start and end.
-5. **Bench.** If the person has an inclinometer app, record `/bench.html` for them.
+### 1. Live check (switches off)
+
+Built-in browser on `/?exp=diag`. Sign in, start a session, one minute still. Record
+analyses/s, any errors, whether the skeleton follows and how the score behaves. If it
+stalls or errors, that is the first problem; stop and fix it before measuring accuracy.
+
+### 2. Record every posture with `/bench.html`
+
+Thirteen steps (bench v2): neutral, head down 15° and 30°, look up, forward head, tilt
+left and right, turn left and right, lean sideways, raise one shoulder, lean toward the
+screen, slouch. For each the tester holds the posture and types the value measured by
+hand: a phone inclinometer held flat against the side of the head (zeroed while sitting
+upright) for angles, a ruler along the desk edge for centimetres. Looking up is entered
+as a negative number. Each person gives one JSON file: save them under
+`validation/camp/` (not committed; it is in `.gitignore`).
+
+### 3. Replay the engine over the recordings
+
+```
+cd frontend
+node scripts/replay-bench.mjs ../validation/camp                    # engine as shipped
+node scripts/replay-bench.mjs ../validation/camp --compare head3d   # same frames, with and without a switch
+```
+
+For every posture of every person: whether an expected alert held (≥40% of the frames
+after the first 1.5 s), cross-talk (an alert that belongs to another posture), the
+engine's reading against the measured value, and the score. This runs the same pipeline
+as the live app after the camera (smoothing, then `analyzeMP`), so a change to the engine
+can be judged on the same real people without recording again.
+
+### 4. Fix, compare, ship behind a switch
+
+1. Take the worst row of the summary (most people missed, or most cross-talk).
+2. Change the engine behind a new switch in `experiments.js`.
+3. `replay-bench.mjs --compare <switch>`: the target posture must improve, and no other
+   posture may get worse (catches, cross-talk). Add a synthetic check to
+   `postureEngine.accuracy.mjs`.
+4. Run every check in `CLAUDE.md`, open a PR, merge.
+5. The tester tries `/?exp=<switch>` live and repeats step 2 for that posture.
+6. Only when both the replay and the live retest are better: a separate PR turns the
+   switch on by default, with the before/after table.
+
+### Hypotheses to check first (seen on the synthetic subject, not yet on people)
+
+Run on a synthetic bench session; each needs a real recording before anything changes.
+
+| Posture | What the engine did |
+|---|---|
+| Head down 30° | read about 9°, no alert (landmark proxy); `head3d` reads 30° and alerts |
+| Look up 20° | read about −5°, no alert; `head3d` reads −20° and alerts |
+| Head down 30°, forward head 5 cm | "too close" (`dist_c`) fired: the face gets bigger in the frame |
+| Forward head 5 cm | reading right (4.7 cm), no forward-head alert |
+| One shoulder 7–10° higher | severity "moderate", but the alert only fires above 10° |
+| Lean sideways 12° | hips out of frame: reported as uneven shoulders and head tilt, spine lean reads 0 |
+| `head3d` neutral | the 30 s learner averages whatever the person does in the first 30 s; several postures in that window pull it |
 
 ## Rules that do not change
 

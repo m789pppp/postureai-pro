@@ -40,3 +40,6 @@ __pycache__/
 *.pyc
 *.bak
 frontend/.posmoz-backup/
+
+# Camp bench recordings (pseudonymous landmarks, kept off git)
+validation/camp/
