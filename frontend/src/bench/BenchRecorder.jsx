@@ -1,5 +1,5 @@
 /**
- * BenchRecorder — local research tool (open /bench.html with `npm run dev`).
+ * BenchRecorder — research tool for the validation camp (open /bench.html on the deployed site).
  * Records landmark-only sessions for the Posmoz Bench and downloads them as JSON.
  * No video or image is stored or uploaded.
  */

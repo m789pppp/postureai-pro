@@ -35,9 +35,11 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 400,
     rollupOptions: {
-      // perf.html is the pipeline benchmark (noindex): it has to be in the build so it
-      // can be run on real phones and laptops from a preview deployment.
-      input: { main: 'index.html', perf: 'perf.html' },
+      // perf.html (pipeline benchmark) and bench.html (Posmoz Bench recorder for the
+      // validation camp) are noindex tool pages. They have to be in the build so they
+      // can be used on real phones and laptops from the deployed site; bench.html was
+      // left out and only worked under `npm run dev`.
+      input: { main: 'index.html', perf: 'perf.html', bench: 'bench.html' },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
