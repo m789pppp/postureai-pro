@@ -459,7 +459,17 @@ function _applyEliteElevation(data) {
   // ── Elite whitelist check FIRST — whitelisted users bypass ALL expiry logic ──
   // Founder accounts, university pilots, etc. are ALWAYS elite regardless of
   // subscription status, trial expiry, or payment history.
-  if (_shouldElevateToElite(data.email || "")) {
+  // The whitelist used to be checked against the `email` stored in the Firestore
+  // document only. A document whose email is missing, empty or out of date (an
+  // account created through another sign-in path, an edited profile) lost Elite
+  // even though the person signed in with a whitelisted address. For the signed-in
+  // user's OWN document the verified sign-in email is checked as well. It is never
+  // applied to anyone else's document (HR lists, admin views), and an unverified
+  // address does not count.
+  const me = auth.currentUser;
+  const ownDoc = !!me && (data.uid === me.uid || data.id === me.uid);
+  const verifiedOwnEmail = ownDoc && me.emailVerified ? (me.email || "") : "";
+  if (_shouldElevateToElite(data.email || "") || _shouldElevateToElite(verifiedOwnEmail)) {
     data.tier = "elite";
     data.is_trial = false;
     data.subscription_status = "active";
