@@ -106,15 +106,34 @@ test("quality score", () => {
   assert.ok(weak.score < 65 && weak.grade === "low", JSON.stringify(weak));
 });
 
-test("neutral learner: skips the first second, then takes the median of the next two", () => {
+test("neutral learner: skips the first second, first estimate after three", () => {
   const n = createNeutralLearner();
   assert.equal(n.feed(40, 0), null);                 // settling: ignored
   assert.equal(n.feed(40, 900), null);
   let v = null;
   for (let t = 1000; t <= 3100; t += 150) v = n.feed(12 + (t % 300 ? 0.4 : -0.4), t);
   assert.ok(Math.abs(v - 12) < 0.5, String(v));      // the 40s never entered
-  assert.equal(n.feed(99, 5000), v);                 // fixed once learned
   n.reset(); assert.equal(n.value, null);
+});
+
+test("neutral learner: looking down to press Start does not become the neutral", () => {
+  const n = createNeutralLearner();
+  let v = null, t = 0;
+  for (; t < 4000; t += 100) v = n.feed(30, t);      // 4 s looking down at the trackpad
+  assert.ok(Math.abs(v - 30) < 0.01);                // first estimate is wrong…
+  for (; t < 12000; t += 100) v = n.feed(2, t);      // …then the person sits up
+  assert.ok(Math.abs(v - 2) < 0.01, `after 12 s the neutral is ${v}`);
+  for (; t < 31000; t += 100) v = n.feed(2, t);
+  assert.equal(n.locked, true);
+});
+
+test("neutral learner: fixed after the refinement window, a later slouch does not move it", () => {
+  const n = createNeutralLearner({ refineMs: 10000 });
+  let v = null, t = 0;
+  for (; t < 11000; t += 100) v = n.feed(5, t);
+  assert.equal(n.locked, true);
+  for (; t < 600000; t += 1000) v = n.feed(25, t);   // ten minutes of slouching
+  assert.equal(v, 5);
 });
 
 test("neutral learner: works at a slow, uneven sample rate and ignores bad values", () => {

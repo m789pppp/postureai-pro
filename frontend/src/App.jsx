@@ -111,10 +111,15 @@ import { createLiveEnhancer } from "./features/analysis/liveEnhancer.js";
 import { createVisionClient } from "./features/analysis/visionClient.js";
 import { createRateController } from "./features/analysis/analysisRate.js";
 import { pipelineId } from "./features/analysis/pipelineInfo.js";
-import { experimentEnabled } from "./features/analysis/experiments.js";
+import { experimentEnabled, activeExperiments } from "./features/analysis/experiments.js";
+import { diagInstall, diagFrame, diagSet } from "./features/analysis/diag.js";
+const DiagPanel = lazy(() => import("./features/analysis/DiagPanel.jsx"));
 const HEAD3D = experimentEnabled("head3d");
 const EXP_WORKER = experimentEnabled("worker");
 const EXP_ADAPTIVE = experimentEnabled("adaptive");
+// "diag": an on-screen readout for testers to copy when they report a problem (diag.js)
+const EXP_DIAG = experimentEnabled("diag");
+if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
 // API URL: set VITE_API_URL in .env.local for production
@@ -4152,6 +4157,13 @@ export default function App(){
             if(rawResult && prec.distCm!=null && prec.distSource==="calibrated") rawResult.distCm=prec.distCm;
             if(rawResult) rawResult.precision=prec;
             pipelineRef.current=pipelineId({vision:mpRef.current?.info,precision:prec});
+            if(EXP_DIAG){
+              diagFrame(performance.now());
+              diagSet({pipeline:pipelineRef.current,experiments:activeExperiments().join(",")||"none",
+                headPitchMethod:rawResult?.bodyModules?.monitor?.method||"landmark_proxy",
+                rtmw:`${prec.rtmw?.state||"-"}${prec.rtmw?.reason?" ("+prec.rtmw.reason+")":""}`,
+                faceModel:prec.faceModel,score:rawResult?.overall??null,frame:`${W}x${H}`});
+            }
             if(++precTickRef.current%6===0) startTransition(()=>setPrecision(prec));
           }catch(e){ /* precision layer must never break the main loop */ }
           // Stabilize distance via sliding median — fixes ±10pt IPD jitter
@@ -7855,6 +7867,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <canvas ref={ovRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",transform:"scaleX(-1)",objectFit:isFs?"contain":"cover"}}/>
           <canvas ref={canvRef} style={{display:"none"}}/>
           {camActive && precision && <PrecisionHud data={precision} isAr={isAr} calibrated={!!calibData?.calib_version}/>}
+          {EXP_DIAG && <Suspense fallback={null}><DiagPanel/></Suspense>}
 
           {/* Viewfinder frame — this is a computer-vision scanner, so the
               signature visual treatment is a scan reticle (not a generic

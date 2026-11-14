@@ -240,25 +240,36 @@ export function calibrationQuality({ validFrames, targetFrames, spreads = {}, di
 // ── Neutral learned at the start of a session ───────────────────────────────
 /**
  * Learns a person's settled value of some reading (e.g. head pitch) at the start of a
- * session, by TIME rather than by a count of samples: the first `skipMs` are ignored
- * (the person is still settling), the next `learnMs` are sampled, and the median becomes
- * the neutral. Used when no calibrated neutral exists, so that a tilted camera does not
- * read as a tilted head. Pure — unit-tested.
+ * session, by TIME rather than by a count of samples. Used when no calibrated neutral
+ * exists, so that a tilted camera does not read as a tilted head.
+ *
+ *   skipMs    ignored at the very start (the person is still settling)
+ *   learnMs   after this much more, a first neutral is available (median so far)
+ *   refineMs  the neutral keeps following the median of everything seen until this age,
+ *             then it is fixed for the session
+ *
+ * The refinement matters: people look DOWN to press Start and then sit up. A neutral fixed
+ * after three seconds takes "looking down" as level and reads the rest of the session as
+ * looking up. Following the median for the first half-minute lets the pose the person
+ * actually holds win, and fixing it afterwards stops a slow slouch from becoming the
+ * new neutral. Pure — unit-tested.
  */
-export function createNeutralLearner({ skipMs = 1000, learnMs = 2000, minSamples = 6 } = {}) {
-  let t0 = null, samples = [], value = null;
+export function createNeutralLearner({ skipMs = 1000, learnMs = 2000, refineMs = 30000, minSamples = 6 } = {}) {
+  let t0 = null, samples = [], value = null, locked = false;
   return {
-    /** @returns {number|null} the neutral once learned, else null */
+    /** @returns {number|null} the neutral once a first estimate exists, else null */
     feed(v, tMs) {
-      if (value !== null || !Number.isFinite(v)) return value;
+      if (locked || !Number.isFinite(v)) return value;
       if (t0 === null) t0 = tMs;
       const age = tMs - t0;
       if (age < skipMs) return null;
       samples.push(v);
       if (age >= skipMs + learnMs && samples.length >= minSamples) value = median(samples);
+      if (age >= refineMs && value !== null) { locked = true; samples = []; }
       return value;
     },
     get value() { return value; },
-    reset() { t0 = null; samples = []; value = null; },
+    get locked() { return locked; },
+    reset() { t0 = null; samples = []; value = null; locked = false; },
   };
 }
