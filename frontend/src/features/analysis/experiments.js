@@ -6,6 +6,8 @@
  * ?exp=off to clear it. This exists because scoring changes that passed every synthetic
  * test still made real sessions worse, and they had gone straight to everyone.
  *
+ *   diag     show an on-screen readout of the pipeline and any script errors, with a Copy
+ *            button, for reporting a problem. Changes nothing about the analysis.
  *   worker   run pose and face inference in a Web Worker instead of on the main thread.
  *   adaptive lower the analysis rate while the person is still.
  *   head3d   score looking down / up from the face model's 3-D head pose, with a neutral
@@ -34,3 +36,4 @@ function active() {
 }
 
 export function experimentEnabled(name) { return active().includes(name); }
+export function activeExperiments() { return active().slice(); }
