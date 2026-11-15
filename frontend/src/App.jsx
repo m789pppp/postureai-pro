@@ -126,6 +126,8 @@ const EXP_SEVLABEL = experimentEnabled("sevlabel");
 const EXP_EDGE = experimentEnabled("edge");
 // Forward-head readings past 15 cm are unmeasured, not Critical.
 const EXP_FHPGUARD = experimentEnabled("fhpguard");
+// A whole-trunk side lean is one spine-lean finding, not three neck/shoulder ones.
+const EXP_TRUNKLEAN = experimentEnabled("trunklean");
 if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
@@ -4155,7 +4157,7 @@ export default function App(){
           // It went to everyone once and real sessions got worse, so until it is
           // proven on people the engine scores head pitch as it did before.
           const headPose=HEAD3D?(enhancerRef.current?.headPitch?.(performance.now())??null):null;
-          const engineExt=(HEAD3D||EXP_EDGE||EXP_FHPGUARD)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{}),...(EXP_FHPGUARD?{fhpGuard:true}:{})}:null;
+          const engineExt=(HEAD3D||EXP_EDGE||EXP_FHPGUARD||EXP_TRUNKLEAN)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{}),...(EXP_FHPGUARD?{fhpGuard:true}:{}),...(EXP_TRUNKLEAN?{trunkLean:true}:{})}:null;
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,engineExt); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);

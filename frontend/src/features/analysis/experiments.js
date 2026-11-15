@@ -20,6 +20,9 @@
  *            shoulder shrug and shoulder level unmeasured instead of reading a false shrug.
  *   fhpguard a forward-head reading past 15 cm (physically implausible seated) is reported
  *            unmeasured instead of as a Critical alert.
+ *   trunklean with the hips out of frame, a sideways lean of the whole trunk (eye line and
+ *            shoulder line tilted together) is reported once, as spine lean, instead of as
+ *            head tilt + neck lean + shoulder level.
  */
 const KEY = "posmoz_exp";
 

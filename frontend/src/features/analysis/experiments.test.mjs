@@ -25,7 +25,8 @@ test("App.jsx uses the worker, the adaptive rate and the 3-D head pitch only beh
   assert.match(src, /const HEAD3D = experimentEnabled\("head3d"\)/);
   assert.match(src, /HEAD3D\?\{head:headPose,moderateCap:true\}:\{\}/);
   assert.match(src, /EXP_EDGE\?\{edgeGuard:true\}:\{\}/);
-  assert.match(src, /const engineExt=\(HEAD3D\|\|EXP_EDGE\|\|EXP_FHPGUARD\)\?/);
+  assert.match(src, /const engineExt=\(HEAD3D\|\|EXP_EDGE\|\|EXP_FHPGUARD\|\|EXP_TRUNKLEAN\)\?/);
+  assert.match(src, /EXP_TRUNKLEAN\?\{trunkLean:true\}:\{\}/);
   assert.match(src, /EXP_FHPGUARD\?\{fhpGuard:true\}:\{\}/);
   assert.match(src, /learnNeutral:HEAD3D/);
   assert.match(src, /createVisionClient\(\{worker:EXP_WORKER\}\)/);

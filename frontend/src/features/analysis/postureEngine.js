@@ -2925,6 +2925,49 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);
 
+  // opt-in `trunklean` (experiments.js). At laptop distance the hips are out of
+  // frame, so spine lean is unmeasured, and a sideways lean of the whole trunk
+  // tilts the head and the shoulder line together. The engine then reported it
+  // three times, as head tilt + neck lean + shoulder level, and told the user to
+  // straighten the neck while the real cause, sitting off-centre, was never
+  // named (camp R6; synthetic 10° lean: head tilt severe, shoulder moderate,
+  // neck mild). Under the switch, when the eye line and the shoulder line tilt
+  // the same way by about the same angle, it is read as one trunk lean: spine
+  // lean is estimated from the shoulder line, and head tilt and neck lean are
+  // measured relative to the shoulders. A raised shoulder with a level head is
+  // unaffected (the eye line stays level), and so is a head tilt on level
+  // shoulders.
+  if (ext?.trunkLean && !spine.reliable && shoulder.reliable && headTilt.reliable && neck.reliable) {
+    const ang = (a, b) => Math.atan2((b.y - a.y) * H, (b.x - a.x) * W) * 180 / Math.PI;
+    const wrap = d => ((d + 540) % 360) - 180;
+    const shLine  = wrap(ang(lms[PL.L_SHOULDER], lms[PL.R_SHOULDER]) - 180);
+    const eyeLine = wrap(ang(lms[PL.L_EYE], lms[PL.R_EYE]) - 180);
+    const shTilt = Math.abs(shLine) > 90 ? wrap(shLine + 180) : shLine;
+    const eyeTilt = Math.abs(eyeLine) > 90 ? wrap(eyeLine + 180) : eyeLine;
+    if (Math.abs(shTilt) >= 5 && Math.sign(shTilt) === Math.sign(eyeTilt) && Math.abs(eyeTilt - shTilt) <= 4) {
+      const lean = Math.abs(shTilt);
+      // spine's sign convention (+ = leaning to the subject's right) matches the
+      // shoulder line's: a lean to the right lowers the right shoulder.
+      const leanSign = Math.sign(shoulder.signedRaw ?? shoulder.signedAngle ?? shTilt) || 1;
+      const leanThr = resolveThr(calib, "spine_angle", 0, THR.SPINE_LEAN.ok, THR.SPINE_LEAN.bad);
+      Object.assign(spine, {
+        angle: Math.round(lean), angleRaw: lean, signedAngle: Math.round(lean * leanSign * 10) / 10, signedRaw: lean * leanSign,
+        score: scoreMetric(lean, leanThr.ideal, leanThr.ok, leanThr.bad),
+        severity: classify(lean, SEV.SPINE), confidence: 60, reliable: true, source: "shoulders", estimated: true,
+      });
+      const relHead = Math.abs(eyeTilt - shTilt);
+      const htThr = resolveThr(calib, "head_tilt", 0, THR.HEAD_TILT.ok, THR.HEAD_TILT.bad);
+      Object.assign(headTilt, { angle: Math.round(relHead), angleRaw: relHead,
+        score: scoreMetric(relHead, htThr.ideal, htThr.ok, htThr.bad),
+        severity: classify(relHead, { mild: 3, moderate: 7, severe: 10 }), relativeToTrunk: true });
+      const relNeck = Math.max(0, (neck.angleRaw ?? neck.angle) - lean);
+      Object.assign(neck, { angle: Math.round(relNeck), angleRaw: relNeck,
+        score: scoreMetric(relNeck, 0, neck.okAdj ?? 6, neck.badAdj ?? 17),
+        severity: classify(relNeck, SEV.NECK), relativeToTrunk: true });
+      Object.assign(shoulder, { score: Math.max(shoulder.score, 90), severity: "normal", attributedTo: "trunk_lean" });
+    }
+  }
+
   // Debounce every module's `reliable` flag — see debounceReliable() for
   // why a raw per-frame flip is a real score-stability bug, not cosmetic.
   // Safe to apply uniformly to cached (rounded/fhp/elbow/monitor) as well

@@ -722,6 +722,30 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
           guardedReal?.reliable === true && guardedReal.value > 5, `${fmt(guardedReal?.value)} cm`);
   }
 
+  // Trunk side lean with the hips out of frame (camp R6). The shipped engine
+  // spreads it over head tilt + neck lean + shoulder level and never names it.
+  // Behind the `trunklean` switch (ext.trunkLean) it is one spine-lean finding.
+  {
+    const noHips = l => l.map((p, i) => p && i >= 23 ? { ...p, visibility: 0.1 } : p);
+    const run = (pose, ext) => { resetProportions(); let r = null;
+      for (let i = 0; i < 130; i++) r = analyzeMP(noHips(renderSubject({}, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext);
+      for (let i = 0; i < 60;  i++) r = analyzeMP(noHips(renderSubject(pose, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext);
+      return r?.metrics; };
+    const shipped = run({ lateralLeanDeg: 10 }, null);
+    const lean = run({ lateralLeanDeg: 10 }, { trunkLean: true });
+    const leanL = run({ lateralLeanDeg: -10 }, { trunkLean: true });
+    const shTilt = run({ shoulderTiltDeg: 10 }, { trunkLean: true });
+    check("trunklean: a 10° trunk lean is named as spine lean",
+          lean?.spine_lean?.reliable === true && Math.abs((lean.spine_lean.value ?? 0) - 10) <= 2,
+          `shipped engine: spine ${shipped?.spine_lean?.reliable ? "measured" : "unmeasured"}, head tilt ${shipped?.head_tilt?.severity}, shoulder ${shipped?.shoulder_level?.severity}`);
+    check("trunklean: and is not also reported as head tilt, neck lean or shoulder level",
+          lean?.head_tilt?.severity === "normal" && lean?.neck_lean?.severity === "normal" && lean?.shoulder_level?.severity === "normal");
+    check("trunklean: the side is kept (left lean = negative)",
+          (lean?.spine_lean?.signed ?? 0) > 0 && (leanL?.spine_lean?.signed ?? 0) < 0);
+    check("trunklean: one raised shoulder with a level head is still a shoulder finding",
+          shTilt?.shoulder_level?.severity !== "normal" && shTilt?.spine_lean?.reliable !== true);
+  }
+
   // The engine has to HAND that fact to the UI, not merely act on it
   // internally. Everything above was already true before coverageDetail
   // existed — and the page still displayed a single unqualified score,
