@@ -680,6 +680,33 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
             : `reported ${fmt(clipped?.value)}% as a real reading`);
   }
 
+  // Shoulders below the frame (camp 2026-11-15). With the face close, the
+  // shoulders leave the shot DOWNWARDS and the tracker pins them to the bottom
+  // border: the ear-to-shoulder gap shrinks and reads as a shrug. Behind the
+  // `edge` switch (ext.edgeGuard) that is refused, and shoulder level too.
+  {
+    const down = (l, dy) => l.map(p => p ? ({
+      ...p, x: Math.min(0.995, Math.max(0.005, p.x)),
+      y: Math.min(0.995, Math.max(0.005, p.y + dy)),
+      visibility: Math.max(p.visibility ?? 0, 0.92),
+    }) : p);
+    const run = (dy, ext) => {
+      resetProportions();
+      let r = null;
+      for (let i = 0; i < 130; i++) r = analyzeMP(down(renderSubject({}, {}, { distCm: 45 }), 0), W, H, "front", null, null, null, null, ext);
+      for (let i = 0; i < 60;  i++) r = analyzeMP(down(renderSubject({}, {}, { distCm: 45 }), dy), W, H, "front", null, null, null, null, ext);
+      return r?.metrics;
+    };
+    const inShot = run(0.45, { edgeGuard: true }), clipped = run(0.62, { edgeGuard: true }), shipped = run(0.62, null);
+    check("edge: shoulders low but still in shot are measured as before",
+          inShot?.shoulder_elevation?.reliable === true && inShot?.shoulder_level?.reliable === true);
+    check("edge: shoulders pinned to the bottom border are not read as a shrug",
+          clipped?.shoulder_elevation?.reliable === false,
+          `shipped engine reads ${fmt(shipped?.shoulder_elevation?.value)}% (${shipped?.shoulder_elevation?.severity})`);
+    check("edge: and shoulder level is reported unmeasured with them",
+          clipped?.shoulder_level?.reliable === false);
+  }
+
   // The engine has to HAND that fact to the UI, not merely act on it
   // internally. Everything above was already true before coverageDetail
   // existed — and the page still displayed a single unqualified score,

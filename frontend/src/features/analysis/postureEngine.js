@@ -2721,6 +2721,16 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // conversions for users whose shoulders differ from the 42 cm average
   // (adult range: ~32 cm narrow → ~52 cm broad).
   const prop = computeProportions(lms, W, H, calibKnownDistCm);
+  // opt-in `edge` (experiments.js): shAtEdge also covers a shoulder pinned to
+  // the BOTTOM border. With the face close to the camera the shoulders leave
+  // the frame downwards; the tracker keeps them, clamped to the bottom edge, so
+  // the ear-to-shoulder gap shrinks and reads as a shrug that is not there
+  // (camp 2026-11-15: shrug "High" with both shoulders out of shot). Under the
+  // switch a clamped shoulder also makes shoulder level unmeasured.
+  if (ext?.edgeGuard && !prop.shAtEdge) {
+    const ly = lms[PL.L_SHOULDER]?.y ?? 0.5, ry = lms[PL.R_SHOULDER]?.y ?? 0.5;
+    if (ly >= 0.988 || ry >= 0.988) prop.shAtEdge = true;
+  }
 
   // #17: frame-skip for expensive metrics — FHP, rounded shoulders, elbow,
   // and monitor angle are geometrically complex and stable over ~100ms.
@@ -2798,7 +2808,9 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // neutral posture measured during calibration.
   const neck     = analyzeNeckLean(lms, W, H, prop, calib);
   const headTilt = analyzeHeadTilt(lms, W, H, calib);
-  const shoulder = analyzeShoulderLevel(lms, W, H, prop, calib);
+  const shoulder = (ext?.edgeGuard && prop.shAtEdge)
+    ? { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false }
+    : analyzeShoulderLevel(lms, W, H, prop, calib);
   const yaw      = analyzeHeadYawModule(lms, W, H);
   const shoulderElev = analyzeShoulderElevation(lms, W, H, prop, calib);
   // Forward slouch and trunk twist — the two most common desk postures the

@@ -122,6 +122,8 @@ const EXP_ADAPTIVE = experimentEnabled("adaptive");
 const EXP_DIAG = experimentEnabled("diag");
 // Live HUD risk rows read the engine's own severity instead of score bands.
 const EXP_SEVLABEL = experimentEnabled("sevlabel");
+// Shoulders pinned to the bottom of the frame are unmeasured, not a shrug.
+const EXP_EDGE = experimentEnabled("edge");
 if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
@@ -4151,7 +4153,8 @@ export default function App(){
           // It went to everyone once and real sessions got worse, so until it is
           // proven on people the engine scores head pitch as it did before.
           const headPose=HEAD3D?(enhancerRef.current?.headPitch?.(performance.now())??null):null;
-          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,HEAD3D?{head:headPose,moderateCap:true}:null); // Side mode removed app-wide
+          const engineExt=(HEAD3D||EXP_EDGE)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{})}:null;
+          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,engineExt); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Live precision layer: runs beside the engine; it only replaces the distance

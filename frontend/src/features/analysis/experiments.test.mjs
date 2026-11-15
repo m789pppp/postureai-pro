@@ -23,7 +23,9 @@ test("?exp=off clears, and junk is ignored", () => {
 test("App.jsx uses the worker, the adaptive rate and the 3-D head pitch only behind their switches", async () => {
   const src = await readFile(new URL("../../App.jsx", import.meta.url), "utf8");
   assert.match(src, /const HEAD3D = experimentEnabled\("head3d"\)/);
-  assert.match(src, /HEAD3D\?\{head:headPose,moderateCap:true\}:null/);
+  assert.match(src, /HEAD3D\?\{head:headPose,moderateCap:true\}:\{\}/);
+  assert.match(src, /EXP_EDGE\?\{edgeGuard:true\}:\{\}/);
+  assert.match(src, /const engineExt=\(HEAD3D\|\|EXP_EDGE\)\?/);
   assert.match(src, /learnNeutral:HEAD3D/);
   assert.match(src, /createVisionClient\(\{worker:EXP_WORKER\}\)/);
   assert.match(src, /\(!EXP_ADAPTIVE \|\| clinicalSinkRef\.current\) \? 50 :/);

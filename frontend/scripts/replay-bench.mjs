@@ -46,6 +46,7 @@ const unpack = a => (a ? a.map(([x, y, z, v]) => ({ x, y, z, visibility: v })) :
 export function replaySession(session, { exp = [] } = {}) {
   const W = session.camera?.width || 1280, H = session.camera?.height || 720;
   const head3d = exp.includes("head3d");
+  const edge = exp.includes("edge");
   let clock = 0;
   const realPerf = globalThis.performance;
   Object.defineProperty(globalThis, "performance", { value: { now: () => clock }, configurable: true });
@@ -77,6 +78,7 @@ export function replaySession(session, { exp = [] } = {}) {
           const n = typeof calibPitch === "number" ? calibPitch : neutral.feed(f.head[0], f.t);
           ext = { head: { pitchDeg: f.head[0], neutralDeg: typeof calibPitch === "number" ? calibPitch : n }, moderateCap: true };
         } else if (f.head) neutral.feed(f.head[0], f.t);
+        if (edge) ext = { ...(ext || {}), edgeGuard: true };
         const r = analyzeMP(sm, W, H, "laptop", null, sess, null, null, ext);
         if (!r) continue;
         if (f.t - t0 < 1500) continue;                 // the person is still getting into the posture

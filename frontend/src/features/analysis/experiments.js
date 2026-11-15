@@ -16,6 +16,8 @@
  *   sevlabel the live HUD's Low/Med/High rows use the engine's severity (normal/mild →
  *            Low, moderate → Med, severe → High) instead of score bands, so a "High" row
  *            and an "Excellent" score can no longer appear together.
+ *   edge     a shoulder pinned to the bottom of the frame (face close to the camera) makes
+ *            shoulder shrug and shoulder level unmeasured instead of reading a false shrug.
  */
 const KEY = "posmoz_exp";
 
