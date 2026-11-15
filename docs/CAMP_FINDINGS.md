@@ -184,3 +184,10 @@ Branch: `camp/field-ready` (from `origin/main` 9e9a7cc). One PR per step; nothin
 | r11_slouch | Recline/sacral slump: everything Low, distance "25 cm" while farther | P5: needs a bench recording + design |
 | r12_neutral_again | Same card as R10/R11 (looked stuck) | checked in R13: not stuck |
 | r13_tilt_excellent93 | Neck High with score 93 "Excellent" | `sevlabel` |
+- 2026-11-15: **Trunk side lean (P7), reproduced and fixed behind a switch.** At laptop distance spine lean is unmeasured even on the synthetic subject. A 10° whole-trunk lean read as head tilt **severe** + shoulder level moderate + neck lean mild (score 79): the user was told to fix the neck while the real cause, sitting off-centre, was never named. New switch **`trunklean`**: when the eye line and the shoulder line tilt the same way by about the same angle (within 4°, at least 5°), it is one spine-lean finding estimated from the shoulders, and head tilt and neck lean are measured relative to the shoulders. One raised shoulder with a level head stays a shoulder finding. 4 checks.
+- 2026-11-15: **`modcap` switch**: the score is capped at 84 while a moderate fault lasts (until now only `head3d` did this). With `trunklean` alone a moderate lean still scored 95; with both it is ≤ 84. 1 check (`test:posture` 124/124).
+- 2026-11-15: **`?exp=camp`** turns on every camp switch plus diag: `diag, sevlabel, edge, fhpguard, trunklean, modcap, head3d`.
+- Not changed, with reasons:
+  - **Distance jump (P3)**: the eye-landmark fallback gives the right distance on the synthetic subject (45/60/80 cm), so the real 104 cm is not reproduced.
+  - **Recline/sacral slump (P5)**: there is no way to tell it from simply sitting farther back without a recording.
+  - **Rate (T1)**: the face model already runs every 2nd frame; the `worker` switch exists and should be measured live with `/perf.html` before any change.

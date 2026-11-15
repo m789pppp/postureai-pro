@@ -49,6 +49,7 @@ export function replaySession(session, { exp = [] } = {}) {
   const edge = exp.includes("edge");
   const fhpguard = exp.includes("fhpguard");
   const trunklean = exp.includes("trunklean");
+  const modcap = exp.includes("modcap");
   let clock = 0;
   const realPerf = globalThis.performance;
   Object.defineProperty(globalThis, "performance", { value: { now: () => clock }, configurable: true });
@@ -83,6 +84,7 @@ export function replaySession(session, { exp = [] } = {}) {
         if (edge) ext = { ...(ext || {}), edgeGuard: true };
         if (fhpguard) ext = { ...(ext || {}), fhpGuard: true };
         if (trunklean) ext = { ...(ext || {}), trunkLean: true };
+        if (modcap) ext = { ...(ext || {}), moderateCap: true };
         const r = analyzeMP(sm, W, H, "laptop", null, sess, null, null, ext);
         if (!r) continue;
         if (f.t - t0 < 1500) continue;                 // the person is still getting into the posture

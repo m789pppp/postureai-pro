@@ -23,6 +23,9 @@
  *   trunklean with the hips out of frame, a sideways lean of the whole trunk (eye line and
  *            shoulder line tilted together) is reported once, as spine lean, instead of as
  *            head tilt + neck lean + shoulder level.
+ *   modcap   the score is capped at 84 ("Good", not "Excellent") while a moderate fault
+ *            lasts. head3d already does this; modcap tries it on its own.
+ *   camp     shorthand for all of the camp switches above plus diag (see PRESETS).
  */
 const KEY = "posmoz_exp";
 
@@ -31,8 +34,17 @@ export function parseExperiments(search, stored) {
   const q = new URLSearchParams(search || "").get("exp");
   const raw = q != null ? q : (stored || "");
   if (raw.trim().toLowerCase() === "off") return [];
-  return [...new Set(raw.split(",").map(s => s.trim().toLowerCase()).filter(s => /^[a-z0-9_-]{1,24}$/.test(s)))];
+  const names = raw.split(",").map(s => s.trim().toLowerCase()).filter(s => /^[a-z0-9_-]{1,24}$/.test(s));
+  return [...new Set(names.flatMap(n => PRESETS[n] || [n]))];
 }
+
+/**
+ * Shorthands. `camp` turns on every fix from the 2026-11-15 camp session
+ * (docs/CAMP_FINDINGS.md) plus the diag panel, so a tester types one word.
+ */
+export const PRESETS = Object.freeze({
+  camp: ["diag", "sevlabel", "edge", "fhpguard", "trunklean", "modcap", "head3d"],
+});
 
 let memo = null;
 function active() {

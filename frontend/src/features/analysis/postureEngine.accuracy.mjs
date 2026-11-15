@@ -742,6 +742,11 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
           lean?.head_tilt?.severity === "normal" && lean?.neck_lean?.severity === "normal" && lean?.shoulder_level?.severity === "normal");
     check("trunklean: the side is kept (left lean = negative)",
           (lean?.spine_lean?.signed ?? 0) > 0 && (leanL?.spine_lean?.signed ?? 0) < 0);
+    { resetProportions(); _startFakeClock(); let r = null; const ext = { trunkLean: true, moderateCap: true };
+      for (let i = 0; i < 130; i++) { _tick(); r = analyzeMP(noHips(renderSubject({}, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext); }
+      for (let i = 0; i < 60;  i++) { _tick(); r = analyzeMP(noHips(renderSubject({ lateralLeanDeg: 10 }, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext); }
+      _stopFakeClock();
+      check("modcap: a held moderate trunk lean cannot score as Excellent", (r?.score ?? 100) <= 84, `score ${r?.score}`); }
     check("trunklean: one raised shoulder with a level head is still a shoulder finding",
           shTilt?.shoulder_level?.severity !== "normal" && shTilt?.spine_lean?.reliable !== true);
   }
