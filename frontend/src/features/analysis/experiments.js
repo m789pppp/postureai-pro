@@ -13,6 +13,9 @@
  *   head3d   score looking down / up from the face model's 3-D head pose, with a neutral
  *            learned in the first seconds; cap the score at 84 while a moderate fault lasts;
  *            show head flexion in the HUD relative to that learned neutral.
+ *   sevlabel the live HUD's Low/Med/High rows use the engine's severity (normal/mild →
+ *            Low, moderate → Med, severe → High) instead of score bands, so a "High" row
+ *            and an "Excellent" score can no longer appear together.
  */
 const KEY = "posmoz_exp";
 

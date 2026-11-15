@@ -120,6 +120,8 @@ const EXP_WORKER = experimentEnabled("worker");
 const EXP_ADAPTIVE = experimentEnabled("adaptive");
 // "diag": an on-screen readout for testers to copy when they report a problem (diag.js)
 const EXP_DIAG = experimentEnabled("diag");
+// Live HUD risk rows read the engine's own severity instead of score bands.
+const EXP_SEVLABEL = experimentEnabled("sevlabel");
 if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
@@ -8414,13 +8416,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // Same scoreTierColor() thresholds (70/55) as the badge above and
               // ScoreGauge — these bars used to use their own 80/60 split, a
               // third disagreeing color scheme on the same screen.
+              // `sevlabel`: the row's Low/Med/High comes from the engine's
+              // severity, the same classification that drives alerts, the
+              // findings and the score caps. With score bands, a row could read
+              // "High" (score < 55) while the engine called it mild, so the
+              // headline score next to it stayed "Excellent" (camp R13: neck
+              // High, score 93). normal/mild → Low, moderate → Med, severe → High.
+              const sevTier = (EXP_SEVLABEL && !unseen && m.severity)
+                ? ({severe:2, moderate:1}[m.severity] ?? 0) : null;
+              const tier = sevTier ?? (unseen ? null : s>=70 ? 0 : s>=55 ? 1 : 2);
               const col = learning ? "#818cf8"            // indigo — "in progress"
                         : unseen   ? "#64748b"            // slate  — "no data"
+                        : sevTier!=null ? scoreTierColor([100,60,0][sevTier]) // same palette as the score tiers
                         : scoreTierColor(s);
               const risk= learning ? (isAr?"يتعلم":"Settling")
                         : unseen   ? (isAr?"مش ظاهر":"no view")
-                        : s>=70    ? (isAr?"منخفض":"Low")
-                        : s>=55    ? (isAr?"متوسط":"Med")
+                        : tier===0 ? (isAr?"منخفض":"Low")
+                        : tier===1 ? (isAr?"متوسط":"Med")
                         :            (isAr?"مرتفع":"High");
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",
