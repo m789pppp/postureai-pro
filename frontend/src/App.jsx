@@ -12,6 +12,7 @@ import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startT
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
 import { decimate, sessionTrend, NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
+import { createSessionAggregator } from "./lib/sessionFindings.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -3471,6 +3472,9 @@ export default function App(){
   // those 2 seconds. fullHistRef keeps the actual session, sampled ~every 2s so
   // an hour costs ~1800 numbers.
   const fullHistRef=useRef([]); const fullHistLastMsRef=useRef(0);
+  // Per-metric severity over the whole session, for the end-of-session summary
+  // (which used to describe only the last analysed frame).
+  const sessAggRef=useRef(null); if(!sessAggRef.current) sessAggRef.current=createSessionAggregator();
   const pushSessionScore=useCallback((v)=>{
     if(!Number.isFinite(v)) return;
     const now=Date.now();
@@ -4266,6 +4270,7 @@ export default function App(){
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             pushSessionScore(displayScore);
+            sessAggRef.current.add(finalResult.metrics);
             lastAnalRef.current=finalResult;
             // Push to React at ~4Hz, not on every analysed frame.
             //
@@ -4712,6 +4717,7 @@ export default function App(){
             histRef.current.push(smoothed);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             pushSessionScore(smoothed);
+            sessAggRef.current.add(result.metrics);
             lastAnalRef.current=result;
             startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(result); });
             const now=Date.now();
@@ -5029,6 +5035,7 @@ export default function App(){
       // The result modal's own "New Session" button reaches this in one click.
       histRef.current=[]; setHistory([]);
       fullHistRef.current=[]; fullHistLastMsRef.current=0;
+      sessAggRef.current.reset();
       goodRef.current=0; setGoodF(0);
       totalRef.current=0; setTotalF(0);
       acRef.current={total:0,neck:0,dist:0};
@@ -5366,9 +5373,12 @@ export default function App(){
       // have to read histRef/lastAnalRef live — which is what stopped the live
       // page's own session state from being cleared when the session ended.
       score_history: hist.slice(-600),
-      // Read by the summary's FindingsPanel: the whole metrics object, so the
-      // summary can EXPLAIN the session rather than name its worst number.
-      metrics: la.metrics || {},
+      // Read by the summary's FindingsPanel. Built from the whole session: a
+      // metric counts at the worst severity it held for at least 20% of its
+      // measured frames. It used to be the last frame's metrics, i.e. the
+      // moment the user reached for Stop & Save. Falls back to the last frame
+      // only if nothing was aggregated.
+      metrics: (()=>{ const sm=sessAggRef.current.summarize({minShare:0.2}); return Object.keys(sm).length? sm : (la.metrics||{}); })(),
     };
     // A report on a session that never happened.
     //
@@ -7359,25 +7369,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               ))}
             </div>
 
-            {/* Top issue */}
-            {sessionResult.top_metric&&(
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:12,padding:"10px 14px",marginBottom:20,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:11,color:darkMode?"#D6A24C":"#b45309",fontWeight:700,marginBottom:3}}>
-                  {isAr?"أبرز مشكلة":"Top issue to fix"}
-                </div>
-                <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
-                  {isAr
-                    ? `${METRIC_LABEL_AR[sessionResult.top_metric[0]]||sessionResult.top_metric[1]?.label} — النتيجة ${sessionResult.top_metric[1]?.score}/100`
-                    : `${sessionResult.top_metric[1]?.label} — score ${sessionResult.top_metric[1]?.score}/100`}
-                </div>
-              </div>
-            )}
-
-            {/* The findings, explained. Naming the lowest-scoring metric tells
-                a user which number was worst; it does not tell them what to
-                change. Same panel, same wording, as the live session — so the
-                summary cannot describe a measurement differently from the
-                screen the user was just looking at. */}
+            {/* Top issues only: up to three, each with a title, its severity
+                and one short line on what to do. The session summary used to
+                stack a top-issue box, every finding in full, a trend badge, an
+                improvement tip and a pain summary; testers read none of it.
+                The full detail stays on the live screen and in the PDF. Same
+                findings layer as the live session, so the wording matches. */}
             {sessionResult?.metrics && Object.keys(sessionResult.metrics).length > 0 && (
               <div style={{marginTop:14}}>
                 <Suspense fallback={null}>
@@ -7385,8 +7382,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     metrics={sessionResult.metrics}
                     cs={cs} isAr={isAr}
                     calibrated={!!calibData?.tolerances}
-                    variant="full"
-                    onCalibrate={()=>{setSessionResult(null);setShowCalibWizard(true);}}
+                    variant="summary"
                   />
                 </Suspense>
               </div>
@@ -7410,35 +7406,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Trend badge */}
-            {sessionResult.trend && sessionResult.trend !== "stable" && (
-              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(79,174,142,.08)":"rgba(198,96,79,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(79,174,142,.25)":"rgba(198,96,79,.25)"}`,borderRadius:12,padding:"9px 14px",marginBottom:12}}>
-                <span style={{fontSize:18}}>{sessionResult.trend==="improving"?"📈":"📉"}</span>
-                <div style={{fontSize:12,color:sessionResult.trend==="improving"?"#4FAE8E":"#C6604F",fontWeight:600}}>
-                  {sessionResult.trend==="improving"
-                    ?(isAr?"وضعيتك تتحسن خلال هذه الجلسة 💪":"Your posture improved during this session 💪")
-                    :(isAr?"وضعيتك تراجعت — خذ استراحة":"Posture declined — consider a break")}
-                </div>
-              </div>
-            )}
-
-            {/* Improvement tip */}
-            {sessionResult.improvement_tip && (
-              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"10px 14px",marginBottom:12,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:10,color:darkMode?"#818cf8":"#4338ca",fontWeight:700,marginBottom:3}}>
-                  💡 {isAr?"نصيحة للتحسين":"Improvement tip"}
-                </div>
-                <div style={{fontSize:12,color:"#e0e7ff",lineHeight:1.5}}>{sessionResult.improvement_tip}</div>
-              </div>
-            )}
-
-            {/* Pain prediction */}
-            {sessionResult.pain_summary && (
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.25)",borderRadius:12,padding:"9px 14px",marginBottom:12}}>
-                <div style={{fontSize:12,color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>{sessionResult.pain_summary}</div>
               </div>
             )}
 

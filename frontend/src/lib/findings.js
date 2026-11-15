@@ -381,6 +381,18 @@ export function buildFindings(metrics, { lang = "en", calibrated = false, limit 
   };
 }
 
+/**
+ * The first sentence of a finding's action: what to do, without the follow-up
+ * advice. Used by the end-of-session summary, which shows only the top issues
+ * with one short line each. Falls back to the whole action when it has no
+ * sentence break.
+ */
+export function shortAction(action) {
+  const a = String(action || "").trim();
+  const m = a.match(/^.+?[.!?؟](?=\s|$)/u);
+  return m ? m[0] : a;
+}
+
 /** One-line summary for a header or a notification. */
 export function findingsSummary(res, lang = "en") {
   const ar = lang === "ar";
