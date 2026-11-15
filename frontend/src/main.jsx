@@ -40,6 +40,14 @@ try {
 // App.jsx for identifyUser/captureError — but its initSentry() was never
 // actually called, so it silently did nothing. Fixed to use the real one.
 import { initSentry } from "./sentry.js";
+import { activeExperiments } from "./features/analysis/experiments.js";
+
+// Read ?exp= on the very first page load. experiments.js saves the switches to
+// localStorage only the first time it is asked, and nothing on the landing page
+// asks, so by the time the app code ran the URL was /auth#live and the switch
+// was lost (CAMP_FINDINGS F1). Asking here keeps "open the site once with
+// ?exp=a,b" working from any page.
+activeExperiments();
 
 // ── Global error safety net ──────────────────────────────────────
 // Catches unhandled promise rejections (e.g. Firestore permission errors,
