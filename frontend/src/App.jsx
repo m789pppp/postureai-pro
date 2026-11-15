@@ -12,6 +12,8 @@ import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startT
 import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
 import { decimate, sessionTrend, NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
+import { createSessionAggregator } from "./lib/sessionFindings.js";
+import { createSlumpTracker, slumpMetric } from "./features/analysis/slumpModel.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -119,6 +121,20 @@ const EXP_WORKER = experimentEnabled("worker");
 const EXP_ADAPTIVE = experimentEnabled("adaptive");
 // "diag": an on-screen readout for testers to copy when they report a problem (diag.js)
 const EXP_DIAG = experimentEnabled("diag");
+// Live HUD risk rows read the engine's own severity instead of score bands.
+const EXP_SEVLABEL = experimentEnabled("sevlabel");
+// Shoulders pinned to the bottom of the frame are unmeasured, not a shrug.
+const EXP_EDGE = experimentEnabled("edge");
+// Forward-head readings past 15 cm are unmeasured, not Critical.
+const EXP_FHPGUARD = experimentEnabled("fhpguard");
+// A whole-trunk side lean is one spine-lean finding, not three neck/shoulder ones.
+const EXP_TRUNKLEAN = experimentEnabled("trunklean");
+// The score is capped at 84 while a moderate fault lasts (head3d turns this on too).
+const EXP_MODCAP = experimentEnabled("modcap");
+// Experimental learned layer for slumped-back / leaning-in postures (synthetic-trained).
+const EXP_SLUMP = experimentEnabled("slump");
+// A head tilt is not a one-sided shrug.
+const EXP_TILTGUARD = experimentEnabled("tiltguard");
 if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
@@ -572,6 +588,7 @@ function _angle3pt(a,b,c){
 // `detectedConditions` blocks for the exact source strings this must match.
 const METRIC_LABEL_AR = {
   neck_lean:          "ميل الرقبة",
+  slump_posture:       "قعدة مرخية",
   head_tilt:           "ميل الرأس",
   shoulder_level:      "توازن الكتفين",
   spine_lean:          "ميل العمود الفقري",
@@ -3471,6 +3488,10 @@ export default function App(){
   // those 2 seconds. fullHistRef keeps the actual session, sampled ~every 2s so
   // an hour costs ~1800 numbers.
   const fullHistRef=useRef([]); const fullHistLastMsRef=useRef(0);
+  // Per-metric severity over the whole session, for the end-of-session summary
+  // (which used to describe only the last analysed frame).
+  const sessAggRef=useRef(null); if(!sessAggRef.current) sessAggRef.current=createSessionAggregator();
+  const slumpRef=useRef(null); if(EXP_SLUMP && !slumpRef.current) slumpRef.current=createSlumpTracker();
   const pushSessionScore=useCallback((v)=>{
     if(!Number.isFinite(v)) return;
     const now=Date.now();
@@ -4145,7 +4166,8 @@ export default function App(){
           // It went to everyone once and real sessions got worse, so until it is
           // proven on people the engine scores head pitch as it did before.
           const headPose=HEAD3D?(enhancerRef.current?.headPitch?.(performance.now())??null):null;
-          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,HEAD3D?{head:headPose,moderateCap:true}:null); // Side mode removed app-wide
+          const engineExt=(HEAD3D||EXP_EDGE||EXP_FHPGUARD||EXP_TRUNKLEAN||EXP_MODCAP||EXP_TILTGUARD)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{}),...(EXP_FHPGUARD?{fhpGuard:true}:{}),...(EXP_TRUNKLEAN?{trunkLean:true}:{}),...(EXP_MODCAP?{moderateCap:true}:{}),...(EXP_TILTGUARD?{tiltGuard:true}:{})}:null;
+          const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,engineExt); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Live precision layer: runs beside the engine; it only replaces the distance
@@ -4262,10 +4284,16 @@ export default function App(){
                 : "I can't see your hips, so slouch and twist detection won't work right now — try sitting a little further back or tilting the camera down.",
                 "info");
             }
+            if(EXP_SLUMP && slumpRef.current){
+              const sp=slumpRef.current.update(lms,W,H);
+              const sm=slumpMetric(sp,{learning:slumpRef.current.learning});
+              if(sm) finalResult.metrics={...finalResult.metrics, slump_posture:sm};
+            }
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             pushSessionScore(displayScore);
+            sessAggRef.current.add(finalResult.metrics);
             lastAnalRef.current=finalResult;
             // Push to React at ~4Hz, not on every analysed frame.
             //
@@ -4712,6 +4740,7 @@ export default function App(){
             histRef.current.push(smoothed);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             pushSessionScore(smoothed);
+            sessAggRef.current.add(result.metrics);
             lastAnalRef.current=result;
             startTransition(()=>{ setHistory([...histRef.current]);setAnalysis(result); });
             const now=Date.now();
@@ -5029,6 +5058,8 @@ export default function App(){
       // The result modal's own "New Session" button reaches this in one click.
       histRef.current=[]; setHistory([]);
       fullHistRef.current=[]; fullHistLastMsRef.current=0;
+      sessAggRef.current.reset();
+      slumpRef.current?.reset();
       goodRef.current=0; setGoodF(0);
       totalRef.current=0; setTotalF(0);
       acRef.current={total:0,neck:0,dist:0};
@@ -5366,9 +5397,12 @@ export default function App(){
       // have to read histRef/lastAnalRef live — which is what stopped the live
       // page's own session state from being cleared when the session ended.
       score_history: hist.slice(-600),
-      // Read by the summary's FindingsPanel: the whole metrics object, so the
-      // summary can EXPLAIN the session rather than name its worst number.
-      metrics: la.metrics || {},
+      // Read by the summary's FindingsPanel. Built from the whole session: a
+      // metric counts at the worst severity it held for at least 20% of its
+      // measured frames. It used to be the last frame's metrics, i.e. the
+      // moment the user reached for Stop & Save. Falls back to the last frame
+      // only if nothing was aggregated.
+      metrics: (()=>{ const sm=sessAggRef.current.summarize({minShare:0.2}); return Object.keys(sm).length? sm : (la.metrics||{}); })(),
     };
     // A report on a session that never happened.
     //
@@ -7359,25 +7393,12 @@ async function downloadPDF(sessionOverride, isClinical=false){
               ))}
             </div>
 
-            {/* Top issue */}
-            {sessionResult.top_metric&&(
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.2)",borderRadius:12,padding:"10px 14px",marginBottom:20,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:11,color:darkMode?"#D6A24C":"#b45309",fontWeight:700,marginBottom:3}}>
-                  {isAr?"أبرز مشكلة":"Top issue to fix"}
-                </div>
-                <div style={{fontSize:13,color:"#f0f6ff",fontWeight:500}}>
-                  {isAr
-                    ? `${METRIC_LABEL_AR[sessionResult.top_metric[0]]||sessionResult.top_metric[1]?.label} — النتيجة ${sessionResult.top_metric[1]?.score}/100`
-                    : `${sessionResult.top_metric[1]?.label} — score ${sessionResult.top_metric[1]?.score}/100`}
-                </div>
-              </div>
-            )}
-
-            {/* The findings, explained. Naming the lowest-scoring metric tells
-                a user which number was worst; it does not tell them what to
-                change. Same panel, same wording, as the live session — so the
-                summary cannot describe a measurement differently from the
-                screen the user was just looking at. */}
+            {/* Top issues only: up to three, each with a title, its severity
+                and one short line on what to do. The session summary used to
+                stack a top-issue box, every finding in full, a trend badge, an
+                improvement tip and a pain summary; testers read none of it.
+                The full detail stays on the live screen and in the PDF. Same
+                findings layer as the live session, so the wording matches. */}
             {sessionResult?.metrics && Object.keys(sessionResult.metrics).length > 0 && (
               <div style={{marginTop:14}}>
                 <Suspense fallback={null}>
@@ -7385,8 +7406,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     metrics={sessionResult.metrics}
                     cs={cs} isAr={isAr}
                     calibrated={!!calibData?.tolerances}
-                    variant="full"
-                    onCalibrate={()=>{setSessionResult(null);setShowCalibWizard(true);}}
+                    variant="summary"
                   />
                 </Suspense>
               </div>
@@ -7410,35 +7430,6 @@ async function downloadPDF(sessionOverride, isClinical=false){
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* Trend badge */}
-            {sessionResult.trend && sessionResult.trend !== "stable" && (
-              <div style={{display:"flex",alignItems:"center",gap:8,background:sessionResult.trend==="improving"?"rgba(79,174,142,.08)":"rgba(198,96,79,.08)",border:`1px solid ${sessionResult.trend==="improving"?"rgba(79,174,142,.25)":"rgba(198,96,79,.25)"}`,borderRadius:12,padding:"9px 14px",marginBottom:12}}>
-                <span style={{fontSize:18}}>{sessionResult.trend==="improving"?"📈":"📉"}</span>
-                <div style={{fontSize:12,color:sessionResult.trend==="improving"?"#4FAE8E":"#C6604F",fontWeight:600}}>
-                  {sessionResult.trend==="improving"
-                    ?(isAr?"وضعيتك تتحسن خلال هذه الجلسة 💪":"Your posture improved during this session 💪")
-                    :(isAr?"وضعيتك تراجعت — خذ استراحة":"Posture declined — consider a break")}
-                </div>
-              </div>
-            )}
-
-            {/* Improvement tip */}
-            {sessionResult.improvement_tip && (
-              <div style={{background:"rgba(99,102,241,.07)",border:"1px solid rgba(99,102,241,.2)",borderRadius:12,padding:"10px 14px",marginBottom:12,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:10,color:darkMode?"#818cf8":"#4338ca",fontWeight:700,marginBottom:3}}>
-                  💡 {isAr?"نصيحة للتحسين":"Improvement tip"}
-                </div>
-                <div style={{fontSize:12,color:"#e0e7ff",lineHeight:1.5}}>{sessionResult.improvement_tip}</div>
-              </div>
-            )}
-
-            {/* Pain prediction */}
-            {sessionResult.pain_summary && (
-              <div style={{background:"rgba(214,162,76,.07)",border:"1px solid rgba(214,162,76,.25)",borderRadius:12,padding:"9px 14px",marginBottom:12}}>
-                <div style={{fontSize:12,color:darkMode?"#D6A24C":"#b45309",fontWeight:600}}>{sessionResult.pain_summary}</div>
               </div>
             )}
 
@@ -8343,7 +8334,18 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   // Positioning adjustment" here instead of a real metric.
                   const worst = Object.entries(analysis?.metrics||{})
                     .filter(([k,v])=>!NON_POSTURAL_METRICS.has(k) && v && v.reliable!==false && typeof v.score==="number")
-                    .sort(([,a],[,b])=>a.score-b.score)[0];
+                    // `sevlabel`: rank by the engine's severity first, as the
+                    // findings do, then by score. By score alone a severe 15°
+                    // shoulder line lost the headline to a moderate forward
+                    // head with a lower raw score (camp R9b).
+                    .sort(([,a],[,b])=>{
+                      if(EXP_SEVLABEL){
+                        const R={severe:3,moderate:2,mild:1};
+                        const d=(R[b.severity]||0)-(R[a.severity]||0);
+                        if(d) return d;
+                      }
+                      return a.score-b.score;
+                    })[0];
                   if(!worst || worst[1].score >= 80) return null;
                   const label = isAr ? (METRIC_LABEL_AR[worst[0]]||worst[1].label) : worst[1].label;
                   return (
@@ -8447,13 +8449,23 @@ async function downloadPDF(sessionOverride, isClinical=false){
               // Same scoreTierColor() thresholds (70/55) as the badge above and
               // ScoreGauge — these bars used to use their own 80/60 split, a
               // third disagreeing color scheme on the same screen.
+              // `sevlabel`: the row's Low/Med/High comes from the engine's
+              // severity, the same classification that drives alerts, the
+              // findings and the score caps. With score bands, a row could read
+              // "High" (score < 55) while the engine called it mild, so the
+              // headline score next to it stayed "Excellent" (camp R13: neck
+              // High, score 93). normal/mild → Low, moderate → Med, severe → High.
+              const sevTier = (EXP_SEVLABEL && !unseen && m.severity)
+                ? ({severe:2, moderate:1}[m.severity] ?? 0) : null;
+              const tier = sevTier ?? (unseen ? null : s>=70 ? 0 : s>=55 ? 1 : 2);
               const col = learning ? "#818cf8"            // indigo — "in progress"
                         : unseen   ? "#64748b"            // slate  — "no data"
+                        : sevTier!=null ? scoreTierColor([100,60,0][sevTier]) // same palette as the score tiers
                         : scoreTierColor(s);
               const risk= learning ? (isAr?"يتعلم":"Settling")
                         : unseen   ? (isAr?"مش ظاهر":"no view")
-                        : s>=70    ? (isAr?"منخفض":"Low")
-                        : s>=55    ? (isAr?"متوسط":"Med")
+                        : tier===0 ? (isAr?"منخفض":"Low")
+                        : tier===1 ? (isAr?"متوسط":"Med")
                         :            (isAr?"مرتفع":"High");
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",

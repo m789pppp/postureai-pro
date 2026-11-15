@@ -147,6 +147,9 @@ const RELIABILITY_HYSTERESIS_FRAMES = 5;
  * a genuinely sustained bad posture is still caught well inside a second.
  */
 const ALERT_DWELL_MS = 1200;
+// Upper bound for a seated forward-head reading under the `fhpguard` switch.
+// A maximal chin poke is roughly 10-12 cm; past 15 cm the number is noise.
+const FHP_MAX_PLAUSIBLE_CM = 15;
 
 // ─── Scoring thresholds (synced with backend.py score_m calls) ─────
 const THR = {
@@ -2058,6 +2061,10 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
     elevPct: Math.round(elevPct * 10) / 10,
     lElevPct: Math.round(lElevPct * 10) / 10,
     rElevPct: Math.round(rElevPct * 10) / 10,
+    // Signed per-side change of the ear-to-shoulder gap (+ = shrank), for the
+    // `tiltguard` switch in analyzeMP.
+    lDelta: (NEUTRAL_L - lGap) * 100,
+    rDelta: (NEUTRAL_R - rGap) * 100,
     asymmetric,
     score, severity,
     confidence: 82,
@@ -2721,6 +2728,16 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // conversions for users whose shoulders differ from the 42 cm average
   // (adult range: ~32 cm narrow → ~52 cm broad).
   const prop = computeProportions(lms, W, H, calibKnownDistCm);
+  // opt-in `edge` (experiments.js): shAtEdge also covers a shoulder pinned to
+  // the BOTTOM border. With the face close to the camera the shoulders leave
+  // the frame downwards; the tracker keeps them, clamped to the bottom edge, so
+  // the ear-to-shoulder gap shrinks and reads as a shrug that is not there
+  // (camp 2026-11-15: shrug "High" with both shoulders out of shot). Under the
+  // switch a clamped shoulder also makes shoulder level unmeasured.
+  if (ext?.edgeGuard && !prop.shAtEdge) {
+    const ly = lms[PL.L_SHOULDER]?.y ?? 0.5, ry = lms[PL.R_SHOULDER]?.y ?? 0.5;
+    if (ly >= 0.988 || ry >= 0.988) prop.shAtEdge = true;
+  }
 
   // #17: frame-skip for expensive metrics — FHP, rounded shoulders, elbow,
   // and monitor angle are geometrically complex and stable over ~100ms.
@@ -2798,7 +2815,9 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   // neutral posture measured during calibration.
   const neck     = analyzeNeckLean(lms, W, H, prop, calib);
   const headTilt = analyzeHeadTilt(lms, W, H, calib);
-  const shoulder = analyzeShoulderLevel(lms, W, H, prop, calib);
+  const shoulder = (ext?.edgeGuard && prop.shAtEdge)
+    ? { angle: 0, score: 90, severity: "normal", confidence: 0, reliable: false }
+    : analyzeShoulderLevel(lms, W, H, prop, calib);
   const yaw      = analyzeHeadYawModule(lms, W, H);
   const shoulderElev = analyzeShoulderElevation(lms, W, H, prop, calib);
   // Forward slouch and trunk twist — the two most common desk postures the
@@ -2895,8 +2914,85 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
       };
     }
   }
+  // opt-in `fhpguard` (experiments.js): a forward head beyond what a seated
+  // person can physically hold is a measurement failure, not a finding. Before
+  // the depth baseline is learned (first seconds of a session), or when it
+  // refuses to learn, FHP comes from analyzeFHP's ear-to-shoulder offset, and on
+  // a real session that read "Forward head 31.1cm (~64° pitch)" as a Critical
+  // alert five seconds in, sitting upright (camp R1); head down 30° read
+  // 19.5cm. The depth path itself is capped at 25cm. The fallback stays in use
+  // below the cap: for someone who sits with the head forward from the start it
+  // is the only FHP reading there is.
+  if (ext?.fhpGuard && fhp.reliable && Number.isFinite(fhp.distCm) && fhp.distCm > FHP_MAX_PLAUSIBLE_CM) {
+    fhp = { ...fhp, reliable: false, _rawReliable: false, reason: "implausible" };
+  }
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);
+
+  // opt-in `tiltguard` (experiments.js). Shoulder elevation is the larger of
+  // the two ear-to-shoulder gaps' shrinkage, so a head tilt, which brings one
+  // ear down toward its shoulder (and lifts the other), read as a one-sided
+  // shrug. On the OpenSim fixture a 15° head tilt raised a "mild" shrug in
+  // every body and camera (validation/opensim). Under the switch, when the eye
+  // line is tilted against the shoulder line, the gap change that a tilt
+  // explains (equal and opposite on the two sides) is removed and only the
+  // part common to both sides counts as elevation.
+  if (ext?.tiltGuard && shoulderElev.reliable && headTilt.reliable && Number.isFinite(shoulderElev.lDelta)) {
+    const ang = (a, b) => Math.atan2((b.y - a.y) * H, (b.x - a.x) * W) * 180 / Math.PI;
+    const fold = d => { d = ((d + 540) % 360) - 180; return Math.abs(d) > 90 ? ((d + 360) % 360) - 180 : d; };
+    const rel = fold(ang(lms[PL.L_EYE], lms[PL.R_EYE]) - ang(lms[PL.L_SHOULDER], lms[PL.R_SHOULDER]));
+    if (Math.abs(rel) >= 5) {
+      const common = Math.max(0, Math.min(shoulderElev.lDelta, shoulderElev.rDelta, (shoulderElev.lDelta + shoulderElev.rDelta) / 2));
+      Object.assign(shoulderElev, {
+        elevPct: Math.round(common * 10) / 10,
+        score: scoreMetric(common, 0, THR.SHOULDER_ELEV.ok, THR.SHOULDER_ELEV.bad),
+        severity: classify(common, SEV.SHOULDER_ELEV), asymmetric: null, tiltCorrected: true,
+      });
+    }
+  }
+
+  // opt-in `trunklean` (experiments.js). At laptop distance the hips are out of
+  // frame, so spine lean is unmeasured, and a sideways lean of the whole trunk
+  // tilts the head and the shoulder line together. The engine then reported it
+  // three times, as head tilt + neck lean + shoulder level, and told the user to
+  // straighten the neck while the real cause, sitting off-centre, was never
+  // named (camp R6; synthetic 10° lean: head tilt severe, shoulder moderate,
+  // neck mild). Under the switch, when the eye line and the shoulder line tilt
+  // the same way by about the same angle, it is read as one trunk lean: spine
+  // lean is estimated from the shoulder line, and head tilt and neck lean are
+  // measured relative to the shoulders. A raised shoulder with a level head is
+  // unaffected (the eye line stays level), and so is a head tilt on level
+  // shoulders.
+  if (ext?.trunkLean && !spine.reliable && shoulder.reliable && headTilt.reliable && neck.reliable) {
+    const ang = (a, b) => Math.atan2((b.y - a.y) * H, (b.x - a.x) * W) * 180 / Math.PI;
+    const wrap = d => ((d + 540) % 360) - 180;
+    const shLine  = wrap(ang(lms[PL.L_SHOULDER], lms[PL.R_SHOULDER]) - 180);
+    const eyeLine = wrap(ang(lms[PL.L_EYE], lms[PL.R_EYE]) - 180);
+    const shTilt = Math.abs(shLine) > 90 ? wrap(shLine + 180) : shLine;
+    const eyeTilt = Math.abs(eyeLine) > 90 ? wrap(eyeLine + 180) : eyeLine;
+    if (Math.abs(shTilt) >= 5 && Math.sign(shTilt) === Math.sign(eyeTilt) && Math.abs(eyeTilt - shTilt) <= 4) {
+      const lean = Math.abs(shTilt);
+      // spine's sign convention (+ = leaning to the subject's right) matches the
+      // shoulder line's: a lean to the right lowers the right shoulder.
+      const leanSign = Math.sign(shoulder.signedRaw ?? shoulder.signedAngle ?? shTilt) || 1;
+      const leanThr = resolveThr(calib, "spine_angle", 0, THR.SPINE_LEAN.ok, THR.SPINE_LEAN.bad);
+      Object.assign(spine, {
+        angle: Math.round(lean), angleRaw: lean, signedAngle: Math.round(lean * leanSign * 10) / 10, signedRaw: lean * leanSign,
+        score: scoreMetric(lean, leanThr.ideal, leanThr.ok, leanThr.bad),
+        severity: classify(lean, SEV.SPINE), confidence: 60, reliable: true, source: "shoulders", estimated: true,
+      });
+      const relHead = Math.abs(eyeTilt - shTilt);
+      const htThr = resolveThr(calib, "head_tilt", 0, THR.HEAD_TILT.ok, THR.HEAD_TILT.bad);
+      Object.assign(headTilt, { angle: Math.round(relHead), angleRaw: relHead,
+        score: scoreMetric(relHead, htThr.ideal, htThr.ok, htThr.bad),
+        severity: classify(relHead, { mild: 3, moderate: 7, severe: 10 }), relativeToTrunk: true });
+      const relNeck = Math.max(0, (neck.angleRaw ?? neck.angle) - lean);
+      Object.assign(neck, { angle: Math.round(relNeck), angleRaw: relNeck,
+        score: scoreMetric(relNeck, 0, neck.okAdj ?? 6, neck.badAdj ?? 17),
+        severity: classify(relNeck, SEV.NECK), relativeToTrunk: true });
+      Object.assign(shoulder, { score: Math.max(shoulder.score, 90), severity: "normal", attributedTo: "trunk_lean" });
+    }
+  }
 
   // Debounce every module's `reliable` flag — see debounceReliable() for
   // why a raw per-frame flip is a real score-stability bug, not cosmetic.

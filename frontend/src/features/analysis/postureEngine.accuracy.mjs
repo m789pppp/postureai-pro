@@ -680,6 +680,77 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
             : `reported ${fmt(clipped?.value)}% as a real reading`);
   }
 
+  // Shoulders below the frame (camp 2026-11-15). With the face close, the
+  // shoulders leave the shot DOWNWARDS and the tracker pins them to the bottom
+  // border: the ear-to-shoulder gap shrinks and reads as a shrug. Behind the
+  // `edge` switch (ext.edgeGuard) that is refused, and shoulder level too.
+  {
+    const down = (l, dy) => l.map(p => p ? ({
+      ...p, x: Math.min(0.995, Math.max(0.005, p.x)),
+      y: Math.min(0.995, Math.max(0.005, p.y + dy)),
+      visibility: Math.max(p.visibility ?? 0, 0.92),
+    }) : p);
+    const run = (dy, ext) => {
+      resetProportions();
+      let r = null;
+      for (let i = 0; i < 130; i++) r = analyzeMP(down(renderSubject({}, {}, { distCm: 45 }), 0), W, H, "front", null, null, null, null, ext);
+      for (let i = 0; i < 60;  i++) r = analyzeMP(down(renderSubject({}, {}, { distCm: 45 }), dy), W, H, "front", null, null, null, null, ext);
+      return r?.metrics;
+    };
+    const inShot = run(0.45, { edgeGuard: true }), clipped = run(0.62, { edgeGuard: true }), shipped = run(0.62, null);
+    check("edge: shoulders low but still in shot are measured as before",
+          inShot?.shoulder_elevation?.reliable === true && inShot?.shoulder_level?.reliable === true);
+    check("edge: shoulders pinned to the bottom border are not read as a shrug",
+          clipped?.shoulder_elevation?.reliable === false,
+          `shipped engine reads ${fmt(shipped?.shoulder_elevation?.value)}% (${shipped?.shoulder_elevation?.severity})`);
+    check("edge: and shoulder level is reported unmeasured with them",
+          clipped?.shoulder_level?.reliable === false);
+  }
+
+  // Implausible forward head (camp R1: "31.1cm, ~64° pitch" sitting upright,
+  // five seconds into a session). Before the depth baseline exists FHP comes
+  // from the ear-to-shoulder fallback, which has no upper bound. Behind the
+  // `fhpguard` switch (ext.fhpGuard) anything past 15 cm is unmeasured.
+  {
+    const early = (fh, ext) => { resetProportions(); let r = null;
+      for (let i = 0; i < 10; i++) r = analyzeMP(renderSubject({ forwardHeadCm: fh }, {}, { distCm: 60 }), W, H, "front", null, null, null, null, ext);
+      return r?.metrics?.fhp_index; };
+    const shippedWild = early(30, null), guardedWild = early(30, { fhpGuard: true }), guardedReal = early(12, { fhpGuard: true });
+    check("fhpguard: a forward-head reading past 15 cm is reported unmeasured",
+          guardedWild?.reliable === false, `shipped engine reads ${fmt(shippedWild?.value)} cm`);
+    check("fhpguard: a large but possible forward head (12 cm) is still measured",
+          guardedReal?.reliable === true && guardedReal.value > 5, `${fmt(guardedReal?.value)} cm`);
+  }
+
+  // Trunk side lean with the hips out of frame (camp R6). The shipped engine
+  // spreads it over head tilt + neck lean + shoulder level and never names it.
+  // Behind the `trunklean` switch (ext.trunkLean) it is one spine-lean finding.
+  {
+    const noHips = l => l.map((p, i) => p && i >= 23 ? { ...p, visibility: 0.1 } : p);
+    const run = (pose, ext) => { resetProportions(); let r = null;
+      for (let i = 0; i < 130; i++) r = analyzeMP(noHips(renderSubject({}, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext);
+      for (let i = 0; i < 60;  i++) r = analyzeMP(noHips(renderSubject(pose, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext);
+      return r?.metrics; };
+    const shipped = run({ lateralLeanDeg: 10 }, null);
+    const lean = run({ lateralLeanDeg: 10 }, { trunkLean: true });
+    const leanL = run({ lateralLeanDeg: -10 }, { trunkLean: true });
+    const shTilt = run({ shoulderTiltDeg: 10 }, { trunkLean: true });
+    check("trunklean: a 10° trunk lean is named as spine lean",
+          lean?.spine_lean?.reliable === true && Math.abs((lean.spine_lean.value ?? 0) - 10) <= 2,
+          `shipped engine: spine ${shipped?.spine_lean?.reliable ? "measured" : "unmeasured"}, head tilt ${shipped?.head_tilt?.severity}, shoulder ${shipped?.shoulder_level?.severity}`);
+    check("trunklean: and is not also reported as head tilt, neck lean or shoulder level",
+          lean?.head_tilt?.severity === "normal" && lean?.neck_lean?.severity === "normal" && lean?.shoulder_level?.severity === "normal");
+    check("trunklean: the side is kept (left lean = negative)",
+          (lean?.spine_lean?.signed ?? 0) > 0 && (leanL?.spine_lean?.signed ?? 0) < 0);
+    { resetProportions(); _startFakeClock(); let r = null; const ext = { trunkLean: true, moderateCap: true };
+      for (let i = 0; i < 130; i++) { _tick(); r = analyzeMP(noHips(renderSubject({}, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext); }
+      for (let i = 0; i < 60;  i++) { _tick(); r = analyzeMP(noHips(renderSubject({ lateralLeanDeg: 10 }, {}, { distCm: 60 })), W, H, "front", null, null, null, null, ext); }
+      _stopFakeClock();
+      check("modcap: a held moderate trunk lean cannot score as Excellent", (r?.score ?? 100) <= 84, `score ${r?.score}`); }
+    check("trunklean: one raised shoulder with a level head is still a shoulder finding",
+          shTilt?.shoulder_level?.severity !== "normal" && shTilt?.spine_lean?.reliable !== true);
+  }
+
   // The engine has to HAND that fact to the UI, not merely act on it
   // internally. Everything above was already true before coverageDetail
   // existed — and the page still displayed a single unqualified score,

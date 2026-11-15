@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { buildFindings, findingsSummary } from "./lib/findings.js";
+import { buildFindings, findingsSummary, shortAction } from "./lib/findings.js";
 
 /**
  * FindingsPanel — how a measurement becomes something someone can act on.
@@ -120,9 +120,33 @@ export function FindingCard({ finding: f, cs, isAr, defaultOpen = false }) {
 }
 
 /**
+ * One line per issue for the end-of-session summary: what is wrong, how
+ * serious, and the first sentence of what to do. The full card (why, numbers)
+ * stays on the live screen and in the report.
+ */
+function SummaryRow({ finding: f, cs }) {
+  const border = cs?.border || "rgba(148,163,184,.14)";
+  const text   = cs?.text   || "#e6edf3";
+  return (
+    <div style={{
+      border: `1px solid ${border}`, borderRadius: 12, padding: "10px 12px",
+      background: "rgba(148,163,184,.035)", textAlign: "start",
+      borderInlineStartWidth: 3, borderInlineStartColor: f.color || border, borderInlineStartStyle: "solid",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: text, lineHeight: 1.35 }}>{f.title}</div>
+        <Chip label={f.severityLabel} color={f.color} sev={f.severity} />
+      </div>
+      <div style={{ fontSize: 12.5, color: text, opacity: .85, lineHeight: 1.6 }}>{shortAction(f.action)}</div>
+    </div>
+  );
+}
+
+/**
  * @param metrics   the engine's `metrics` payload
  * @param limit     0 = all
- * @param variant   "full" (session summary) | "compact" (live, beside the camera)
+ * @param variant   "full" (all findings) | "compact" (live, beside the camera)
+ *                  | "summary" (end of session: top 3, one short line each)
  */
 export default function FindingsPanel({
   metrics, cs, isAr = false, calibrated = false, limit = 0,
@@ -135,7 +159,8 @@ export default function FindingsPanel({
   const text   = cs?.text  || "#e6edf3";
   const border = cs?.border || "rgba(148,163,184,.14)";
 
-  const cap = showAll ? 0 : (limit || (variant === "compact" ? 2 : 0));
+  const isSummary = variant === "summary";
+  const cap = isSummary ? (limit || 3) : showAll ? 0 : (limit || (variant === "compact" ? 2 : 0));
   const shown = cap > 0 ? res.findings.slice(0, cap) : res.findings;
   const hidden = res.findings.length - shown.length;
 
@@ -165,6 +190,20 @@ export default function FindingsPanel({
         <div style={{ fontSize: 12, color: muted, lineHeight: 1.7 }}>
           {isAr ? `${res.measured} مقياس اتقاسوا ومفيش فيهم حاجة برّه المدى. حافظ على وضعك.`
                 : `${res.measured} metrics measured, none outside their range. Hold this position.`}
+        </div>
+      </div>
+    );
+  }
+
+  if (isSummary) {
+    return (
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: muted, letterSpacing: isAr ? 0 : ".06em",
+                      textTransform: isAr ? "none" : "uppercase", marginBottom: 8, textAlign: "start" }}>
+          {isAr ? "أهم مشاكلك" : "Your top issues"}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {shown.map(f => <SummaryRow key={f.id} finding={f} cs={cs} />)}
         </div>
       </div>
     );

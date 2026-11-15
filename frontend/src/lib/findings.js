@@ -188,6 +188,28 @@ const LIB = {
                   ar: "محتاج الكتفين والحوض في الكادر، وكام ثانية ثبات في الأول عشان يتعلّم وضعك المستقيم." },
   },
 
+  // From the `slump` switch's learned layer (features/analysis/slumpModel.js):
+  // a slumped-back or leaning-in posture compared with how the user sat at the
+  // start of the session. Experimental, synthetic-trained; no number is shown.
+  slump_posture: {
+    title: { en: "Slumped posture", ar: "قعدة مرخية" },
+    what: (m, ar) => m.kind === "recline_slump"
+      ? (ar ? "شكلك سايب جسمك لورا في الكرسي مقارنةً بقعدتك في أول الجلسة، ورقبتك منحنية عشان عينك تفضل على الشاشة."
+            : "You look slumped back in your seat compared with how you sat at the start, with your neck bent to keep your eyes on the screen.")
+      : (ar ? "شكلك مايل لقدّام ناحية الشاشة مقارنةً بقعدتك في أول الجلسة."
+            : "You look hunched forward toward the screen compared with how you sat at the start."),
+    why: (m, ar) => ar
+      ? "القعدة دي لو استمرت بتحط حمل زيادة على الرقبة وأسفل الظهر."
+      : "Held for long, this posture puts extra load on the neck and lower back.",
+    act: (m, ar) => m.kind === "recline_slump"
+      ? (ar ? "ارجع بحوضك لآخر الكرسي واقعد مفرود، وقرّب الشاشة أو ارفعها بدل ما تميل لها."
+            : "Shift your hips to the back of the seat and sit tall. Bring the screen closer or higher instead of sinking toward it.")
+      : (ar ? "ارجع بضهرك للمسند وخلّي الشاشة على بعد دراع منك."
+            : "Sit back against the backrest and keep the screen about an arm's length away."),
+    unmeasured: { en: "Learning how you sit at the start of the session; needs your face and both shoulders in frame.",
+                  ar: "بيتعلّم قعدتك في أول الجلسة؛ محتاج وشك وكتافك الاتنين في الكادر." },
+  },
+
   trunk_rotation: {
     title: { en: "Torso turned", ar: "الجذع ملفوف" },
     what: (m, ar) => ar
@@ -379,6 +401,18 @@ export function buildFindings(metrics, { lang = "en", calibrated = false, limit 
     allClear: out.length === 0 && measured > 0,
     nothingMeasured: measured === 0,
   };
+}
+
+/**
+ * The first sentence of a finding's action: what to do, without the follow-up
+ * advice. Used by the end-of-session summary, which shows only the top issues
+ * with one short line each. Falls back to the whole action when it has no
+ * sentence break.
+ */
+export function shortAction(action) {
+  const a = String(action || "").trim();
+  const m = a.match(/^.+?[.!?؟](?=\s|$)/u);
+  return m ? m[0] : a;
 }
 
 /** One-line summary for a header or a notification. */

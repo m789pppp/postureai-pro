@@ -17,7 +17,10 @@ export default function DiagPanel() {
   const stalled = snap.msSinceLastFrame != null && snap.msSinceLastFrame > 3000;
   const row = { display: "flex", justifyContent: "space-between", gap: 10 };
   return (
-    <div dir="ltr" style={{ position: "fixed", insetInlineStart: 8, insetBlockEnd: 8, zIndex: 9999, inlineSize: open ? 300 : "auto", maxBlockSize: "60vh", overflow: "auto",
+    // Bottom-right, above the full-screen button. At bottom-left it covered the
+    // start of the live alert banner, so the alert text could not be read while
+    // diag was on (camp 2026-11-15).
+    <div dir="ltr" style={{ position: "fixed", right: 8, bottom: 56, zIndex: 9999, inlineSize: open ? 300 : "auto", maxBlockSize: "60vh", overflow: "auto",
       background: "rgba(2,8,16,.92)", color: "#e2e8f0", border: "1px solid rgba(148,163,184,.35)", borderRadius: 10, padding: 8, font: "11px/1.5 ui-monospace, monospace" }}>
       <div style={{ ...row, alignItems: "center", marginBlockEnd: open ? 6 : 0 }}>
         <strong>diag</strong>

@@ -13,6 +13,22 @@
  *   head3d   score looking down / up from the face model's 3-D head pose, with a neutral
  *            learned in the first seconds; cap the score at 84 while a moderate fault lasts;
  *            show head flexion in the HUD relative to that learned neutral.
+ *   sevlabel the live HUD's Low/Med/High rows use the engine's severity (normal/mild →
+ *            Low, moderate → Med, severe → High) instead of score bands, so a "High" row
+ *            and an "Excellent" score can no longer appear together.
+ *   edge     a shoulder pinned to the bottom of the frame (face close to the camera) makes
+ *            shoulder shrug and shoulder level unmeasured instead of reading a false shrug.
+ *   fhpguard a forward-head reading past 15 cm (physically implausible seated) is reported
+ *            unmeasured instead of as a Critical alert.
+ *   trunklean with the hips out of frame, a sideways lean of the whole trunk (eye line and
+ *            shoulder line tilted together) is reported once, as spine lean, instead of as
+ *            head tilt + neck lean + shoulder level.
+ *   modcap   the score is capped at 84 ("Good", not "Excellent") while a moderate fault
+ *            lasts. head3d already does this; modcap tries it on its own.
+ *   tiltguard a head tilt no longer reads as a one-sided shoulder shrug.
+ *   slump    experimental learned layer (slumpModel.js, trained on the OpenSim fixture only)
+ *            that names a slumped-back or leaning-in posture against the user's first seconds.
+ *   camp     shorthand for all of the camp switches above plus diag (see PRESETS).
  */
 const KEY = "posmoz_exp";
 
@@ -21,8 +37,17 @@ export function parseExperiments(search, stored) {
   const q = new URLSearchParams(search || "").get("exp");
   const raw = q != null ? q : (stored || "");
   if (raw.trim().toLowerCase() === "off") return [];
-  return [...new Set(raw.split(",").map(s => s.trim().toLowerCase()).filter(s => /^[a-z0-9_-]{1,24}$/.test(s)))];
+  const names = raw.split(",").map(s => s.trim().toLowerCase()).filter(s => /^[a-z0-9_-]{1,24}$/.test(s));
+  return [...new Set(names.flatMap(n => PRESETS[n] || [n]))];
 }
+
+/**
+ * Shorthands. `camp` turns on every fix from the 2026-11-15 camp session
+ * (docs/CAMP_FINDINGS.md) plus the diag panel, so a tester types one word.
+ */
+export const PRESETS = Object.freeze({
+  camp: ["diag", "sevlabel", "edge", "fhpguard", "trunklean", "modcap", "head3d", "tiltguard", "slump"],
+});
 
 let memo = null;
 function active() {
