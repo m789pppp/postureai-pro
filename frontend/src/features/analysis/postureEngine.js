@@ -2061,6 +2061,10 @@ function analyzeShoulderElevation(lms, W, H, prop, calib = null) {
     elevPct: Math.round(elevPct * 10) / 10,
     lElevPct: Math.round(lElevPct * 10) / 10,
     rElevPct: Math.round(rElevPct * 10) / 10,
+    // Signed per-side change of the ear-to-shoulder gap (+ = shrank), for the
+    // `tiltguard` switch in analyzeMP.
+    lDelta: (NEUTRAL_L - lGap) * 100,
+    rDelta: (NEUTRAL_R - rGap) * 100,
     asymmetric,
     score, severity,
     confidence: 82,
@@ -2924,6 +2928,28 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
   }
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);
+
+  // opt-in `tiltguard` (experiments.js). Shoulder elevation is the larger of
+  // the two ear-to-shoulder gaps' shrinkage, so a head tilt, which brings one
+  // ear down toward its shoulder (and lifts the other), read as a one-sided
+  // shrug. On the OpenSim fixture a 15° head tilt raised a "mild" shrug in
+  // every body and camera (validation/opensim). Under the switch, when the eye
+  // line is tilted against the shoulder line, the gap change that a tilt
+  // explains (equal and opposite on the two sides) is removed and only the
+  // part common to both sides counts as elevation.
+  if (ext?.tiltGuard && shoulderElev.reliable && headTilt.reliable && Number.isFinite(shoulderElev.lDelta)) {
+    const ang = (a, b) => Math.atan2((b.y - a.y) * H, (b.x - a.x) * W) * 180 / Math.PI;
+    const fold = d => { d = ((d + 540) % 360) - 180; return Math.abs(d) > 90 ? ((d + 360) % 360) - 180 : d; };
+    const rel = fold(ang(lms[PL.L_EYE], lms[PL.R_EYE]) - ang(lms[PL.L_SHOULDER], lms[PL.R_SHOULDER]));
+    if (Math.abs(rel) >= 5) {
+      const common = Math.max(0, Math.min(shoulderElev.lDelta, shoulderElev.rDelta, (shoulderElev.lDelta + shoulderElev.rDelta) / 2));
+      Object.assign(shoulderElev, {
+        elevPct: Math.round(common * 10) / 10,
+        score: scoreMetric(common, 0, THR.SHOULDER_ELEV.ok, THR.SHOULDER_ELEV.bad),
+        severity: classify(common, SEV.SHOULDER_ELEV), asymmetric: null, tiltCorrected: true,
+      });
+    }
+  }
 
   // opt-in `trunklean` (experiments.js). At laptop distance the hips are out of
   // frame, so spine lean is unmeasured, and a sideways lean of the whole trunk

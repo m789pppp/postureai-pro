@@ -25,6 +25,9 @@
  *            head tilt + neck lean + shoulder level.
  *   modcap   the score is capped at 84 ("Good", not "Excellent") while a moderate fault
  *            lasts. head3d already does this; modcap tries it on its own.
+ *   tiltguard a head tilt no longer reads as a one-sided shoulder shrug.
+ *   slump    experimental learned layer (slumpModel.js, trained on the OpenSim fixture only)
+ *            that names a slumped-back or leaning-in posture against the user's first seconds.
  *   camp     shorthand for all of the camp switches above plus diag (see PRESETS).
  */
 const KEY = "posmoz_exp";
@@ -43,7 +46,7 @@ export function parseExperiments(search, stored) {
  * (docs/CAMP_FINDINGS.md) plus the diag panel, so a tester types one word.
  */
 export const PRESETS = Object.freeze({
-  camp: ["diag", "sevlabel", "edge", "fhpguard", "trunklean", "modcap", "head3d"],
+  camp: ["diag", "sevlabel", "edge", "fhpguard", "trunklean", "modcap", "head3d", "tiltguard", "slump"],
 });
 
 let memo = null;

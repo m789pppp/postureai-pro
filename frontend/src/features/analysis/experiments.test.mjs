@@ -25,7 +25,8 @@ test("App.jsx uses the worker, the adaptive rate and the 3-D head pitch only beh
   assert.match(src, /const HEAD3D = experimentEnabled\("head3d"\)/);
   assert.match(src, /HEAD3D\?\{head:headPose,moderateCap:true\}:\{\}/);
   assert.match(src, /EXP_EDGE\?\{edgeGuard:true\}:\{\}/);
-  assert.match(src, /const engineExt=\(HEAD3D\|\|EXP_EDGE\|\|EXP_FHPGUARD\|\|EXP_TRUNKLEAN\|\|EXP_MODCAP\)\?/);
+  assert.match(src, /const engineExt=\(HEAD3D\|\|EXP_EDGE\|\|EXP_FHPGUARD\|\|EXP_TRUNKLEAN\|\|EXP_MODCAP\|\|EXP_TILTGUARD\)\?/);
+  assert.match(src, /EXP_TILTGUARD\?\{tiltGuard:true\}:\{\}/);
   assert.match(src, /EXP_MODCAP\?\{moderateCap:true\}:\{\}/);
   assert.match(src, /EXP_TRUNKLEAN\?\{trunkLean:true\}:\{\}/);
   assert.match(src, /EXP_FHPGUARD\?\{fhpGuard:true\}:\{\}/);
@@ -36,7 +37,7 @@ test("App.jsx uses the worker, the adaptive rate and the 3-D head pitch only beh
 
 test("?exp=camp turns on every camp switch plus diag, and mixes with others", () => {
   const camp = parseExperiments("?exp=camp", "");
-  for (const n of ["diag", "sevlabel", "edge", "fhpguard", "trunklean", "modcap", "head3d"]) assert.ok(camp.includes(n), n);
+  for (const n of ["diag", "sevlabel", "edge", "fhpguard", "trunklean", "modcap", "head3d", "tiltguard", "slump"]) assert.ok(camp.includes(n), n);
   assert.ok(!camp.includes("camp"));
   assert.deepEqual(parseExperiments("?exp=camp,worker", "").slice(-1), ["worker"]);
   assert.deepEqual(parseExperiments("", "camp"), camp);

@@ -13,6 +13,7 @@ import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
 import { decimate, sessionTrend, NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
 import { createSessionAggregator } from "./lib/sessionFindings.js";
+import { createSlumpTracker, slumpMetric } from "./features/analysis/slumpModel.js";
 import {
   auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
   onAuthStateChanged, createUserProfile, getUserProfile,
@@ -130,6 +131,10 @@ const EXP_FHPGUARD = experimentEnabled("fhpguard");
 const EXP_TRUNKLEAN = experimentEnabled("trunklean");
 // The score is capped at 84 while a moderate fault lasts (head3d turns this on too).
 const EXP_MODCAP = experimentEnabled("modcap");
+// Experimental learned layer for slumped-back / leaning-in postures (synthetic-trained).
+const EXP_SLUMP = experimentEnabled("slump");
+// A head tilt is not a one-sided shrug.
+const EXP_TILTGUARD = experimentEnabled("tiltguard");
 if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
@@ -583,6 +588,7 @@ function _angle3pt(a,b,c){
 // `detectedConditions` blocks for the exact source strings this must match.
 const METRIC_LABEL_AR = {
   neck_lean:          "ميل الرقبة",
+  slump_posture:       "قعدة مرخية",
   head_tilt:           "ميل الرأس",
   shoulder_level:      "توازن الكتفين",
   spine_lean:          "ميل العمود الفقري",
@@ -3485,6 +3491,7 @@ export default function App(){
   // Per-metric severity over the whole session, for the end-of-session summary
   // (which used to describe only the last analysed frame).
   const sessAggRef=useRef(null); if(!sessAggRef.current) sessAggRef.current=createSessionAggregator();
+  const slumpRef=useRef(null); if(EXP_SLUMP && !slumpRef.current) slumpRef.current=createSlumpTracker();
   const pushSessionScore=useCallback((v)=>{
     if(!Number.isFinite(v)) return;
     const now=Date.now();
@@ -4159,7 +4166,7 @@ export default function App(){
           // It went to everyone once and real sessions got worse, so until it is
           // proven on people the engine scores head pitch as it did before.
           const headPose=HEAD3D?(enhancerRef.current?.headPitch?.(performance.now())??null):null;
-          const engineExt=(HEAD3D||EXP_EDGE||EXP_FHPGUARD||EXP_TRUNKLEAN||EXP_MODCAP)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{}),...(EXP_FHPGUARD?{fhpGuard:true}:{}),...(EXP_TRUNKLEAN?{trunkLean:true}:{}),...(EXP_MODCAP?{moderateCap:true}:{})}:null;
+          const engineExt=(HEAD3D||EXP_EDGE||EXP_FHPGUARD||EXP_TRUNKLEAN||EXP_MODCAP||EXP_TILTGUARD)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{}),...(EXP_FHPGUARD?{fhpGuard:true}:{}),...(EXP_TRUNKLEAN?{trunkLean:true}:{}),...(EXP_MODCAP?{moderateCap:true}:{}),...(EXP_TILTGUARD?{tiltGuard:true}:{})}:null;
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,engineExt); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
@@ -4276,6 +4283,11 @@ export default function App(){
                 ? "مش قادر أشوف حوضك — كشف الانحناء واللف مش هيشتغل. جرب تبعد شوية عن الكاميرا أو تميلها لتحت شوية."
                 : "I can't see your hips, so slouch and twist detection won't work right now — try sitting a little further back or tilting the camera down.",
                 "info");
+            }
+            if(EXP_SLUMP && slumpRef.current){
+              const sp=slumpRef.current.update(lms,W,H);
+              const sm=slumpMetric(sp,{learning:slumpRef.current.learning});
+              if(sm) finalResult.metrics={...finalResult.metrics, slump_posture:sm};
             }
             finalResult.pain_prediction = updatePainPrediction(displayScore, finalResult.metrics);
             histRef.current.push(displayScore);
@@ -5047,6 +5059,7 @@ export default function App(){
       histRef.current=[]; setHistory([]);
       fullHistRef.current=[]; fullHistLastMsRef.current=0;
       sessAggRef.current.reset();
+      slumpRef.current?.reset();
       goodRef.current=0; setGoodF(0);
       totalRef.current=0; setTotalF(0);
       acRef.current={total:0,neck:0,dist:0};

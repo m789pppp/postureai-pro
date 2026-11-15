@@ -43,3 +43,6 @@ frontend/.posmoz-backup/
 
 # Camp bench recordings (pseudonymous landmarks, kept off git)
 validation/camp/
+validation/opensim/training.json
+validation/opensim/*.osim
+validation/opensim/__pycache__/

@@ -191,3 +191,22 @@ Branch: `camp/field-ready` (from `origin/main` 9e9a7cc). One PR per step; nothin
   - **Distance jump (P3)**: the eye-landmark fallback gives the right distance on the synthetic subject (45/60/80 cm), so the real 104 cm is not reproduced.
   - **Recline/sacral slump (P5)**: there is no way to tell it from simply sitting farther back without a recording.
   - **Rate (T1)**: the face model already runs every 2nd frame; the `worker` switch exists and should be measured live with `/perf.html` before any change.
+
+## OpenSim fixture (2026-11-15)
+
+A second, independent synthetic subject built in OpenSim 4.6 (`validation/opensim/`): a seated upper-body model with pelvis, lumbar, lower-neck (C7) and head-nod (C1) joints, shoulder elevation and protraction, and markers at the MediaPipe landmark sites. It covers 14 postures × 6 bodies (including two eye heights) × 3 cameras, replayed through the engine's own camera projection (`frontend/scripts/opensim-replay.mjs`). It tests geometry only, not clinical accuracy.
+
+**What it found in the shipped engine**
+1. **A head tilt reads as a shrug.** A 15° head tilt raised a "mild" shoulder elevation in every body and camera. Elevation is the larger of the two ear-to-shoulder gaps' shrinkage, and a tilt brings one ear down. Fixed behind **`tiltguard`**: when the eye line is tilted against the shoulder line, only the gap change common to both sides counts.
+2. **The landmark head-pitch proxy depends on face anatomy.** With the eyes 1 cm higher or lower above the ears than the engine's own fixture, `monitor_height` reads ~14° ("mild") sitting upright. When the fixture first placed the eyes 2.5 cm lower by mistake it read 40° (severe), which caps the score at 69. This is the same weakness as the camp's "monitor height offset" headlines. `head3d` (learned personal neutral from the face model) reads 0 at neutral in every body.
+3. **Recline/sofa slump** was caught in 50% of cases, and only through other metrics. Rounded shoulders: 0% (needs the hips).
+
+**Learned layer: `slump` switch (experimental)**
+- `features/analysis/slumpModel.js`: six scale-free face/shoulder features against the user's first seconds, softmax regression over neutral / slouch forward / recline / lean to screen / head down.
+- Trained on OpenSim samples only (`scripts/train-slump.mjs`): held-out 88%, out-of-distribution bodies and cameras 79%. Neutral is almost never flagged (held-out 0/200, OOD 3/190).
+- Never seen a real person, so it must be checked on real recordings before it goes to anyone. It produces the `slump_posture` finding (no number shown), and head-down is left to the neck metrics.
+- Replay, camp switches: recline 50% → **100%**, slouch 67% → 78%, lean to screen 61% → 83%; no slump finding at neutral or on tilt/turn/shrug.
+
+**Still weak on this fixture:** head down 15° (camp 33%, shipped 44% via the anatomy-biased proxy), chin poke (44%), rounded shoulders (0%). Head-tilt noise at the 3° mild threshold shows in 2 of 18 cases.
+
+`?exp=camp` now also turns on `tiltguard` and `slump`. New checks: `npm run test:opensim` (6 replay checks + 9 slump-model checks).
