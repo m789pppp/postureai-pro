@@ -47,6 +47,7 @@ export function replaySession(session, { exp = [] } = {}) {
   const W = session.camera?.width || 1280, H = session.camera?.height || 720;
   const head3d = exp.includes("head3d");
   const edge = exp.includes("edge");
+  const fhpguard = exp.includes("fhpguard");
   let clock = 0;
   const realPerf = globalThis.performance;
   Object.defineProperty(globalThis, "performance", { value: { now: () => clock }, configurable: true });
@@ -79,6 +80,7 @@ export function replaySession(session, { exp = [] } = {}) {
           ext = { head: { pitchDeg: f.head[0], neutralDeg: typeof calibPitch === "number" ? calibPitch : n }, moderateCap: true };
         } else if (f.head) neutral.feed(f.head[0], f.t);
         if (edge) ext = { ...(ext || {}), edgeGuard: true };
+        if (fhpguard) ext = { ...(ext || {}), fhpGuard: true };
         const r = analyzeMP(sm, W, H, "laptop", null, sess, null, null, ext);
         if (!r) continue;
         if (f.t - t0 < 1500) continue;                 // the person is still getting into the posture

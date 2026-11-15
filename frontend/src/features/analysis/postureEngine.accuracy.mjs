@@ -707,6 +707,21 @@ console.log("\nPRECISION — repeated readings of one pose under landmark noise"
           clipped?.shoulder_level?.reliable === false);
   }
 
+  // Implausible forward head (camp R1: "31.1cm, ~64° pitch" sitting upright,
+  // five seconds into a session). Before the depth baseline exists FHP comes
+  // from the ear-to-shoulder fallback, which has no upper bound. Behind the
+  // `fhpguard` switch (ext.fhpGuard) anything past 15 cm is unmeasured.
+  {
+    const early = (fh, ext) => { resetProportions(); let r = null;
+      for (let i = 0; i < 10; i++) r = analyzeMP(renderSubject({ forwardHeadCm: fh }, {}, { distCm: 60 }), W, H, "front", null, null, null, null, ext);
+      return r?.metrics?.fhp_index; };
+    const shippedWild = early(30, null), guardedWild = early(30, { fhpGuard: true }), guardedReal = early(12, { fhpGuard: true });
+    check("fhpguard: a forward-head reading past 15 cm is reported unmeasured",
+          guardedWild?.reliable === false, `shipped engine reads ${fmt(shippedWild?.value)} cm`);
+    check("fhpguard: a large but possible forward head (12 cm) is still measured",
+          guardedReal?.reliable === true && guardedReal.value > 5, `${fmt(guardedReal?.value)} cm`);
+  }
+
   // The engine has to HAND that fact to the UI, not merely act on it
   // internally. Everything above was already true before coverageDetail
   // existed — and the page still displayed a single unqualified score,

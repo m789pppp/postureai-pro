@@ -124,6 +124,8 @@ const EXP_DIAG = experimentEnabled("diag");
 const EXP_SEVLABEL = experimentEnabled("sevlabel");
 // Shoulders pinned to the bottom of the frame are unmeasured, not a shrug.
 const EXP_EDGE = experimentEnabled("edge");
+// Forward-head readings past 15 cm are unmeasured, not Critical.
+const EXP_FHPGUARD = experimentEnabled("fhpguard");
 if (EXP_DIAG) diagInstall();
 import PrecisionHud from "./features/analysis/PrecisionHud.jsx";
 
@@ -4153,7 +4155,7 @@ export default function App(){
           // It went to everyone once and real sessions got worse, so until it is
           // proven on people the engine scores head pitch as it did before.
           const headPose=HEAD3D?(enhancerRef.current?.headPitch?.(performance.now())??null):null;
-          const engineExt=(HEAD3D||EXP_EDGE)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{})}:null;
+          const engineExt=(HEAD3D||EXP_EDGE||EXP_FHPGUARD)?{...(HEAD3D?{head:headPose,moderateCap:true}:{}),...(EXP_EDGE?{edgeGuard:true}:{}),...(EXP_FHPGUARD?{fhpGuard:true}:{})}:null;
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData,engineExt); // Side mode removed app-wide
           if(rawResult) rawResult.pipeline=pipelineRef.current; // which models produced this reading (one frame behind)
           clinicalSinkRef.current?.(lms,W,H,rawResult);
@@ -8315,7 +8317,18 @@ async function downloadPDF(sessionOverride, isClinical=false){
                   // Positioning adjustment" here instead of a real metric.
                   const worst = Object.entries(analysis?.metrics||{})
                     .filter(([k,v])=>!NON_POSTURAL_METRICS.has(k) && v && v.reliable!==false && typeof v.score==="number")
-                    .sort(([,a],[,b])=>a.score-b.score)[0];
+                    // `sevlabel`: rank by the engine's severity first, as the
+                    // findings do, then by score. By score alone a severe 15°
+                    // shoulder line lost the headline to a moderate forward
+                    // head with a lower raw score (camp R9b).
+                    .sort(([,a],[,b])=>{
+                      if(EXP_SEVLABEL){
+                        const R={severe:3,moderate:2,mild:1};
+                        const d=(R[b.severity]||0)-(R[a.severity]||0);
+                        if(d) return d;
+                      }
+                      return a.score-b.score;
+                    })[0];
                   if(!worst || worst[1].score >= 80) return null;
                   const label = isAr ? (METRIC_LABEL_AR[worst[0]]||worst[1].label) : worst[1].label;
                   return (

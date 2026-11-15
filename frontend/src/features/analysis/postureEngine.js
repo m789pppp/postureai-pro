@@ -147,6 +147,9 @@ const RELIABILITY_HYSTERESIS_FRAMES = 5;
  * a genuinely sustained bad posture is still caught well inside a second.
  */
 const ALERT_DWELL_MS = 1200;
+// Upper bound for a seated forward-head reading under the `fhpguard` switch.
+// A maximal chin poke is roughly 10-12 cm; past 15 cm the number is noise.
+const FHP_MAX_PLAUSIBLE_CM = 15;
 
 // ─── Scoring thresholds (synced with backend.py score_m calls) ─────
 const THR = {
@@ -2906,6 +2909,18 @@ export function analyzeMP(lms, W, H, mode, distCalibFactor = null, sessionStartM
         source: "depth",
       };
     }
+  }
+  // opt-in `fhpguard` (experiments.js): a forward head beyond what a seated
+  // person can physically hold is a measurement failure, not a finding. Before
+  // the depth baseline is learned (first seconds of a session), or when it
+  // refuses to learn, FHP comes from analyzeFHP's ear-to-shoulder offset, and on
+  // a real session that read "Forward head 31.1cm (~64° pitch)" as a Critical
+  // alert five seconds in, sitting upright (camp R1); head down 30° read
+  // 19.5cm. The depth path itself is capped at 25cm. The fallback stays in use
+  // below the cap: for someone who sits with the head forward from the start it
+  // is the only FHP reading there is.
+  if (ext?.fhpGuard && fhp.reliable && Number.isFinite(fhp.distCm) && fhp.distCm > FHP_MAX_PLAUSIBLE_CM) {
+    fhp = { ...fhp, reliable: false, _rawReliable: false, reason: "implausible" };
   }
   // Spine runs every frame (fast) but depends on rounded.score from above
   const spine = analyzeSpineLean(lms, W, H, prop, rounded.score, calib);

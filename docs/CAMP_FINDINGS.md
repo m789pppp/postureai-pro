@@ -163,3 +163,24 @@ Branch: `camp/field-ready` (from `origin/main` 9e9a7cc). One PR per step; nothin
   - Distance moves only 54→65 cm when looking up 45°; the real 35→104 cm jump (R3) is not reproduced, likely eye landmarks lost with glasses/extension.
   - A synthetic forward slouch (trunk 20°) is caught via FHP (score 66). The tester's R11 was a recline / sacral slump, which reads all-normal (97).
   - These need the bench recording before any change: P2 head pitch (`head3d` exists), P3 distance, P4 FHP, P5 slouch/recline.
+- 2026-11-15: **Implausible forward head, reproduced and guarded behind a switch.** R1's "Forward head 31.1cm (~64° pitch)" Critical alert, 5 s into the session sitting upright: `atan2(31.1, 15)` = 64°, so the number was the FHP cm. The depth path is capped at 25 cm, so it came from the `analyzeFHP` fallback used before the depth baseline exists. That fallback has no upper bound: the shipped engine reads **52.5 cm** for a synthetic 30 cm forward head at 60 cm. New switch **`fhpguard`**: past 15 cm (beyond what a seated person can hold) FHP is unmeasured. Below that the fallback still counts, because for someone who sits head-forward from the start it is the only FHP reading. 2 new checks (`test:posture` 119/119).
+- 2026-11-15: **"Biggest drop" headline under `sevlabel`** ranks by the engine's severity first, as the findings do, then by score. By score alone, R9b's severe 15° shoulder lost the headline to a moderate forward head.
+
+### Screenshot → finding → action map (all camp screenshots, 2026-11-15)
+| Screenshot | What it shows | Action |
+|---|---|---|
+| f2_builtin_browser_camera_denied | Camera blocked in the Claude browser pane; app error handling fine | none (tooling) |
+| f5_session_summary_4m57 | Summary listed a 27 cm "very close" alert while the badge read 45–64 cm | summary now from the whole session (`sessionFindings`) |
+| f4_live_5m48, p2_head_down15_too_close, p2b | Shrug "High" with the shoulders out of / at the bottom of the frame | `edge` switch |
+| p3_head_down30, r2_head_down | Head down: neck Low once, High once; FHP 19.5 cm cross-talk | `head3d` (exists) + `fhpguard` caps the 19.5 |
+| r1_neutral_fhp31 | 31.1 cm / 64° Critical sitting upright at session start | `fhpguard` |
+| r3_look_up | Looking up not caught; distance 35→104 cm | `head3d`; distance needs a bench recording (not reproduced on the synthetic subject) |
+| r4_forward_head | Real chin poke 7.7 cm, direction right, score still "Good" | `sevlabel` + score caps |
+| r5_tilt_right | Big head tilt caught correctly | – |
+| r6_side_lean | Trunk lean split into neck + shoulder + shrug | needs hips or a new signal (P7) |
+| r7/r8_turn | Head turn caught correctly | – |
+| r9_arm_raised, r9b_shoulder_raised | 15° shoulder only "Med", headline forward head | `sevlabel` (rows + headline) |
+| r10_lean_in | Too close caught correctly | – |
+| r11_slouch | Recline/sacral slump: everything Low, distance "25 cm" while farther | P5: needs a bench recording + design |
+| r12_neutral_again | Same card as R10/R11 (looked stuck) | checked in R13: not stuck |
+| r13_tilt_excellent93 | Neck High with score 93 "Excellent" | `sevlabel` |
