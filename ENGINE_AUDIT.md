@@ -52,6 +52,31 @@
 
 مفيش حاجة اتمسحت في الجرد ده. المسح هيحصل في نفس الـ PR اللي بيربط البديل، علشان منكسرش حاجة.
 
+## 7. حاجات باينة إنها شغالة وهي مش شغالة
+
+دي أخطر نوع، لأن الواجهة أو النص بيوعد بحاجة مش موجودة.
+
+| الحاجة | المكان | المشكلة | الخطورة |
+|---|---|---|---|
+| سحب موافقة الكاميرا | App.jsx سطر 3128 و3188 | نافذة الموافقة بتقول "تقدر تسحب الموافقة في أي وقت من الإعدادات"، والدالة `revokeCameraConsent` مكتوبة بس مفيش أي زرار بينادي عليها | عالية (privacy وقانوني) |
+| بانر الكوكيز والـ footer القانوني | App.jsx سطر 96 | `CookieConsent` و`LegalFooter` متعمل لهم import ومش معروضين في أي مكان. والـ analytics مستنية موافقة عمرها ما هتتطلب | عالية (قانوني) |
+| تنعيم السكور | App.jsx سطر 2942 | `useScoreSmoothing` بيحسب `smoothedScore` ومحدش بيعرضه. السكور المعروض جاي من مسار تاني | متوسطة |
+| زرار "كل المقاييس" | App.jsx سطر 3213 | `showAllMetrics` state مفيش حاجة بتغيره ولا بتقراه | منخفضة |
+| RISK_ZONES | liveEnhancer.js | بيتحسب ويظهر في الـ HUD بس، ومبيأثرش على السكور ولا الـ alerts | متوسطة (هيتربط في Score v2) |
+| بيانات demo | firebase.js سطر 934 | `seedDemoUser` بيكتب سيشنات بأرقام عشوائية في Firestore. مش متنادي من أي مكان، بس وجوده خطر | متوسطة (يتمسح) |
+| Onboarding preview | OnboardingWizard.jsx سطر 18 | رسم بأرقام demo ثابتة. لازم يبقى واضح للمستخدم إنه مثال | منخفضة |
+
+## 8. كود مكتوب ومش مستخدم (lint)
+
+- `postureEngine.js`: الدوال `vec3` و`angleBetween3D`، والمتغيرات `elevRatio` (analyzeRoundedShoulders) و`lateralPx` (analyzeFHP).
+- `PostureCalibration.jsx`: `CALIB_FRAMES` و`frames`، يعني الـ calibration القديم مش بيجمع الفريمات اللي الثوابت بتاعته بتقول عليها.
+- `SmartCalibration.jsx` و`App.jsx`: ثابت `LM` مش مستخدم.
+- `App.jsx`: 78 حاجة مش مستخدمة. منهم 35 import (APIs وcomponents)، و8 states متعرفة ومحدش بيستخدمها (`showAcctSelect`، `showDeviceSelect`، `showLegalCompliance`، `rsiData`، `startupError`، `swUpdateReady`، `company`، `isOnline`)، ودوال كاملة (`Onboard`، `Auth`، `Profile`، `Pricing`، `AccountTypeSelect`).
+- `LiveUI.jsx`: `mpIcon` و`coachIcon`.
+- باقي الملفات (dashboards وbilling وغيرهم): حوالي 180 تحذير تاني، برا نطاق اللايف بيج.
+
+الأمر اللي بيطلّع القائمة كاملة: `npx eslint src --ext .js,.jsx` مع قاعدة `no-unused-vars`. الـ `.eslintrc.cjs` الحالي ناقصه plugin الـ react-hooks.
+
 ## 5. اللي هيتبني عليه (شغال ومتغطي بـ tests)
 
 - `calibrationCore.js`: One Euro، robust stats، iris distance، head pose من الـ matrix، framing checks.
