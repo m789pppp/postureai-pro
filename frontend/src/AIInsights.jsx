@@ -238,63 +238,10 @@ function Sparkline({ scores, color = "#1a56db", h = 44, showArea = true }) {
 }
 
 // ── Insight Card ───────────────────────────────────────────────────
-function InsightCard({ icon, title, value, sub, trend, color = "#1a56db", delay = 0 }) {
-  return (
-    <div style={{
-      background: "rgba(15,30,54,.85)", border: "1px solid rgba(255,255,255,.07)",
-      borderRadius: 14, padding: "14px 16px", position: "relative", overflow: "hidden",
-      animation: `fadeIn 400ms ${delay}ms both`,
-    }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg,${color},transparent)` }} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b82a6" }}>{title}</span>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-      </div>
-      <div style={{ fontFamily: "Syne,sans-serif", fontSize: 26, fontWeight: 800, color, lineHeight: 1, letterSpacing: "-0.03em" }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: "#6b82a6", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
-      {trend !== undefined && (
-        <div style={{ fontSize: 10, fontWeight: 700, marginTop: 4, color: trend >= 0 ? "#10b981" : "#ef4444" }}>
-          {trend >= 0 ? "↑" : "↓"} {Math.abs(trend)}% vs prev week
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Risk Meter ─────────────────────────────────────────────────────
-function RiskMeter({ score, label }) {
-  const color = score >= 70 ? "#ef4444" : score >= 45 ? "#f59e0b" : "#10b981";
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-        <span style={{ fontSize: 12, color: "#b0c4de", fontWeight: 500 }}>{label}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, color }}>{score}%</span>
-      </div>
-      <div style={{ height: 6, borderRadius: 99, background: "rgba(148,163,184,.1)", overflow: "hidden" }}>
-        <div style={{
-          height: "100%", width: `${score}%`, background: color,
-          borderRadius: 99, transition: "width 700ms cubic-bezier(.4,0,.2,1)",
-        }} />
-      </div>
-    </div>
-  );
-}
 
 // ── Section wrapper ────────────────────────────────────────────────
-function Section({ title, sub, children, action }) {
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div>
-          <div style={{ fontFamily: "Syne,sans-serif", fontSize: 15, fontWeight: 800, color: "#e8f0fe", letterSpacing: "-0.02em" }}>{title}</div>
-          {sub && <div style={{ fontSize: 10, color: "#6b82a6", marginTop: 2, fontWeight: 500 }}>{sub}</div>}
-        </div>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN COMPONENT

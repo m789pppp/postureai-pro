@@ -3,7 +3,7 @@
  * Automated summaries · PDF executive reports
  * Manager insights · Department comparisons
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   cervicalLoadKg, neckFlexionDeg, sessionFatigue,
   weekWindows, lifetimeSessions, readingReliability,
@@ -11,7 +11,7 @@ import {
 import { geminiAnalysis, localFallbackAnalysis } from "./gemini.js";
 import { getCached, setCache, getCachedAsync, setFirestoreCache } from "./aiPreloader.js";
 import { getLocalAIStatus } from "./localAI.js";
-import { featureTier, qualityFor } from "./lib/tierQuality.js";
+import { qualityFor } from "./lib/tierQuality.js";
 import { exportPDFReport } from "./lib/pdfReports.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { weekKey } from "./lib/exercisePlanLib.js";
@@ -19,14 +19,10 @@ import { weekKey } from "./lib/exercisePlanLib.js";
 // ── helpers ───────────────────────────────────────────────────────
 const avg  = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
 const sc   = v => v == null ? "#6b82a6" : v >= 80 ? "#10b981" : v >= 60 ? "#f59e0b" : "#ef4444";
-const grade = (v, ar) => v >= 80 ? (ar ? "ممتاز" : "Excellent") : v >= 60 ? (ar ? "جيد" : "Good") : (ar ? "يحتاج تحسين" : "Needs Improvement");
 const pct  = (a, b) => (a == null || b == null || !b) ? "—" : `${a >= b ? "+" : ""}${Math.round(((a - b) / b) * 100)}%`;
 const fmt  = d => { try { return new Date(d?.toDate?.() || d).toLocaleDateString(); } catch { return "—"; } };
 // Escapes any string before it's interpolated into the report HTML
 // (profile names, AI-generated text, session fields are all untrusted).
-const escapeHtml = (str) => String(str ?? "").replace(/[&<>"']/g, c => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[c]));
 
 async function callGemini(prompt, system, maxTokens = 1200) {
   try {

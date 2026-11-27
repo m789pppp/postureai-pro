@@ -2,11 +2,8 @@
  * Posmoz — Admin Dashboard v2
  * Premium redesign: refined dark, clear hierarchy, modern sidebar
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  getAllUsers, getAllPayments, confirmPayment, rejectPayment,
-  updateUserTier, updateUserProfile, getCompany,
-} from "./firebase.js";
+import { useState, useEffect, useCallback } from "react";
+import { getAllUsers, getAllPayments, confirmPayment, rejectPayment, updateUserTier } from "./firebase.js";
 import { apiFetch } from "./services/api.js";
 
 // ── Design tokens ──────────────────────────────────────────────────
@@ -39,7 +36,6 @@ const TOKENS = {
 
 const fmt   = d => d?.toDate?.()?.toLocaleDateString() || d?.split?.("T")[0] || "—";
 const money = n => n ? `${Number(n).toLocaleString()} EGP` : "—";
-const scoreColor = v => v >= 75 ? TOKENS.green : v >= 50 ? TOKENS.amber : TOKENS.red;
 const tierMeta = {
   elite:        { color: TOKENS.purple, bg: TOKENS.purpleBg, label: "Elite" },
   professional: { color: TOKENS.sky,    bg: TOKENS.skyBg,    label: "Pro" },

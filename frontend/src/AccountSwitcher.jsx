@@ -8,16 +8,10 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import {
-  getAuth, signInWithPopup, GoogleAuthProvider,
-  signInWithEmailAndPassword, onAuthStateChanged,
-} from "firebase/auth";
-import { initializeApp, getApps, getApp } from "firebase/app";
-import {
-  getFirestore, collection, query, where, getDocs,
-  setDoc, deleteDoc, doc, serverTimestamp,
-} from "firebase/firestore";
-import { auth, db } from "./firebase.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword } from "firebase/auth";
+import { initializeApp, getApp } from "firebase/app";
+import { collection, query, where, getDocs, setDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { db } from "./firebase.js";
 
 // ── Secondary Firebase App (for signing in linked accounts without touching primary auth)
 const FB_CONFIG = {

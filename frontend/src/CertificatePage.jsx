@@ -160,9 +160,12 @@ export async function generateCertPDF({ cert_id, name, company_name, type, issue
 // ── PUBLIC VERIFY PAGE ───────────────────────────────────────────
 export function CertVerifyPage({ certId: propCertId }) {
   const certId = propCertId || window.location.pathname.split("/verify/")[1];
+  // Was read below without ever being defined: a valid certificate threw a
+  // ReferenceError instead of rendering. Same source main.jsx uses for the 404 page.
+  const isAr = (() => { try { return localStorage.getItem("lang") === "ar"; } catch { return false; } })();
   const [data, setData]     = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState(null);
+  const [, setError]   = useState(null);
 
   useEffect(() => {
     if (!certId) { setError("No certificate ID"); setLoading(false); return; }
@@ -251,11 +254,11 @@ export function CertVerifyPage({ certId: propCertId }) {
 export function CertBadgeModal({ profile, cs, isAr, onClose, addToast }) {
   useBodyScrollLock();
   const [step, setStep]       = useState("info"); // info | paying | done
-  const [certData, setCertData] = useState(null);
+  const [, setCertData] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
   const hasCert = !!profile?.has_cert;
-  const type    = "individual"; // only individual for now; company via sales
+   // only individual for now; company via sales
   const price   = isAr ? `${CERT_PRICE_EGP} جنيه` : `${CERT_PRICE_EGP} EGP`;
 
   // If already has cert, fetch it

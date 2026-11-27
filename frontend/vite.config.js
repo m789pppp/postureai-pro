@@ -187,9 +187,7 @@ export default defineConfig({
 
           // ── 5. Marketing / standalone pages ───────────────────────
           if (id.includes('/src/LandingPageV7') ||
-              id.includes('/src/StandaloneLayout') ||
-              id.includes('/src/sharedTokens') ||
-              id.includes('/src/lpShared'))                       return 'landing';
+              id.includes('/src/StandaloneLayout'))               return 'landing';
           if (id.includes('/src/ProductPage'))                    return 'page-product';
           if (id.includes('/src/SolutionsPage'))                  return 'page-solutions';
           if (id.includes('/src/PricingPageLP'))                  return 'page-pricing';

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY,
-         whatsappActivationLink, activationPromise, activateLabel, openWhatsapp } from "./lib/salesWhatsapp.js";
+import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP_DISPLAY, whatsappActivationLink, activationPromise, activateLabel, openWhatsapp } from "./lib/salesWhatsapp.js";
 
 
 // ═══════════════════════════════════════════════════════════════════
@@ -120,7 +119,6 @@ function PlanCard({ plan, billing, region, onSelect, currentPlan, highlighted, l
         ? (billing==="yearly" ? plan.price.egp_yearly : plan.price.egp_monthly)
         : (billing==="yearly" ? plan.price.usd_yearly : plan.price.usd_monthly))
     : null;
-  const currency  = isEGP ? "EGP" : "$";
   const perMonth  = (billing==="yearly" && price)
     ? (isEGP ? Math.round(price/12) : (price/12).toFixed(2))
     : null;

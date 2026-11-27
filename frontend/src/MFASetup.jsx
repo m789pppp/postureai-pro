@@ -45,7 +45,7 @@ export function MFASetup({ profile, cs, lang, onClose, onEnabled, onProfileChang
   const [mfaEnabled, setMfaEnabled] = useState(!!profile?.mfa_enabled);
   const [mfaMethod,  setMfaMethod]  = useState(profile?.mfa_method||"totp");
   const [secret,     setSecret]    = useState("");
-  const [totpUri,    setTotpUri]   = useState("");
+  const [,    setTotpUri]   = useState("");
   const [backupCodes,setBackupCodes] = useState([]);
   const [copied,     setCopied]    = useState(false);
   const [loadingSetup, setLoadingSetup] = useState(false);

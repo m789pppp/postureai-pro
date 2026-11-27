@@ -195,7 +195,7 @@ function BookingCard({ b, isAr, currentUid, demoMode, onCancel, cancellingId,
                        ratingId, setRatingId, submitReview, submittingReview, cs, tk }) {
   if(!cs||!tk){ cs={card:"#111827",border:"rgba(255,255,255,.07)",inp:"rgba(0,0,0,.3)",inpB:"rgba(255,255,255,.15)",muted:"#64748b",text:"#e2e8f0",bg:"#0a0f1e"}; tk=mkT(cs); }
   const { BORDER, TEXT, MUTED, SUB, CARD } = tk;
-  const card = tk.card; const btnG = tk.btnGh; const lbl = tk.lbl;
+  const card = tk.card; const btnG = tk.btnGh; 
   const [chatOpen, setChatOpen] = useState(false);
   const sc = STATUS_COLORS[b.status] || MUTED;
 
@@ -780,7 +780,7 @@ export function TherapistMarketplace({ cs, t, darkMode, lang="en", user, isAdmin
   const tk = mkT(cs);
   const { BORDER, TEXT, MUTED, SUB, CARD } = tk;
   const card = tk.card; const lbl = tk.lbl; const inp = tk.inp;
-  const btnP = tk.btnP; const btnG = tk.btnGh;
+  const btnP = tk.btnP; 
   const [tab, setTab]               = useState("browse");
   const [therapists, setTherapists] = useState([]);
   const [loading, setLoading]       = useState(true);

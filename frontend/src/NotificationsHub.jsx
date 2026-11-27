@@ -2,13 +2,10 @@
  * Posmoz — Notifications & Integrations Hub v3.0
  * Real-time Firestore · Smart Queue · Slack/Teams/Jira · AI Alerts
  */
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { geminiAnalysis } from "./gemini.js";
 import { getAuthToken } from "./firebase.js";
-import {
-  db, doc, getDoc, setDoc, addDoc, updateDoc, collection,
-  query, where, orderBy, limit, onSnapshot, getDocs,
-} from "./firebase.js";
+import { db, doc, getDoc, setDoc, updateDoc, collection, query, orderBy, limit, onSnapshot } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ─────────────────────────────────────────────────────────────

@@ -333,22 +333,12 @@ export const PL = {
  * @param {object} a - {x,y,z}
  * @param {object} b - {x,y,z}
  */
-function vec3(a, b) {
-  return { x: b.x - a.x, y: b.y - a.y, z: (b.z ?? 0) - (a.z ?? 0) };
-}
 
-function dot3(u, v) { return u.x*v.x + u.y*v.y + u.z*v.z; }
-function mag3(v)    { return Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z); }
 
 /**
  * Angle between two 3D vectors in degrees.
  * Uses dot product formula — accurate regardless of coordinate plane.
  */
-function angleBetween3D(u, v) {
-  const m = mag3(u) * mag3(v);
-  if (m < 1e-6) return 0;
-  return Math.acos(Math.max(-1, Math.min(1, dot3(u, v) / m))) * 180 / Math.PI;
-}
 
 /**
  * Vertical deviation angle of a vector from the Y-axis (degrees).
@@ -1789,7 +1779,6 @@ function analyzeRoundedShoulders(lms, prop, H, calib = null, trunkFlexDeg = 0) {
   // with a constant "severe rounded shoulders" alert for everyone.
   const midEarYpx = ((g(PL.L_EAR).y + g(PL.R_EAR).y) / 2) * H;
   const midShYpx  = prop.midSh.y; // already in pixels
-  const elevRatio = (midShYpx - midEarYpx) / Math.max(prop.shWidthPx, 1);
 
   // Neutral ear-to-shoulder ratio is ANATOMY-dependent (neck length): a
   // naturally short-necked user has a lower ratio and would read as
@@ -2098,7 +2087,6 @@ function analyzeFHP(lms, W, H, prop) {
   // Kept for the reliability/diagnostics path below — the lateral component is
   // no longer part of the FHP figure, but knowing it was large is useful when
   // deciding whether this reading is trustworthy.
-  const lateralPx    = Math.abs(midEarX - prop.midSh.x);
 
   // Clinically correct extra neck load — Hansraj (2014) Surgical Technology International
   const HEAD_WEIGHT_KG   = 4.5;

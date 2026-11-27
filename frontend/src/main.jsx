@@ -144,12 +144,6 @@ if ("Notification" in window && Notification.permission === "default") {
 const path = window.location.pathname;
 
 // ── Preload hints for faster navigation ──────────────────────────
-function preloadChunk(href) {
-  const link = document.createElement('link');
-  link.rel = 'modulepreload';
-  link.href = href;
-  document.head.appendChild(link);
-}
 
 // Prefetch firebase-auth on all pages (always needed after login)
 // Use requestIdleCallback to not block initial render
@@ -365,4 +359,19 @@ if (CRISP_ID && typeof window !== "undefined") {
       ["streak",    user.streak || 0],
     ]]]);
   };
+}
+
+// ── Cookie consent banner ─────────────────────────────────────────
+// The banner existed and analytics above waits for its answer, but nothing ever
+// rendered it, so the question was never asked. It gets its own root so every
+// entry point (landing, app, standalone pages, shared reports) shows it once.
+// Not inside an iframe: the embed widget runs on other people's sites.
+if (typeof window !== "undefined" && window.self === window.top) {
+  import("./LegalCompliance.jsx").then(({ CookieConsent }) => {
+    if (!CookieConsent || document.getElementById("cookie-consent-root")) return;
+    const el = document.createElement("div");
+    el.id = "cookie-consent-root";
+    document.body.appendChild(el);
+    createRoot(el).render(<CookieConsent />);
+  }).catch(() => {});
 }

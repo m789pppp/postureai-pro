@@ -8,7 +8,7 @@
  * 2. HabitScoreCard     — consistency score (not accuracy)
  * 3. WhatsAppReminder   — session reminder via WhatsApp
  */
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import { updateUserProfile, getAuthToken } from "./firebase.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
 

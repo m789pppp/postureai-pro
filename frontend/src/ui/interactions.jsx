@@ -261,7 +261,6 @@ export function SuccessCheck({ show, size = 64, message, isAr }) {
 // ── ANIMATED COUNTER ──────────────────────────────────────────────
 export function AnimatedNumber({ value, duration = 800, suffix = "", prefix = "", style = {} }) {
   const [displayed, setDisplayed] = useState(0);
-  const start = useRef(null);
   const prev  = useRef(0);
 
   useEffect(() => {

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from "react";
 import { db } from "./firebase.js";
-import { collection, getDocs, query, where, orderBy, limit, doc, updateDoc, setDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, doc, updateDoc, setDoc } from "firebase/firestore";
 import { apiFetch } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 

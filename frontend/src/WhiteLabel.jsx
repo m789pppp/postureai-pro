@@ -68,7 +68,7 @@ export function WhiteLabel({ profile, cs, lang, onClose }) {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [previewMode, setPreviewMode] = useState(false);
 
   useEffect(() => {

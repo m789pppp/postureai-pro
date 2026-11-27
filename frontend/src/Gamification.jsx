@@ -1,11 +1,9 @@
-import { API_BASE_URL } from "./config/api.js";
 import { useState, useEffect, useCallback } from "react";
 
 import { apiFetch } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { StreakFreezeButton } from "./BasicFeatures.jsx";
-const API = API_BASE_URL;
 
 // ── Client-side gamification fallback ─────────────────────────────
 // Mirrors the Python backend's /api/gamification/compute logic so that

@@ -26,7 +26,7 @@ export function ContactModal({ cs, isAr = false, supportEmail = "m789pppp@gmail.
   const [message, setMessage] = useState("");
   const [website, setWebsite] = useState(""); // honeypot
   const [status, setStatus] = useState("idle"); // idle | sending | sent | error
-  const [errMsg, setErrMsg] = useState("");
+  const [, setErrMsg] = useState("");
 
   const bg = cs?.card || "#0b1420";
   const border = cs?.border || "rgba(148,163,184,.15)";

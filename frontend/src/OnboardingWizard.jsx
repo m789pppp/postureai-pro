@@ -89,28 +89,6 @@ function ProgressBar({ value, max = 100, color = "#1a56db", h = 5 }) {
   );
 }
 
-function Ring({ score, size = 70, sw = 7 }) {
-  const r = (size / 2) - sw, c = 2 * Math.PI * r;
-  const pct = Math.max(0, Math.min(100, Number(score) || 0));
-  const dash = (pct / 100) * c, col = sc(pct);
-  return (
-    <div style={{ position: "relative", width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(148,163,184,.1)" strokeWidth={sw} />
-        {/* A round line cap on a zero-length dash still paints a dot — see
-            the same fix in HomePage's Ring and ui/index.jsx's. */}
-        {pct > 0 && (
-          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={col} strokeWidth={sw}
-            strokeDasharray={`${dash} ${c}`} strokeLinecap="round"
-            style={{ transition: "stroke-dasharray 700ms cubic-bezier(.4,0,.2,1)" }} />
-        )}
-      </svg>
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontFamily: SYNE, fontSize: size > 60 ? 18 : 14, fontWeight: 800, color: col, lineHeight: 1 }}>{score}</span>
-      </div>
-    </div>
-  );
-}
 
 function Input({ label, value, onChange, placeholder, type = "text", hint }) {
   const [foc, setFoc] = useState(false);
@@ -384,7 +362,6 @@ function StepDevice({ isAr, profile, setProfile, onNext, onBack }) {
   const [mode] = useState("laptop"); // fixed — Phone/Side removed app-wide
   const [cameraOk, setCameraOk] = useState(null);
   const [checking, setChecking] = useState(false);
-  const videoRef = useRef(null);
 
   const checkCamera = async () => {
     setChecking(true);
@@ -929,7 +906,7 @@ function StepIntegrations({ isAr, profile, setProfile, onNext, onBack }) {
 /* ── Step 7: All set! ────────────────────────────────────────────── */
 function StepFinish({ isAr, profile, onComplete }) {
   const [confetti, setConfetti] = useState(false);
-  const [count, setCount] = useState(0);
+  const [, setCount] = useState(0);
   const firstName = profile.name?.split(" ")[0] || (isAr ? "أنت" : "you");
 
   useEffect(() => {

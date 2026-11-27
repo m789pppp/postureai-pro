@@ -3,10 +3,10 @@
  * Complete rewrite: proper role separation, working tools, real data, tier gates
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { LegalFooter } from "./LegalCompliance.jsx";
 import { createPortal } from "react-dom";
-import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, deleteAuthUser, logOut } from "./firebase.js";
+import { getUserSessions, getAllUsers, updateUserProfile, auth, deleteSession, getAuthToken, logOut } from "./firebase.js";
 import { useUnreadNotificationsCount } from "./NotificationsHub.jsx";
-import { API_BASE_URL } from "./config/api.js";
 import { updateProfile as fbUpdateProfile } from "firebase/auth";
 import { tierAtLeast, featureTier } from "./lib/tierQuality.js";
 import { enablePushNotifications, disablePushNotifications, isPushEnabled } from "./push.js";
@@ -14,7 +14,7 @@ import { PushAPI, dispatchNotification, FeatureFlagsAPI, BillingAPI, FamilyAPI }
 // Lifted into its own module so the LIVE page can render the same controls
 // inline — see VoiceCoachSettings.jsx.
 import VoiceCoachSettings from "./VoiceCoachSettings.jsx";
-import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, PainAreaSelfReport, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
+import { SessionUsageBar, DemoSessionModal, UpgradeTeaser, FirstSessionBadge, FREE_MONTHLY_SESSION_LIMIT } from "./FreeTierGrowth.jsx";
 import { StressCheckIn, StressCorrelationCard } from "./StressPosture.jsx";
 import { BasicDashboard, WhatsAppReminder } from "./BasicFeatures.jsx";
 // One icon language for the whole product. The sidebar was built out of emoji
@@ -1882,7 +1882,8 @@ function AddPasswordForm({ user, isAr, cs, addToast, onSuccess }) {
 
 function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOut, tier, onBilling,
   onBillingHistory, onReferral, onIntegrations, onNotifications, onMFA, onChangePassword, onHelp,
-  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount, onDevPortal, onInsurance, setShowCertModal }) {
+  lang, setLang, darkMode, setDarkMode, AccountSwitcher, onSwitchAccount, onDevPortal, onInsurance, setShowCertModal,
+  onRevokeCameraConsent }) {
   const [name,    setName]    = useState("");
   const [saving,  setSaving]  = useState(false);
   // Was document.querySelector('input[type=file]') — grabs the FIRST file
@@ -2759,7 +2760,7 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                     {isAr?"تسجيل الخروج":"Sign Out"}
                   </div>
                   <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
-                    {isAr?"تسجيل الخروج من جميع الأجهزة":"Sign out from all devices"}
+                    {isAr?"تسجيل الخروج من الجهاز ده":"Sign out on this device"}
                   </div>
                 </div>
               </div>
@@ -2770,6 +2771,32 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
                 {isAr?"خروج":"Sign Out"}
               </button>
             </div>
+
+            {/* Withdraw camera consent. The consent dialog promises this is
+                possible "at any time in Settings"; this is that control. */}
+            {onRevokeCameraConsent && (
+            <div style={{ padding:"14px 16px", background:cs.card||"rgba(255,255,255,.02)",
+              borderRadius:10, border:`1px solid ${cs.border}`, marginBottom:12,
+              display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <span style={{ display:"inline-flex", alignItems:"center", flexShrink:0 }}><NavIcon name="camera" size={20} color="#f59e0b"/></span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:cs.text }}>
+                    {isAr?"موافقة الكاميرا":"Camera consent"}
+                  </div>
+                  <div style={{ fontSize:11, color:cs.muted, marginTop:2 }}>
+                    {isAr?"اسحب الموافقة. هنطلبها منك تاني قبل أي جلسة جديدة.":"Withdraw it. We will ask again before your next session."}
+                  </div>
+                </div>
+              </div>
+              <button onClick={()=>onRevokeCameraConsent()}
+                style={{ padding:"7px 14px", background:"rgba(245,158,11,.12)",
+                  border:"1px solid rgba(245,158,11,.25)", borderRadius:7,
+                  color:"#f59e0b", fontSize:12, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
+                {isAr?"سحب الموافقة":"Withdraw"}
+              </button>
+            </div>
+            )}
 
             {/* Export my data — GDPR right of access. Sits directly above
                 erasure because they are the same pair of rights and a user
@@ -2874,6 +2901,10 @@ function PanelSettings({ user, profile, setProfile, cs, isAr, addToast, onSignOu
         </div>
       )}
 
+      {/* Terms, privacy, refund and DPA, reachable from inside the app. */}
+      <div style={{ marginTop:16 }}>
+        <LegalFooter cs={cs} />
+      </div>
     </div>
   );
 }
@@ -2883,7 +2914,7 @@ function PushNotificationSettings({ cs, isAr, addToast }) {
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy]       = useState(false);
   const [prefs, setPrefsState] = useState(null);       // {categories, preferred_hour, computed_hour}
-  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [, setSavingPrefs] = useState(false);
 
   useEffect(() => {
     setEnabled(isPushEnabled());
@@ -3258,7 +3289,7 @@ function VoiceCoachUpsell({ cs, isAr, onUpgrade }) {
 
 // SIDEBAR (desktop)
 // ══════════════════════════════════════════════════════════════════
-function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamera,
+function Sidebar({ userRole, tab, setTab, profile, isAr, cs, setPage, startCamera, setShowAdmin,
   logOut, setUser, setProfile, isAdmin, darkMode, setDarkMode, setLang, lang, tier, atRisk,
   user, userSessions, setUserSessions, getAllUsers, setAllUsers,
   setShowCoach, setShowBilling, setShowGamification, setShowGrowthHub, setShowSecurityCenter,
@@ -3789,7 +3820,7 @@ export default function HomePage({
   user, profile, setProfile, cs, lang, isAr, dir,
   userSessions, sessionsLoading, setUserSessions, allUsers, setAllUsers,
   tier, setTier, mode, setMode,
-  setPage, startCamera, addToast, goToBreak,
+  setPage, startCamera, addToast, goToBreak, onRevokeCameraConsent,
   setShowCoach, setShowBilling, setShowCompanyOnboard,
   setShowDashboard, setShowWorkforceAnalytics, setShowAIReports,
   setShowCalibWizard, setShowGamification,
@@ -3919,7 +3950,8 @@ export default function HomePage({
       onChangePassword={()=>setShowChangePw?.(true)}
       lang={lang} setLang={setLang} darkMode={darkMode} setDarkMode={setDarkMode}
       AccountSwitcher={AccountSwitcher} onSwitchAccount={onSwitchAccount}
-      onDevPortal={onDevPortal} onInsurance={onInsurance} setShowCertModal={setShowCertModal}/>
+      onDevPortal={onDevPortal} onInsurance={onInsurance} setShowCertModal={setShowCertModal}
+      onRevokeCameraConsent={onRevokeCameraConsent}/>
   ) : null;
 
   const content = useMemo(()=>{
@@ -4070,7 +4102,7 @@ export default function HomePage({
       background:cs.bg||"#0d1a2e", color:cs.text||"#f0f6ff",
       fontFamily:"'IBM Plex Sans Arabic',system-ui,-apple-system,'Segoe UI',sans-serif" }}>
 
-      {!mobile && <Sidebar userRole={userRole} tab={tab} setTab={setTab} profile={profile}
+      {!mobile && <Sidebar userRole={userRole} tab={tab} setTab={setTab} profile={profile} setShowAdmin={setShowAdmin}
           isAr={isAr} cs={cs} setPage={setPage} startCamera={startCamera}
           logOut={logOut} setUser={setUser} setProfile={setProfile}
           isAdmin={isAdmin} darkMode={darkMode} setDarkMode={setDarkMode}

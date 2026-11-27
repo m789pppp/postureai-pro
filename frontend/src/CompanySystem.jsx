@@ -2,18 +2,11 @@
  * Posmoz — Multi-Tenant Company System
  * Company onboarding, workspace setup, employee invites
  */
-import { API_BASE_URL } from "./config/api.js";
-import { useState, useEffect, useCallback } from "react";
-import {
-  createCompany, getCompany, updateCompany,
-  getDepartments, createDepartment, deleteDepartment,
-  bulkInviteEmployees, getDepartmentEmployees,
-  updateUserProfile, db,
-} from "./firebase.js";
+import { useState, useEffect } from "react";
+import { createCompany, getCompany, createDepartment, bulkInviteEmployees, db } from "./firebase.js";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
-const API = API_BASE_URL;
 
 // ── Company Setup Wizard ──────────────────────────────────────────
 export function CompanyOnboarding({ profile, cs, lang = "en", onComplete, addToast }) {

@@ -16,7 +16,6 @@ export function DeveloperPortalModal({ profile, cs, isAr, onClose, addToast }) {
   const [tab, setTab]         = useState("overview"); // overview | keys | docs | usage
   const [keys, setKeys]       = useState([]);
   const [creating, setCreating] = useState(false);
-  const [usage, setUsage]     = useState(null);
   const [newKeyPlan, setNewKeyPlan] = useState("basic");
   const [newKeyLabel, setNewKeyLabel] = useState("");
   const [createdKey, setCreatedKey]   = useState(null); // shown once after creation
@@ -38,13 +37,6 @@ export function DeveloperPortalModal({ profile, cs, isAr, onClose, addToast }) {
     } catch {}
   }
 
-  async function fetchUsage(key) {
-    try {
-      const res = await fetch("/api/posture-api/usage", { headers:{"x-api-key": key} });
-      const data = await res.json();
-      if (data.ok) setUsage(data);
-    } catch {}
-  }
 
   useEffect(() => { if (tab === "keys") fetchKeys(); }, [tab]);
 
