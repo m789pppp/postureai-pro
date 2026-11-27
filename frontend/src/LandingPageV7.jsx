@@ -5,7 +5,7 @@
  * Design: Premium dark SaaS, Stripe/Linear/Vercel quality
  * RTL-ready · Mobile-first · Accessibility: WCAG 2.1 AA
  */
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ContactModal } from "./ContactModal.jsx";
 import { LegalModal } from "./LegalCompliance.jsx";
@@ -72,24 +72,36 @@ function HeroReveal({ children, delay = 0, y = 22, style = {}, className }) {
 
 // Stagger container — wraps a group of children so they cascade in
 // one after another on scroll, instead of each needing its own delay.
-function Stagger({ children, gap = 0.08, style = {}, className }) {
+// `revealed`: once a group has played its entrance, children that mount later
+// (the pricing cards swap when Individual/Company changes) must appear at rest.
+// whileInView only fires once, so a card that mounted after it stayed at the
+// "hidden" variant — opacity 0 — until something else re-rendered the group.
+const StaggerRevealed = createContext(false);
+function Stagger({ children, gap = 0.08, style = {}, className, onRevealed }) {
   const reduce = useReducedMotion();
+  const [revealed, setRevealed] = useState(false);
   return (
-    <motion.div
-      className={className}
-      style={style}
-      initial={reduce ? false : "hidden"}
-      whileInView="show"
-      viewport={{ once: true, amount: 0.15 }}
-      variants={{ hidden:{}, show:{ transition:{ staggerChildren: gap } } }}
-    >{children}</motion.div>
+    <StaggerRevealed.Provider value={revealed || !!reduce}>
+      <motion.div
+        className={className}
+        style={style}
+        initial={reduce ? false : "hidden"}
+        whileInView="show"
+        animate={revealed ? "show" : undefined}
+        onViewportEnter={() => { if (!revealed) { setRevealed(true); onRevealed?.(); } }}
+        viewport={{ once: true, amount: 0.15 }}
+        variants={{ hidden:{}, show:{ transition:{ staggerChildren: gap } } }}
+      >{children}</motion.div>
+    </StaggerRevealed.Provider>
   );
 }
 function StaggerItem({ children, y = 24, style = {}, className }) {
+  const revealed = useContext(StaggerRevealed);
   return (
     <motion.div
       className={className}
       style={style}
+      initial={revealed ? false : undefined}
       variants={{ hidden:{ opacity:0, y }, show:{ opacity:1, y:0,
         transition:{ duration:.55, ease:[0.22,1,0.36,1] } } }}
     >{children}</motion.div>
@@ -1823,9 +1835,10 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
     if (modeProp && modeProp !== prevModeProp.current) {
       prevModeProp.current = modeProp;
       setLocalMode(modeProp);
+      setMobileCol(null);
     }
   }, [modeProp]);
-  const switchLocalMode = (m) => { setLocalMode(m); onModeChange?.(m); };
+  const switchLocalMode = (m) => { if (m === localMode) return; setLocalMode(m); setMobileCol(null); onModeChange?.(m); };
 
   const isCompany = localMode === "company";
 
