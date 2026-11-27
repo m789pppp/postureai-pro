@@ -52,7 +52,7 @@
 
 مفيش حاجة اتمسحت في الجرد ده. المسح هيحصل في نفس الـ PR اللي بيربط البديل، علشان منكسرش حاجة.
 
-## 7. حاجات باينة إنها شغالة وهي مش شغالة
+## 5. حاجات باينة إنها شغالة وهي مش شغالة
 
 دي أخطر نوع، لأن الواجهة أو النص بيوعد بحاجة مش موجودة.
 
@@ -66,7 +66,7 @@
 | بيانات demo | firebase.js سطر 934 | `seedDemoUser` بيكتب سيشنات بأرقام عشوائية في Firestore. مش متنادي من أي مكان، بس وجوده خطر | متوسطة (يتمسح) |
 | Onboarding preview | OnboardingWizard.jsx سطر 18 | رسم بأرقام demo ثابتة. لازم يبقى واضح للمستخدم إنه مثال | منخفضة |
 
-## 8. كود مكتوب ومش مستخدم (lint)
+## 6. كود مكتوب ومش مستخدم (lint)
 
 - `postureEngine.js`: الدوال `vec3` و`angleBetween3D`، والمتغيرات `elevRatio` (analyzeRoundedShoulders) و`lateralPx` (analyzeFHP).
 - `PostureCalibration.jsx`: `CALIB_FRAMES` و`frames`، يعني الـ calibration القديم مش بيجمع الفريمات اللي الثوابت بتاعته بتقول عليها.
@@ -77,7 +77,7 @@
 
 الأمر اللي بيطلّع القائمة كاملة: `npx eslint src --ext .js,.jsx` مع قاعدة `no-unused-vars`. الـ `.eslintrc.cjs` الحالي ناقصه plugin الـ react-hooks.
 
-## 5. اللي هيتبني عليه (شغال ومتغطي بـ tests)
+## 7. اللي هيتبني عليه (شغال ومتغطي بـ tests)
 
 - `calibrationCore.js`: One Euro، robust stats، iris distance، head pose من الـ matrix، framing checks.
 - `neckModel.js`: `headProtractionCm`، `neckLoadKg` (Hansraj).
@@ -85,6 +85,6 @@
 - `cameraDrift.js`، `postureState.js` (hysteresis + dwell)، `correction.js`.
 - `measurementContract.js` (جديد): الإطارات والإشارات والوحدات وشكل كل قياس.
 
-## 6. الخطوة الجاية (حد)
+## 8. الخطوة الجاية (حد)
 
 مصدر واحد للقياسات: liveEnhancer يطلع `measurements` بالـ contract، والسكور والـ alerts والـ HUD ياخدوا منه. وبالتوازي الـ AprilTag detection.
