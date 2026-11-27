@@ -4,12 +4,10 @@
  * Tabs: Overview · Usage · Invoices · Plan Change · Analytics (admin)
  */
 import { useState, useEffect, useCallback } from "react";
-import { BillingAPI, PaymentAPI } from "./services/api.js";
+import { BillingAPI } from "./services/api.js";
 import { ONLINE_PAYMENT_LIVE, openWhatsapp, activationPromise, SALES_WHATSAPP_DISPLAY } from "./lib/salesWhatsapp.js";
-import { COLORS as C, TYPE as TY, SPACE as SP, RADIUS as R,
-         GLOBAL_CSS, scoreColor } from "./DesignSystem.js";
-import { Skeleton, Spinner, EmptyState, ErrorState,
-         ProgressBar, Badge, Btn, Divider } from "./ui/index.jsx";
+import { COLORS as C, SPACE as SP, RADIUS as R, GLOBAL_CSS } from "./DesignSystem.js";
+import { Skeleton, EmptyState, ProgressBar, Badge, Btn, Divider } from "./ui/index.jsx";
 
 // ─── tokens ─────────────────────────────────────────────────────
 const TOKENS = {

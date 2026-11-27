@@ -8,7 +8,6 @@ const API = import.meta.env.VITE_API_URL || "/api";
 const OA_TOKENS = { bg:"#030711",card:"#0c1832",border:"rgba(99,102,241,.14)",text:"#e8eeff",
   sub:"#94a3b8",primary:"#6366f1",green:"#10b981",amber:"#f59e0b",red:"#ef4444",muted:"#475569" };
 
-const STEPS = ["welcome","calibration","first_session","invite_team","billing"];
 const STEP_LABELS = {
   welcome:       "Welcome Screen",
   calibration:   "Posture Calibration",

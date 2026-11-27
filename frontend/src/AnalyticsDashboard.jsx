@@ -2,13 +2,11 @@
  * Posmoz — AnalyticsDashboard v3
  * AI Intelligence Layer: Executive Summary · Predictive AI · Fatigue · Reports
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { getUserSessions, getReferralStats } from "./firebase.js";
-import { AIAPI } from "./services/api.js";
 import { COLORS as C, TYPE as TY, RADIUS as R, SPACE as SP,
          scoreColor, scoreGrade, GLOBAL_CSS } from "./DesignSystem.js";
-import { Skeleton, Spinner, EmptyState, ErrorState,
-         ProgressBar, Badge, Btn, Divider } from "./ui/index.jsx";
+import { Skeleton, EmptyState, ProgressBar } from "./ui/index.jsx";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 // ─── helpers ────────────────────────────────────────────────────
@@ -72,83 +70,9 @@ function ScoreLine({ scores, color="#6366f1", h=70 }) {
   );
 }
 
-function HourlyHeatmap({ hourly }) {
-  if (!hourly || !Object.keys(hourly).length) return (
-    <div style={{ fontSize:11, color:TOKENS.muted, padding:"8px 0" }}>No hourly data yet</div>
-  );
-  const hours = Array.from({length:24},(_,i)=>i);
-  const vals  = Object.values(hourly);
-  const max   = Math.max(...vals, 1);
-  return (
-    <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
-      {hours.map(h => {
-        const v = hourly[h];
-        const col = v ? sc(v) : "rgba(255,255,255,.04)";
-        const opacity = v ? .3 + (v/max)*.7 : 1;
-        return (
-          <div key={h} title={v?`${h}:00 — ${v}/100`:`${h}:00 — no data`}
-            style={{ width:26, height:26, borderRadius:5, background:col,
-              opacity, display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:8, color:"rgba(255,255,255,.5)", fontWeight:700 }}>
-            {h}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
-function RiskGauge({ value, label }) {
-  const col = value>=60?TOKENS.red:value>=30?TOKENS.amber:TOKENS.green;
-  const r=28, circ=2*Math.PI*r, dash=circ*(value/100);
-  return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6 }}>
-      <svg width={72} height={72} style={{ transform:"rotate(-90deg)" }}>
-        <circle cx={36} cy={36} r={r} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={6}/>
-        <circle cx={36} cy={36} r={r} fill="none" stroke={col} strokeWidth={6}
-          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
-          style={{ transition:"stroke-dasharray .8s ease" }}/>
-        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
-          style={{ transform:"rotate(90deg)", transformOrigin:"center",
-            fontFamily:TY.fontSans, fontSize:14, fontWeight:800, fill:col }}>
-          {value}
-        </text>
-      </svg>
-      <span style={{ fontSize:10, fontWeight:700, color:col }}>{label}</span>
-    </div>
-  );
-}
 
-function InsightCard({ icon, title, body, priority }) {
-  const colMap = { high:TOKENS.red, medium:TOKENS.amber, low:TOKENS.green };
-  const col = colMap[priority] || TOKENS.blue;
-  return (
-    <div style={{ display:"flex", gap:12, padding:`${SP[3]}px`, background:"rgba(255,255,255,.025)",
-      border:`1px solid rgba(255,255,255,.05)`, borderRadius:R.sm, alignItems:"flex-start",
-      borderLeft:`3px solid ${col}` }}>
-      <span style={{ fontSize:20, flexShrink:0 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize:12, fontWeight:700, color:TOKENS.text, marginBottom:3 }}>{title}</div>
-        <div style={{ fontSize:11, color:TOKENS.muted, lineHeight:1.6 }}>{body}</div>
-      </div>
-      <Badge label={priority||"info"} color={col} bg={`${col}15`}
-        style={{ marginLeft:"auto", flexShrink:0 }}/>
-    </div>
-  );
-}
 
-function ForecastBar({ day, score, confidence }) {
-  const col = sc(score);
-  return (
-    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-      <div style={{ fontSize:10, color:TOKENS.muted, fontFamily:"DM Mono,monospace" }}>{score}</div>
-      <div style={{ width:"100%", borderRadius:"3px 3px 0 0",
-        background:col, opacity:.6+confidence*.004,
-        height:Math.max(4,Math.round(score/100*52)), transition:"height .5s ease" }}/>
-      <div style={{ fontSize:9, color:TOKENS.muted }}>D{day}</div>
-    </div>
-  );
-}
 
 // ─── Main component ───────────────────────────────────────────────
 export function AnalyticsDashboard({ uid, profile, cs, lang="en", onBack, sessions:propSessions }) {

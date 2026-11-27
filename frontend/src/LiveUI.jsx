@@ -404,7 +404,6 @@ export function LiveHeader({
   // is actually wrong. Softened to an "info" tone with a plain-language
   // label and a hover tooltip explaining what it means.
   const mpTone = mpStatus === "ready" ? "good" : mpStatus === "loading" ? "info" : "bad";
-  const mpIcon = mpTone === "good" ? "checkCircle" : mpTone === "bad" ? "alertTriangle" : "infoCircle";
   const mpLabel = { ready: isAr ? "جاهز" : "Ready", loading: isAr ? "تحميل" : "Loading", fallback: isAr ? "غير متاح" : "Unavailable", error: isAr ? "خطأ" : "Error" }[mpStatus] || mpStatus;
   const mpTitle = mpStatus === "fallback" ? (isAr ? "التحليل مش قادر يشتغل على الجهاز ده، وصور الكاميرا مش بتتبعت لأي سيرفر." : "Analysis can't run on this device, and camera images are never sent to a server.") : undefined;
   const coachTone = aiCoachStatus?.error ? "bad" : aiCoachStatus?.ready ? "good" : "info";

@@ -9,22 +9,10 @@ if (typeof window !== 'undefined') {
   });
 }
 import React, { lazy, Suspense, useState, useEffect, useRef, useCallback, startTransition } from "react";
-import { API_BASE_URL, apiHealthCheck } from "./config/api.js";
+import { API_BASE_URL } from "./config/api.js";
 import { CAMERA_VERSION, consentDocPath, makeConsentGrant, hasCurrentConsent } from "./lib/consent.js";
 import { decimate, sessionTrend, NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
-import {
-  auth, db, signInGoogle, getGoogleRedirectResult, signInEmail, signUpEmail, logOut, resetPassword,
-  onAuthStateChanged, createUserProfile, getUserProfile,
-  updateUserTier, saveSession, recordPayment, confirmPayment,
-  rejectPayment, listenToPayment, getAllPayments, getAllUsers,
-  isHREmail, isCompanyDomain, isAutoApproveEmail,
-  SUPPORT_EMAIL, ADMIN_PHONE,
-  AUTO_APPROVE_DOMAIN, serverTimestamp,
-  notifyPaymentPending, notifyPaymentConfirmed,
-  getCompany, createCompany, getUserSessions, onUserSessions, onUserProfile, updateUserProfile,
-  checkAndDowngradeTrial, completeOnboardingStep, getReferralStats, checkAndSendNurtureEmails,
-  doc, updateDoc, getDoc, setDoc,
-} from "./firebase.js";
+import { auth, db, getGoogleRedirectResult, logOut, onAuthStateChanged, createUserProfile, getUserProfile, updateUserTier, saveSession, confirmPayment, rejectPayment, getAllPayments, getAllUsers, serverTimestamp, getUserSessions, onUserSessions, onUserProfile, updateUserProfile, checkAndDowngradeTrial, completeOnboardingStep, checkAndSendNurtureEmails, doc, updateDoc, getDoc, setDoc } from "./firebase.js";
 import { HRPanel } from "./HRPanel.jsx";
 const TherapistMarketplace = lazy(()=>import("./TherapistMarketplace.jsx").then(m=>({default:m.TherapistMarketplace})));
 const SymptomCorrelation = lazy(()=>import("./SymptomCorrelation.jsx").then(m=>({default:m.SymptomCorrelation})));
@@ -33,22 +21,17 @@ import { CalibrationWizard, useCalibration } from "./PostureCalibration.jsx";
 import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
-import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
+import { NotificationsHub } from "./NotificationsHub.jsx";
 import { OnboardingWizard } from "./OnboardingWizard.jsx";
 const GamificationPanel = lazy(()=>import("./Gamification.jsx").then(m=>({default:m.GamificationPanel})));
-import { BillingModal, PLANS } from "./Billing.jsx";
-import { AnalysisAPI, ReportAPI, EmailAPI, EnterpriseAPI, AdminAPI, AIAPI, PaymentAPI, NotifyAPI, FamilyAPI, apiFetch } from "./services/api.js";
+import { BillingModal } from "./Billing.jsx";
+import { AnalysisAPI, EmailAPI, PaymentAPI, FamilyAPI, apiFetch } from "./services/api.js";
 import { geminiAnalysis as _aiAnalysis } from "./gemini.js";
 import { getLocalAIStatus, onLocalAIStatus } from "./localAI.js";
-import { useToasts, useOnline, useKeyboardShortcut } from "./hooks/index.js";
-import { Toasts, Ring, MetRow, Skeleton, TierBadge, EmptyState, Btn, BarChart, OfflineBanner, SessionDetailModal, ModalPortal } from "./ui/index.jsx";
-import {
-  LT, Icon, IconBtn, Btn as LiveBtn, StatusPill, SectionCard, StatTile, MetricRow,
-  LiveHeader, ScoreGauge, AICoachCard, CameraFrame, CameraOverlay, OverlayCard, StartingRing,
-  CountdownRing, GuidanceHint, useLiveUICSS, fmtTime, scoreTierColor, alpha as liveAlpha,
-  Switch, SettingsRow, SettingsDivider,
-} from "./LiveUI.jsx";
-import { gradeScore, gradeScoreAr, gradeContext, scoreColor, playBeep, playBreakChime, primeAudio, sendDesktopNotif, requestNotificationPermission, notificationState, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
+import { useToasts, useOnline } from "./hooks/index.js";
+import { Toasts, EmptyState, Btn, BarChart, OfflineBanner, ModalPortal } from "./ui/index.jsx";
+import { LT, Icon, Btn as LiveBtn, SectionCard, StatTile, LiveHeader, ScoreGauge, AICoachCard, CameraOverlay, StartingRing, CountdownRing, GuidanceHint, useLiveUICSS, fmtTime, scoreTierColor, alpha as liveAlpha, Switch, SettingsRow, SettingsDivider } from "./LiveUI.jsx";
+import { gradeScore, gradeScoreAr, gradeContext, playBeep, playBreakChime, primeAudio, sendDesktopNotif, requestNotificationPermission, notificationState, MODES, analyzeMP as _engAnalyzeMP, createLandmarkSmoother, createFrameBuffer, createDistanceSmoother, resetProportions } from "./features/analysis/postureEngine.js";
 import { speakCoach, setVoiceCoachEnabled, stopSpeaking, isVoiceCoachEnabled, primeSpeech, hasVoiceFor, resetSpeechCooldown } from "./lib/voiceCoach.js";
 // Rendered inline in the Live session-settings panel (and, as a full card, on
 // the account settings page) so the coach's accent/voice/speed are reachable
@@ -68,9 +51,8 @@ import { tierAtLeast, qualityFor } from "./lib/tierQuality.js";
 import { EnterpriseAdminTools }from "./EnterpriseAdminTools.jsx";
 import LandingPageV7 from "./LandingPageV7.jsx";
 import { DemoWelcome, DemoDashboard, clearDemoOnExit } from "./DemoModeUI.jsx";
-import { saveDemoSession } from "./DemoMode.js";
 const Landing = LandingPageV7; // alias so <Landing> works
-import { CompanyOnboarding, CompanyBar, useCompany } from "./CompanySystem.jsx";
+import { CompanyOnboarding, useCompany } from "./CompanySystem.jsx";
 import { handleSSORedirect } from "./EnterpriseSSO.jsx";
 // initSentry moved to sentry.js (V12)
 const CertBadgeModal = lazy(()=>import("./CertificatePage.jsx").then(m=>({default:m.CertBadgeModal})));
@@ -89,18 +71,15 @@ import { drawFaceBlur } from "./lib/faceBlur.js";
 import AccountSwitcher from "./AccountSwitcher.jsx";
 import PricingPage from "./PricingPage.jsx";
 import InviteAccept from "./InviteAccept.jsx";
-import { NotFound } from "./ErrorPage.jsx";
 import SessionComparison from "./SessionComparison.jsx";
 import TrendChart from "./TrendChart.jsx";
 import { ShareCard }        from "./ShareCard.jsx";
-import { CookieConsent, LegalFooter } from "./LegalCompliance.jsx";
 import { QAAccuracyTest } from "./QAAccuracyTest.jsx";
-import { ProductTour, TourTrigger } from "./ProductTour.jsx";
+import { ProductTour } from "./ProductTour.jsx";
 import AnnouncementsBar    from "./AnnouncementsBar.jsx";
 import SecurityCenter       from "./SecurityCenter.jsx";
 import FeatureFlags         from "./FeatureFlags.jsx";
 import OnboardingAnalytics  from "./OnboardingAnalytics.jsx";
-import { initSentry, identifyUser, captureError } from "./sentry.js";
 import { AccountActivity } from "./AccountActivity.jsx";
 // ── Merged from v13 & v18 ─────────────────────────────────────────
 import { HelpCenter }     from "./HelpCenter.jsx";
@@ -128,7 +107,7 @@ const TR = {
 // Annual = 20% discount (2 months free) — applied at checkout, not stored here
 // ══════════════════════════════════════════════════════════════════
 const ALLOW_FRAME_UPLOAD = false; // Camera images stay on the device. Guarded by claims.test.mjs.
-const COUPONS = {}; // Coupons validated server-side via /api/coupon/validate
+ // Coupons validated server-side via /api/coupon/validate
 
 // ── B2C Pricing (Egypt + Gulf) ────────────────────────────────────
 // Egypt: Kashier in EGP | Gulf/Global: Stripe in USD
@@ -250,21 +229,10 @@ for(const k in B2B_TIERS){
 }
 
 // Helper: is this a B2B tier ID?
-const isB2BTier = (id) => id && id.startsWith("b2b_");
 // Helper: is this a B2C tier ID?
-const isB2CTier = (id) => id && !id.startsWith("b2b_");
 
 // ── Currency-aware price getter ──────────────────────────────────
 // region: "EG" → EGP, anything else (Gulf/intl) → USD
-function getTierPrice(tierId, period="monthly", region="EG"){
-  const t = TIERS[tierId];
-  if(!t) return null;
-  const currency = region==="EG" ? "egp" : "usd";
-  return t[`price_${currency}_${period}`];
-}
-function getCurrencySymbol(region="EG"){
-  return region==="EG" ? "EGP" : "USD";
-}
 
 // ── Tier ID normaliser ──────────────────────────────────────────────
 const TIER_NORMALIZE={
@@ -283,18 +251,6 @@ const TIER_NORMALIZE={
 const normalizeTier=(t)=>{const k=String(t||"").toLowerCase().trim();return TIER_NORMALIZE[k]||k||"standard";};
 
 // ── Payment Methods — Kashier ─────────────────────────────────────
-const PAY_METHODS = [
-  {id:"visa_card",   name:"Visa / Mastercard", nameAr:"فيزا / ماستركارد",
-   icon:"💳", color:"#1a56db", instant:true,
-   desc:"Activated immediately after payment",
-   descAr:"يُفعَّل الاشتراك فور الدفع",
-   type:"card"},
-  {id:"vodafone_cash", name:"Vodafone Cash",  nameAr:"Vodafone Cash",
-   icon:"📱", color:"#e4002b", instant:true,
-   desc:"Pay via Kashier Vodafone Cash wallet",
-   descAr:"ادفع عبر Vodafone Cash بـ Kashier",
-   type:"wallet"},
-];
 
 // Personal/individual users share the same TIERS pricing as companies —
 // acct_type ("individual" vs "company") determines seat count display only.
@@ -324,7 +280,6 @@ const LIGHT = {bg:"#f1f5f9",card:"#ffffff",card2:"#f8fafc",border:"rgba(100,116,
 // ── Helpers ───────────────────────────────────────────────────────
 const sc    = v => v>=70?"#4FAE8E":v>=55?"#D6A24C":"#C6604F"; // aligned to gradeScore's tier boundaries (85/70/55/40) — see postureEngine.js
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
-const LM = {NOSE:0,L_EYE:2,R_EYE:5,L_EAR:7,R_EAR:8,L_SHOULDER:11,R_SHOULDER:12,L_HIP:23,R_HIP:24,L_KNEE:25,R_KNEE:26,L_ANKLE:27,R_ANKLE:28};
 // ── API wrappers (use service layer with auth) ────────────────────
 async function askGemini(prompt){
   try{
@@ -333,31 +288,6 @@ async function askGemini(prompt){
   }catch{return null;}
 }
 
-async function initKashier({tier,user_email,user_name,billing,uid="",coupon_code,discount_code,discount_pct=0}){
-  try{
-    const {getAuthToken} = await import("./firebase.js");
-    const tok = await getAuthToken().catch(()=>null);
-    const r = await fetch("/api/kashier/create-order",{
-      method:"POST",
-      headers:{"Content-Type":"application/json",...(tok?{Authorization:"Bearer "+tok}:{})},
-      body:JSON.stringify({
-        tier, billing, uid,
-        coupon_code: coupon_code||undefined,
-        discount_code: discount_code||undefined,
-        discount_pct: discount_pct||0,
-        billing_data:{
-          email:user_email,
-          first_name:user_name?.split(" ")[0]||"Customer",
-          last_name:user_name?.split(" ").slice(1).join(" ")||"",
-        }
-      })
-    });
-    const d = await r.json();
-    if(d?.redirect_url) return{type:"redirect",url:d.redirect_url,creditApplied:d.credit_applied_egp||0};
-    if(d?.error) console.error("Kashier error:",d.error);
-  }catch(e){console.error("Kashier:",e);}
-  return null;
-}
 
 // ── Local MediaPipe analysis (adapters for postureEngine result shape) ────
 function analyzeMP(lms,W,H,mode,distCalibFactor,sessionStartMs,calibKnownDistCm,calib){
@@ -572,19 +502,6 @@ const METRIC_LABEL_AR = {
   monitor_height:      "ارتفاع الشاشة",
   torso_flexion:       "انحناء الجذع للأمام",
   trunk_rotation:      "التفاف الجذع",
-};
-const CONDITION_NAME_AR = {
-  "Neck Lean":          "ميل الرقبة",
-  "Forward Head":       "بروز الرأس للأمام",
-  "Head Tilt":          "ميل الرأس",
-  "Shoulder Imbalance": "عدم توازن الكتفين",
-  "Rounded Shoulders":  "انحناء الكتفين",
-  "Spine Lean":         "ميل العمود الفقري",
-  "Shoulder Elevation": "ارتفاع الكتفين",
-  "Monitor/Gaze Angle": "زاوية الشاشة/النظر",
-  "Hand/Chin Prop":     "إسناد اليد على الذقن",
-  "Forward Slouch":     "انحناء للأمام",
-  "Trunk Rotation":     "التفاف الجذع",
 };
 
 // Pick the single most actionable correction cue from the current analysis —
@@ -918,385 +835,13 @@ function _roundRect(ctx,x,y,w,h,r){
 
 
 // ── Onboarding Tour ───────────────────────────────────────────────
-function Onboard({cs,t,done}){
-  const[step,setStep]=useState(0);
-  const steps=[{e:"◈",ti:t.ob1,d:t.ob1d},{e:"📊",ti:t.ob2,d:t.ob2d},{e:"📷",ti:t.ob3,d:t.ob3d},{e:"🚀",ti:t.ob4,d:t.ob4d}];
-  const s=steps[step];
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.50)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:8888}}>
-    <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:20,padding:36,maxWidth:400,width:"90%",textAlign:"center"}}>
-      <div style={{fontSize:48,marginBottom:14}}>{s.e}</div>
-      <div style={{fontSize:17,fontWeight:700,color:cs.text,marginBottom:10}}>{s.ti}</div>
-      <div style={{fontSize:13,color:cs.muted,lineHeight:1.7,marginBottom:24}}>{s.d}</div>
-      <div style={{display:"flex",justifyContent:"center",gap:6,marginBottom:22}}>
-        {steps.map((_,i)=><div key={i} style={{width:i===step?20:7,height:7,borderRadius:99,background:i===step?"#1a56db":"rgba(148,163,184,.2)",transition:"all .3s"}}/>)}
-      </div>
-      <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-        <button onClick={done} style={{background:"none",border:`0.5px solid ${cs.border}`,borderRadius:9,padding:"9px 18px",fontSize:12,color:cs.muted,cursor:"pointer"}}>{t.skip}</button>
-        {step<steps.length-1?<Btn cs={cs} onClick={()=>setStep(step+1)}>{t.next}</Btn>:<Btn cs={cs} onClick={done}>{t.finish}</Btn>}
-      </div>
-    </div>
-  </div>;
-}
 
 
 // ── Auth ──────────────────────────────────────────────────────────
-function Auth({cs,t,darkMode,setDarkMode,lang,setLang,onAuth}){
-  const[tab,setTab]=useState("login");
-  const[email,setEmail]=useState(""),[pass,setPass]=useState("");
-  const[name,setName]=useState(""),[company,setCompany]=useState("");
-  const[loading,setLoading]=useState(false),[err,setErr]=useState("");
-  const[resetSent,setResetSent]=useState(false);
-  const[showPass,setShowPass]=useState(false);
-  const[passStrength,setPassStrength]=useState(0);
-  const isAr=lang==="ar";
-  const isAuto=isAutoApproveEmail(email);
-  const dir=isAr?"rtl":"ltr";
-  const inp={width:"100%",background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:9,padding:"11px 14px",fontSize:13,color:cs.text,outline:"none",boxSizing:"border-box",marginBottom:10,direction:dir};
-
-  // password strength
-  function calcStrength(p){
-    let s=0;
-    if(p.length>=6)s++;if(p.length>=10)s++;
-    if(/[A-Z]/.test(p))s++;if(/[0-9]/.test(p))s++;if(/[^A-Za-z0-9]/.test(p))s++;
-    return s;
-  }
-  function onPassChange(v){setPass(v);if(tab==="signup")setPassStrength(calcStrength(v));}
-
-  const strengthColor=["#C6604F","#D6A24C","#D6A24C","#4FAE8E","#4FAE8E"][passStrength]||"#C6604F";
-  const strengthLabel=isAr
-    ?["ضعيفة جداً","ضعيفة","مقبولة","قوية","قوية جداً"][Math.min(passStrength,4)]
-    :["Very weak","Weak","Fair","Strong","Very strong"][Math.min(passStrength,4)];
-
-  function humanErr(msg){
-    // Firebase can return errors as: "Firebase: Error (auth/code)." or just the code
-    const code = (msg||"").match(/\(auth\/([^)]+)\)/)?.[1]
-               || (msg||"").replace(/^auth\//,"")
-               || msg || "";
-    const map={
-      "wrong-password":                         isAr?"كلمة المرور غلط":"Wrong password",
-      "invalid-credential":                     isAr?"البريد أو كلمة المرور غلط":"Invalid email or password",
-      "user-not-found":                         isAr?"مفيش حساب — سجّل حساب جديد":"No account found — please sign up",
-      "email-already-in-use":                   isAr?"البريد مسجّل — سجّل دخول":"Email already registered — sign in",
-      "weak-password":                          isAr?"كلمة المرور ضعيفة — 6 أحرف على الأقل":"Password too weak — 6+ chars",
-      "too-many-requests":                      isAr?"محاولات كتيرة — حاول بعد شوية":"Too many attempts — try later",
-      "network-request-failed":                 isAr?"مشكلة في الإنترنت":"Network error — check your connection",
-      "popup-blocked":                          isAr?"الـ popup اتحجب — جاري إعادة المحاولة...":"Popup blocked — trying redirect...",
-      "popup-closed-by-user":                   isAr?"أُغلق الـ popup":"Sign-in popup closed",
-      "cancelled-popup-request":                isAr?"أُغلق الـ popup":"Sign-in popup closed",
-      "invalid-email":                          isAr?"البريد الإلكتروني غير صحيح":"Invalid email address",
-      "user-disabled":                          isAr?"الحساب موقوف":"Account disabled — contact support",
-      "internal-error":                         isAr?"خطأ في Firebase — تأكد من الإعدادات":"Firebase error — check your configuration",
-      "operation-not-supported-in-this-environment": isAr?"جاري التوجيه...":"Redirecting to sign in...",
-      "account-exists-with-different-credential": isAr?"هذا البريد مسجّل بطريقة دخول مختلفة":"Account exists with a different sign-in method",
-      "requires-recent-login":                  isAr?"يجب إعادة تسجيل الدخول":"Please sign in again to continue",
-      "credential-already-in-use":              isAr?"هذا الحساب مرتبط بمستخدم آخر":"Credential already linked to another account",
-      "timeout":                                isAr?"انتهى الوقت — حاول تاني":"Timeout — please try again",
-    };
-    return map[code] || map[Object.keys(map).find(k => code.includes(k)) || ""]
-      || (isAr?"حدث خطأ — حاول تاني":"Something went wrong — please try again");
-  }
-
-  async function handleForgotPassword(){
-    if(!email.includes("@")){setErr(isAr?"أدخل بريدك أولاً":"Enter your email first");return;}
-    setLoading(true);setErr("");
-    try{await resetPassword(email);setResetSent(true);}
-    catch(e2){setErr(humanErr(e2.message));}
-    setLoading(false);
-  }
-
-  async function submit(e){
-    e.preventDefault();setErr("");setLoading(true);
-    if(!email.includes("@")){setErr(isAr?"البريد غير صحيح":"Invalid email");setLoading(false);return;}
-    if(pass.length<6){setErr(isAr?"كلمة المرور 6 أحرف على الأقل":"Password must be 6+ chars");setLoading(false);return;}
-    try{
-      if(tab==="login"){
-        const c=await signInEmail(email,pass);
-        onAuth(c.user);
-      } else {
-        const c=await signUpEmail(email,pass);
-        const refCode=window.__referral_code||null;
-        await createUserProfile(c.user.uid,{email,name:name.trim(),company:company.trim()},refCode);
-        onAuth(c.user,true);
-      }
-    }catch(e2){setErr(humanErr(e2.message));}
-    setLoading(false);
-  }
-
-  async function google(){
-    setErr("");setLoading(true);
-    try{
-      const c=await signInGoogle();
-      if(!c){
-        setErr(isAr?"جاري إعادة التوجيه لـ Google...":"Redirecting to Google...");
-        return;
-      }
-      let p=await getUserProfile(c.user.uid);
-      if(!p){
-        const refCode=window.__referral_code||null;
-        await createUserProfile(c.user.uid,{email:c.user.email,name:c.user.displayName||"",company:""},refCode);
-      }
-      onAuth(c.user);
-    }catch(e2){
-      const raw = e2?.code || e2?.message || String(e2);
-      console.error("🔴 Google auth error:", raw, e2);
-      setErr(humanErr(raw));
-    }
-    setLoading(false);
-  }
-
-  return(
-    <div dir={dir} style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
-      <div style={{width:"100%",maxWidth:400}}>
-
-        {/* Controls */}
-        <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginBottom:14}}>
-          <button onClick={()=>setLang(lang==="en"?"ar":"en")} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"5px 12px",fontSize:11,color:cs.text,cursor:"pointer"}}>{lang==="en"?"🇪🇬 عربي":"🇬🇧 EN"}</button>
-          <button onClick={()=>setDarkMode(!darkMode)} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"5px 9px",fontSize:12,cursor:"pointer"}}>{darkMode?"☀️":"🌙"}</button>
-        </div>
-
-        {/* Logo */}
-        <div style={{textAlign:"center",marginBottom:24}}>
-          <div style={{width:48,height:48,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",fontSize:23,margin:"0 auto 10px",boxShadow:"0 8px 24px rgba(26,86,219,.3)"}}>◈</div>
-          <div style={{fontSize:20,fontWeight:700,color:cs.text}}>{t.appName}</div>
-          <div style={{fontSize:11,color:cs.muted,marginTop:3}}>{t.tagline}</div>
-        </div>
-
-        <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:18,padding:24,boxShadow:"0 4px 24px rgba(0,0,0,.08)"}}>
-
-          {/* Tabs */}
-          <div style={{display:"flex",gap:3,background:"rgba(148,163,184,.07)",borderRadius:10,padding:4,marginBottom:20}}>
-            {[["login",t.signIn],["signup",t.signUp]].map(([tt,l])=>(
-              <button key={tt} onClick={()=>{setTab(tt);setErr("");setResetSent(false);}} style={{flex:1,padding:"9px 0",fontSize:12,fontWeight:600,color:tab===tt?"#fff":cs.muted,background:tab===tt?cs.blue:"transparent",border:"none",borderRadius:7,cursor:"pointer",transition:"all .2s"}}>{l}</button>
-            ))}
-          </div>
-
-          {/* Academic badge */}
-          {isAuto&&<div style={{background:"rgba(79,174,142,.08)",border:"0.5px solid rgba(79,174,142,.25)",borderRadius:9,padding:"9px 12px",marginBottom:14,fontSize:11,color:darkMode?"#6ee7b7":"#15803d",display:"flex",gap:8,alignItems:"center"}}>
-            <span style={{fontSize:15}}>🎓</span>
-            <span><strong>{isAr?"نطاق أكاديمي!":"Academic domain!"}</strong> {isAr?"Elite مجاناً لـ":"Elite free for"} {AUTO_APPROVE_DOMAIN}</span>
-          </div>}
-
-          {/* Google */}
-          <button onClick={google} disabled={loading} style={{width:"100%",background:cs.card2||"rgba(255,255,255,.04)",border:`1px solid ${cs.border}`,borderRadius:10,padding:"12px 0",fontSize:13,fontWeight:500,color:cs.text,cursor:loading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:9,marginBottom:16,opacity:loading?.7:1,transition:"all .2s"}}>
-            <svg width="17" height="17" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            {loading?"...":(isAr?"الدخول بـ Google":"Continue with Google")}
-          </button>
-
-          {/* Divider */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-            <div style={{flex:1,height:"0.5px",background:cs.border}}/>
-            <div style={{fontSize:10,color:cs.muted}}>{isAr?"أو بالبريد الإلكتروني":"or with email"}</div>
-            <div style={{flex:1,height:"0.5px",background:cs.border}}/>
-          </div>
-
-          <form onSubmit={submit}>
-            {tab==="signup"&&<>
-              <input value={name} onChange={e=>setName(e.target.value)} placeholder={isAr?"الاسم الكامل *":"Full name *"} required style={inp}/>
-              <input value={company} onChange={e=>setCompany(e.target.value)} placeholder={isAr?"الشركة (اختياري)":"Company (optional)"} style={inp}/>
-            </>}
-
-            <input value={email} onChange={e=>setEmail(e.target.value)} placeholder={isAr?"البريد الإلكتروني":"Email address"} type="email" required style={inp} autoComplete="email"/>
-
-            {/* Password + show/hide */}
-            <div style={{position:"relative",marginBottom:tab==="signup"&&pass?4:10}}>
-              <input value={pass} onChange={e=>onPassChange(e.target.value)} placeholder={isAr?"كلمة المرور":"Password"} type={showPass?"text":"password"} required minLength={6}
-                style={{...inp,marginBottom:0,paddingRight:isAr?"14px":"42px",paddingLeft:isAr?"42px":"14px"}} autoComplete={tab==="login"?"current-password":"new-password"}/>
-              <button type="button" onClick={()=>setShowPass(v=>!v)}
-                style={{position:"absolute",top:"50%",transform:"translateY(-50%)",right:isAr?"auto":"12px",left:isAr?"12px":"auto",background:"none",border:"none",cursor:"pointer",fontSize:15,color:cs.muted,padding:4,lineHeight:1}}>
-                {showPass?"🙈":"👁"}
-              </button>
-            </div>
-
-            {/* Password strength bar */}
-            {tab==="signup"&&pass&&<div style={{marginBottom:10}}>
-              <div style={{display:"flex",gap:3,marginBottom:3}}>
-                {[1,2,3,4,5].map(i=>(
-                  <div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=passStrength?strengthColor:"rgba(148,163,184,.2)",transition:"background .3s"}}/>
-                ))}
-              </div>
-              <div style={{fontSize:9.5,color:strengthColor}}>{strengthLabel}</div>
-            </div>}
-
-            {/* Forgot password */}
-            {tab==="login"&&<div style={{textAlign:isAr?"left":"right",marginBottom:12}}>
-              <button type="button" onClick={handleForgotPassword} disabled={loading}
-                style={{background:"none",border:"none",fontSize:11,color:cs.blue,cursor:"pointer",padding:0,textDecoration:"underline"}}>
-                {isAr?"نسيت كلمة المرور؟":"Forgot password?"}
-              </button>
-            </div>}
-
-            {/* Reset sent */}
-            {resetSent&&<div style={{fontSize:11,color:darkMode?"#6ee7b7":"#15803d",marginBottom:12,background:"rgba(79,174,142,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(79,174,142,.2)"}}>
-              ✅ {isAr?"تم إرسال رابط إعادة تعيين كلمة المرور — راجع بريدك":"Password reset link sent — check your email"}
-            </div>}
-
-            {/* Error */}
-            {err&&<div style={{fontSize:11,color:"#fca5a5",marginBottom:12,background:"rgba(198,96,79,.07)",padding:"10px 12px",borderRadius:8,border:"0.5px solid rgba(198,96,79,.2)"}}>{err}</div>}
-
-            <button type="submit" disabled={loading}
-              style={{width:"100%",background:"linear-gradient(135deg,#1a56db,#0891b2)",border:"none",borderRadius:10,padding:"12px 0",fontSize:13,fontWeight:700,color:"#fff",cursor:loading?"not-allowed":"pointer",opacity:loading?.7:1,marginBottom:4,boxShadow:"0 4px 14px rgba(26,86,219,.3)",transition:"all .2s"}}>
-              {loading?"...":(tab==="login"?(isAr?"تسجيل الدخول":"Sign In"):(isAr?"إنشاء حساب":"Create Account")+(isAuto?" — Elite Free":""))}
-            </button>
-          </form>
-        </div>
-
-        <div style={{textAlign:"center",marginTop:14,fontSize:10,color:cs.muted}}>
-          {isAr?"الدعم":"Support"}: <a href={`mailto:${SUPPORT_EMAIL}`} style={{color:cs.blue}}>{SUPPORT_EMAIL}</a>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Waiting Page ──────────────────────────────────────────────────
-function Waiting({paymentId,payMethod,amount,tier,refCode,onSuccess,cs,t}){
-  const[status,setStatus]=useState("pending"),[payData,setPayData]=useState(null);
-  useEffect(()=>{const unsub=listenToPayment(paymentId,d=>{setPayData(d);if(d.status==="confirmed"){setStatus("confirmed");onSuccess();}else if(d.status==="rejected")setStatus("rejected");});return unsub;},[paymentId]);
-  const pm=PAY_METHODS.find(p=>p.id===payMethod),tierInfo=TIERS[tier];
-  return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
-    <div style={{maxWidth:480,width:"100%"}}>
-      {status==="confirmed"?(<div style={{background:cs.card,border:"0.5px solid rgba(79,174,142,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
-        <div style={{fontSize:52,marginBottom:12}}>✅</div>
-        <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:8}}>{t.payOK}</div>
-        <div style={{fontSize:13,color:cs.muted}}>{t.planActive} {tierInfo?.name}</div>
-      </div>):status==="rejected"?(<div style={{background:cs.card,border:"0.5px solid rgba(198,96,79,.4)",borderRadius:16,padding:36,textAlign:"center"}}>
-        <div style={{fontSize:52,marginBottom:12}}>❌</div>
-        <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:8}}>{t.payFail}</div>
-        <div style={{fontSize:12,color:cs.muted,marginBottom:16}}>{payData?.reject_reason||"Not verified"}</div>
-        <Btn cs={cs} onClick={()=>window.location.reload()}>{t.tryAgain}</Btn>
-      </div>):(<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:16,padding:24}}>
-        <div style={{textAlign:"center",marginBottom:20}}>
-          <div style={{width:50,height:50,border:"3px solid rgba(214,162,76,.3)",borderTop:"3px solid #D6A24C",borderRadius:"50%",margin:"0 auto 12px",animation:"spin 1.2s linear infinite"}}/>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          <div style={{fontSize:16,fontWeight:700,color:cs.text,marginBottom:4}}>{t.waitConfirm}</div>
-          <div style={{fontSize:11,color:cs.muted}}>{t.adminReview}</div>
-        </div>
-        <div style={{background:"rgba(148,163,184,.05)",border:`0.5px solid ${cs.border}`,borderRadius:10,padding:14,marginBottom:12}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[["Plan",tierInfo?.name],["Amount",`${amount?.toLocaleString()} EGP`],["Method",pm?.name],["Reference",refCode]].map(([k,v])=>(
-              <div key={k}><div style={{fontSize:9,color:cs.muted,textTransform:"uppercase",marginBottom:2}}>{k}</div><div style={{fontSize:12,fontWeight:600,color:cs.text,fontFamily:k==="Reference"?"monospace":undefined}}>{v}</div></div>
-            ))}
-          </div>
-        </div>
-        <div style={{fontSize:11,color:cs.muted,lineHeight:1.7}}>
-          {pm?.number&&<><strong style={{color:cs.text}}>📱 {pm.number}</strong><br/></>}
-          {pm?.ipa&&<><strong style={{color:cs.text}}>⚡ {pm.ipa}</strong><br/></>}
-          <strong style={{color:"#fcd34d"}}>Ref: {refCode}</strong><br/>
-          <span style={{fontSize:10}}>Send proof: <strong>{SUPPORT_EMAIL}</strong> · WhatsApp: <strong>{ADMIN_PHONE}</strong></span>
-        </div>
-      </div>)}
-    </div>
-  </div>;
-}
 
 // ── Profile Page ──────────────────────────────────────────────────
-function Profile({user,profile,sessions,cs,t,onBack,onSave,addToast,lang}){
-  const isAr=lang==="ar";
-  const[name,setName]=useState(profile?.name||"");
-  const[company,setCompany]=useState(profile?.company||"");
-  const[saving,setSaving]=useState(false);
-  const[refStats,setRefStats]=useState(null);
-  const[showReferralProgram,setShowReferralProgram]=useState(false);
-  const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
-  const[viewSession,setViewSession]=useState(null);
-  const isElite=tierAtLeast(profile?.tier,"elite");
-  useEffect(()=>{ getReferralStats(user.uid).then(setRefStats).catch(()=>{}); },[user.uid]);
-  const refLink=refStats?.ref_code?`${window.location.origin}?ref=${refStats.ref_code}`:"";
-  // BUG FIX: these used to be derived from `sessions` (the capped
-  // 50-session array), not the authoritative persistent counters that
-  // firebase.js's saveSession() already maintains on every save. Any user
-  // with more than 50 lifetime sessions saw "Total Sessions: 50" frozen
-  // forever, and an average computed only over their 50 most recent
-  // sessions instead of their true lifetime average.
-  const totalSessions=profile?.sessions_count ?? sessions?.length ?? 0;
-  const avgScore=profile?.avg_score ?? (sessions?.length?Math.round(sessions?.reduce((a,s)=>a+(s.avg_score||0),0)/sessions?.length):0);
-  const inp={width:"100%",background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:9,padding:"11px 14px",fontSize:13,color:cs.text,outline:"none",boxSizing:"border-box",marginBottom:12};
-  async function save(){
-    setSaving(true);
-    try{
-      await updateUserProfile(user.uid,{name:name.trim(),company:company.trim()});
-      onSave({...profile,name:name.trim(),company:company.trim()});addToast(t.save+" ✓","success");
-    }catch{addToast(isAr?"خطأ في الحفظ":"Error saving","error");}
-    setSaving(false);
-  }
-  return <div style={{minHeight:"100vh",background:cs.bg,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",overflowY:"auto"}}>
-    <div style={{maxWidth:700,margin:"0 auto",padding:"26px 18px 52px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:24}}>
-        <button onClick={onBack} style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"7px 14px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{t.backToApp}</button>
-        <div style={{fontSize:15,fontWeight:700,color:cs.text}}>👤 {t.profile}</div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:13,marginBottom:13}}>
-        <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20}}>
-          <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:14}}>{t.editProfile}</div>
-          <div style={{width:58,height:58,borderRadius:"50%",background:"linear-gradient(135deg,#1a56db,#0891b2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,color:"white",margin:"0 auto 12px"}}>{(profile?.name||user.email||"U")[0].toUpperCase()}</div>
-          <div style={{fontSize:11,color:cs.muted,textAlign:"center",marginBottom:16}}>{user.email}</div>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder={t.fullName} style={inp}/>
-          <input value={company} onChange={e=>setCompany(e.target.value)} placeholder={t.company} style={inp}/>
-          <Btn cs={cs} style={{width:"100%"}} onClick={save} disabled={saving}>{saving?(isAr?"جاري الحفظ...":"Saving..."):t.save}</Btn>
-        </div>
-        <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20}}>
-          <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:14}}>{t.profileStats||"Statistics"}</div>
-          {[[t.totalSess,totalSessions],[t.avgScore,avgScore+"/100"],[t.planLabel||"Plan",qualityFor(profile?.tier).label[isAr?"ar":"en"]],[t.memberSince,profile?.created_at?.toDate?.()?.toLocaleDateString?.()||"—"]].map(([k,v])=>(
-            <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`0.5px solid ${cs.border}`}}>
-              <span style={{fontSize:12,color:cs.muted}}>{k}</span><span style={{fontSize:12,fontWeight:600,color:cs.text}}>{v}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
-        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:11}}>
-          <span style={{fontSize:20}}>🤝</span>
-          <div><div style={{fontSize:12,fontWeight:700,color:cs.text}}>{t.referral}</div><div style={{fontSize:11,color:cs.muted}}>{t.referralDesc}</div></div>
-        </div>
-        <div style={{display:"flex",gap:7,marginBottom:refStats?.credits>0?8:0}}>
-          <div style={{flex:1,background:cs.inp,border:`0.5px solid ${cs.inpB}`,borderRadius:8,padding:"8px 11px",fontSize:10,color:cs.muted,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{refLink||"…"}</div>
-          <Btn cs={cs} onClick={()=>{navigator.clipboard.writeText(refLink);addToast(t.copied,"success");}} disabled={!refLink} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{t.copyLink}</Btn>
-          <Btn cs={cs} onClick={()=>setShowReferralProgram(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"التفاصيل":"Details"}</Btn>
-        </div>
-        {refStats?.credits>0&&<div style={{fontSize:11,color:"#4FAE8E",fontWeight:700}}>💰 {refStats.credits} EGP {isAr?"رصيد متاح":"credit available"}</div>}
-      </div>
-      {showReferralProgram&&<ErrorBoundary key="referralprogram"><Suspense fallback={null}><ReferralProgram profile={profile} cs={cs} lang={lang} onClose={()=>setShowReferralProgram(false)}/></Suspense></ErrorBoundary>}
-      <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:9}}>
-            <span style={{fontSize:20}}>🔌</span>
-            <div><div style={{fontSize:12,fontWeight:700,color:cs.text}}>{isAr?"التكاملات":"Integrations"}</div><div style={{fontSize:11,color:cs.muted}}>{isAr?"Slack، Teams، Zapier، Webhooks وأكتر":"Slack, Teams, Zapier, Webhooks & more"}</div></div>
-          </div>
-          <Btn cs={cs} onClick={()=>setShowIntegrationsHub(true)} style={{padding:"8px 13px",fontSize:11,flexShrink:0}}>{isAr?"فتح":"Open"}</Btn>
-        </div>
-      </div>
-      {showIntegrationsHub&&<ErrorBoundary key="integrationshub"><Suspense fallback={null}><IntegrationsHub profile={profile} cs={cs} lang={lang} onClose={()=>setShowIntegrationsHub(false)}/></Suspense></ErrorBoundary>}
-      {sessions?.length>0&&<div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:13,padding:20,marginBottom:13}}>
-        <div style={{fontSize:12,fontWeight:700,color:cs.text,marginBottom:13}}>{t.sessionHist||"Session History"}</div>
-        <BarChart data={sessions?.slice(0,10).reverse().map((s,i)=>({l:`S${i+1}`,v:s.avg_score||0}))} color="#1a56db" cs={cs}/>
-        <div style={{marginTop:13,display:"grid",gap:5}}>
-          {sessions?.slice(0,5).map((s,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:9,padding:"6px 0",borderBottom:`0.5px solid ${cs.border}`}}>
-              <div style={{width:7,height:7,borderRadius:"50%",background:sc(s.avg_score||0),flexShrink:0}}/>
-              <span style={{fontSize:10,color:cs.muted,flex:1}}>{s.created_at?.toDate?.()?.toLocaleDateString?.()}</span>
-              <span style={{fontSize:10,color:cs.muted}}>{s.mode} · {s.tier}</span>
-              <span style={{fontSize:11,fontWeight:700,color:sc(s.avg_score||0)}}>{s.avg_score||0}/100</span>
-              {isElite
-                ? <button onClick={()=>setViewSession(s)} title={isAr?"كل بيانات الجلسة":"Full session data"}
-                    style={{background:"none",border:"none",color:cs.muted,cursor:"pointer",fontSize:13,padding:2}}
-                    aria-label={isAr?"عرض تفاصيل الجلسة":"View session details"}>ℹ️</button>
-                : <span title={isAr?"متاح لأعضاء Elite فقط":"Elite members only"}
-                    style={{fontSize:11,opacity:.35}}>🔒</span>}
-            </div>
-          ))}
-        </div>
-      </div>}
-      {viewSession&&<SessionDetailModal session={viewSession} allSessions={sessions} profile={profile} cs={cs} isAr={isAr} addToast={addToast} onClose={()=>setViewSession(null)}/>}
-      {/* Cancel Subscription */}
-      {profile?.tier&&profile.tier!=="standard"&&<CancelSubscriptionCard profile={profile} user={user} cs={cs} addToast={addToast} isAr={isAr}/>}
-    </div>
-  </div>;
-}
 
 // ── Payment Success / Cancelled Screen ───────────────────────────
 function PaymentResultScreen({result, cs, lang, onContinue}){
@@ -1346,50 +891,6 @@ function PaymentResultScreen({result, cs, lang, onContinue}){
 }
 
 // ── Cancel Subscription — inline confirm (no window.confirm) ──────
-function CancelSubscriptionCard({profile,user,cs,addToast,isAr}){
-  const[step,setStep]=useState(0); // 0=idle 1=confirm 2=done
-  const[loading,setLoading]=useState(false);
-  const t={
-    title:   isAr?"⚠️ إلغاء الاشتراك":"⚠️ Cancel Subscription",
-    desc:    isAr?`سيتم إلغاء خطة ${profile.tier}. ستحتفظ بالوصول حتى نهاية فترة الفوترة ثم تعود للخطة المجانية.`:`Your ${profile.tier} plan will be cancelled. You'll keep access until the end of your billing period, then revert to Standard.`,
-    btn:     isAr?"إلغاء الاشتراك":"Cancel subscription",
-    sure:    isAr?"هل أنت متأكد؟ هذا لا يمكن التراجع عنه.":"Are you sure? This cannot be undone.",
-    confirm: isAr?"تأكيد الإلغاء":"Yes, cancel",
-    back:    isAr?"لا، ابقَ":"No, keep it",
-    done:    isAr?"تم إرسال طلب الإلغاء — سيتم المعالجة خلال 24 ساعة":"Cancellation request sent — admin will process within 24h",
-  };
-  const doCancel=async()=>{
-    setLoading(true);
-    try{
-      EmailAPI.invoice({email:user.email,name:profile?.name||"",tier:profile?.tier||"",amount:0,billing:"cancelled",ref:"CANCEL-"+Date.now()}).catch(e=>console.warn("[Email]",e.message));
-    }catch(e){ console.warn("[cancel] email failed:",e?.code||e?.message); }
-    addToast(t.done,"info");
-    setStep(2);
-    setLoading(false);
-  };
-  if(step===2)return(
-    <div style={{background:"rgba(79,174,142,.05)",border:"0.5px solid rgba(79,174,142,.2)",borderRadius:13,padding:16,marginBottom:13,textAlign:"center"}}>
-      <div style={{fontSize:20,marginBottom:6}}>✓</div>
-      <div style={{fontSize:12,color:"#6ee7b7"}}>{t.done}</div>
-    </div>
-  );
-  return(
-    <div style={{background:"rgba(198,96,79,.04)",border:"0.5px solid rgba(198,96,79,.2)",borderRadius:13,padding:18,marginBottom:13}}>
-      <div style={{fontSize:12,fontWeight:700,color:"#fca5a5",marginBottom:6}}>{t.title}</div>
-      <div style={{fontSize:11,color:cs.muted,marginBottom:12,lineHeight:1.6}}>{t.desc}</div>
-      {step===0&&<button onClick={()=>setStep(1)} style={{background:"rgba(198,96,79,.1)",border:"0.5px solid rgba(198,96,79,.3)",borderRadius:8,padding:"8px 16px",fontSize:11,color:"#fca5a5",cursor:"pointer",fontWeight:600}}>{t.btn}</button>}
-      {step===1&&<div>
-        <div style={{fontSize:12,fontWeight:600,color:"#fca5a5",marginBottom:10}}>{t.sure}</div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <button onClick={()=>setStep(0)} style={{background:"rgba(148,163,184,.1)",border:"0.5px solid rgba(148,163,184,.2)",borderRadius:8,padding:"8px 14px",fontSize:11,color:cs.muted,cursor:"pointer",fontWeight:600}}>{t.back}</button>
-          <button onClick={doCancel} disabled={loading} style={{background:"rgba(198,96,79,.15)",border:"0.5px solid rgba(198,96,79,.4)",borderRadius:8,padding:"8px 14px",fontSize:11,color:"#fca5a5",cursor:loading?"not-allowed":"pointer",fontWeight:700,opacity:loading?.7:1}}>
-            {loading?"...":`${t.confirm}`}
-          </button>
-        </div>
-      </div>}
-    </div>
-  );
-}
 
 // ── Leaderboard ───────────────────────────────────────────────────
 function Leaderboard({users,cs,t,onBack,lang}){
@@ -1681,303 +1182,6 @@ function Admin({adminUser,cs,t,onBack,addToast,lang}){
 // production is PricingPage.jsx (a separate file), reached via page==="pricing".
 // Kept here rather than deleted in case it's intentionally staged for a future
 // flow — but do not assume changes here affect what users see today.
-function Pricing({user,profile,cs,t,onBack,onPaid,initialPlan,initialBilling,addToast,lang}){
-  const isAr=lang==="ar";
-  const[selTier,setSelTier]=useState(initialPlan||"professional");
-  const[billing,setBilling]=useState(initialBilling||"monthly");
-  const[seats,setSeats]=useState(profile?.seats||25);
-  const[payMethod,setPayMethod]=useState("visa_card");
-  const[step,setStep]=useState(initialPlan?"method":"plan");
-  const[paymentId,setPaymentId]=useState(null);
-  const[proc,setProc]=useState(false);
-  const[aiTip,setAiTip]=useState(null);
-  const[kashierUrl,setKashierUrl]=useState(null);
-  const[walletNumber,setWalletNumber]=useState("");
-  const[walletStep,setWalletStep]=useState(false);
-  const[coupon,setCoupon]=useState("");
-  const[couponData,setCouponData]=useState(null);
-  const[couponErr,setCouponErr]=useState("");
-  const[couponChecking,setCouponChecking]=useState(false);
-  // Referral credit (EGP, from a prior /api/referral/track welcome credit or
-  // a converted referral) is applied automatically server-side in
-  // /api/kashier/create-order — no client-side discount math needed here.
-  const[referralCreditApplied,setReferralCreditApplied]=useState(0);
-
-  // Persist kashier URL across accidental back-navigations
-  useEffect(()=>{
-    const saved=sessionStorage.getItem("kashier_pending_url");
-    const savedStep=sessionStorage.getItem("kashier_pending_step");
-    if(saved&&savedStep==="kashier"){setKashierUrl(saved);setStep("kashier");}
-  },[]);
-
-  // Debounced coupon validation — fires 600ms after user stops typing
-  useEffect(()=>{
-    if(!coupon.trim()){setCouponData(null);setCouponErr("");return;}
-    const id=setTimeout(async()=>{
-      setCouponChecking(true);
-      try{
-        const r=await PaymentAPI.validateCoupon({code:coupon.trim().toUpperCase()});
-        const d=await r.json();
-        if(d.valid){setCouponData({discount:d.discount,label:d.label});setCouponErr("");}
-        else{setCouponErr(t.couponBad);setCouponData(null);}
-      }catch{setCouponErr(isAr?"الباك اند مش شغال":"Backend offline");setCouponData(null);}
-      setCouponChecking(false);
-    },600);
-    return()=>clearTimeout(id);
-  },[coupon]);
-
-  const tier=TIERS[selTier] || TIERS["standard"];
-  const basePrice=billing==="monthly"?tier.price_monthly:tier.price_yearly;
-  // B2C: no seat-based pricing
-  const subtotal=basePrice?Math.round(basePrice):null;
-  const disc=couponData?couponData.discount:0;
-  const price=subtotal?Math.round(subtotal*(1-disc/100)):null;
-  const seatAddon=0; // B2C: no seat addon
-
-  useEffect(()=>{
-    if(step==="plan"&&price&&price>0){
-      askGemini(`In 2 sentences, why is ${tier.name} Posmoz at ${price} EGP/${billing==="monthly"?"month":"year"} good ROI for Egyptian companies? Focus on sick-leave cost savings.`).then(setAiTip);
-    }
-  },[selTier,billing,seats,step]);
-
-  // applyCoupon now just triggers the debounce via setCoupon
-  async function applyCoupon(){
-    const code=coupon.trim().toUpperCase();
-    if(!code){setCouponErr(t.couponBad);return;}
-    // Force immediate check
-    setCouponChecking(true);
-    try{
-      const r=await PaymentAPI.validateCoupon({code});
-      const d=await r.json();
-      if(d.valid){setCouponData({discount:d.discount,label:d.label});setCouponErr("");addToast(t.couponOK+` (${d.label})`,"success");}
-      else{setCouponErr(t.couponBad);setCouponData(null);}
-    }catch{setCouponErr(isAr?"الباك اند مش شغال":"Backend offline");setCouponData(null);}
-    setCouponChecking(false);
-  }
-
-  async function doKashier(){
-    setProc(true);
-    const result=await initKashier({
-      tier:selTier,user_email:user.email,
-      user_name:profile?.name||"",billing,
-      uid:user?.uid||"",
-      coupon_code: couponData ? coupon.trim().toUpperCase() : undefined,
-      discount_code: couponData ? coupon.trim().toUpperCase() : undefined,
-      discount_pct: disc || 0});
-    if(result?.creditApplied) setReferralCreditApplied(result.creditApplied);
-    if(result?.type==="redirect"&&result?.url){
-      sessionStorage.setItem("kashier_pending_url",result.url);
-      sessionStorage.setItem("kashier_pending_step","kashier");
-      setKashierUrl(result.url);setStep("kashier");
-    }else{
-      // This is what a customer sees when the payment provider is not
-      // reachable, so it says something a customer can act on. The previous
-      // text — "Kashier not configured — check Vercel env vars" — was an
-      // instruction to the developer, shown to the person trying to pay.
-      // The diagnostic detail is still logged in initKashier above.
-      addToast(isAr
-        ? "تعذّر بدء عملية الدفع دلوقتي. لسه محدش اتخصم منه حاجة — جرّب تاني، ولو فضلت المشكلة كلّمنا."
-        : "We couldn't start the payment right now. Nothing has been charged — please try again, or contact us if it keeps happening.",
-        "error");
-    }
-    setProc(false);
-  }
-
-  if(step==="waiting")return <Waiting paymentId={paymentId} payMethod={payMethod} amount={price}
-    tier={selTier} refCode={""} onSuccess={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");onPaid();}} cs={cs} t={t}/>;
-
-  if(step==="kashier")return <div style={{minHeight:"100vh",background:cs.bg,display:"flex",flexDirection:"column",fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif"}}>
-    <div style={{padding:"12px 18px",borderBottom:"0.5px solid "+cs.border,display:"flex",alignItems:"center",gap:11,background:cs.card}}>
-      <button aria-label="Go back" onClick={()=>{sessionStorage.removeItem("kashier_pending_url");sessionStorage.removeItem("kashier_pending_step");setStep("method");}} style={{background:cs.inp,border:"0.5px solid "+cs.border,borderRadius:7,padding:"6px 11px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"→ ":"← "}{isAr?"رجوع":"Back"}</button>
-      <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{"🔒 "}{isAr?"دفع آمن عبر Kashier":"Secure payment via Kashier"}{" — "}{price?.toLocaleString()}{" EGP"}</div>
-    </div>
-    <iframe src={kashierUrl} style={{flex:1,border:"none",width:"100%"}} title="Kashier Checkout"/>
-  </div>;
-
-  return <div dir={isAr?"rtl":"ltr"} style={{minHeight:"100vh",background:cs.bg,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",overflowY:"auto"}}>
-    <div style={{maxWidth:880,margin:"0 auto",padding:"24px 17px 52px"}}>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:20,flexDirection:isAr?"row-reverse":"row"}}>
-        <button onClick={onBack} style={{background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:7,padding:"6px 12px",fontSize:11,color:cs.muted,cursor:"pointer"}}>{isAr?"→ رجوع":"← Back"}</button>
-        <div>
-          <div style={{fontSize:14,fontWeight:700,color:cs.text}}>{t.choosePlan}</div>
-          <div style={{fontSize:10,color:cs.muted}}>{isAr?"7 أيام مجاناً · إلغاء في أي وقت":"7-day free trial · Cancel anytime"} · {SUPPORT_EMAIL}</div>
-        </div>
-      </div>
-
-      {/* Payment step progress indicator */}
-      {(()=>{
-        const steps=[
-          {key:"plan",   label:isAr?"اختار الباقة":"Choose Plan"},
-          {key:"method", label:isAr?"طريقة الدفع":"Payment"},
-          {key:"kashier", label:isAr?"إتمام الدفع":"Checkout"},
-        ];
-        const currentIdx=steps.findIndex(s=>s.key===step);
-        return <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:22}}>
-          {steps.map((s,i)=>(
-            <React.Fragment key={s.key}>
-              {i>0&&<div style={{width:32,height:1.5,background:i<=currentIdx?cs.blue:cs.border,transition:"background .3s"}}/>}
-              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-                <div style={{width:24,height:24,borderRadius:"50%",
-                  background:i<currentIdx?"rgba(26,86,219,.2)":i===currentIdx?cs.blue:"transparent",
-                  border:`2px solid ${i<=currentIdx?cs.blue:cs.border}`,
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:10,fontWeight:700,color:i===currentIdx?"#fff":i<currentIdx?cs.blue:cs.muted,
-                  transition:"all .3s"}}>
-                  {i<currentIdx?"✓":i+1}
-                </div>
-                <div style={{fontSize:9,color:i===currentIdx?cs.text:cs.muted,fontWeight:i===currentIdx?600:400}}>{s.label}</div>
-              </div>
-            </React.Fragment>
-          ))}
-        </div>;
-      })()}
-
-      {/* Step: plan selection */}
-      {step==="plan"&&<>
-        {/* Billing toggle */}
-        <div style={{display:"flex",justifyContent:"center",marginBottom:22}}>
-          <div style={{display:"flex",gap:3,background:"rgba(148,163,184,.07)",borderRadius:10,padding:4}}>
-            {[["monthly",t.monthly],["yearly",t.yearly]].map(([b,l])=>(
-              <button key={b} onClick={()=>setBilling(b)} style={{padding:"8px 17px",fontSize:12,fontWeight:600,
-                color:billing===b?cs.text:cs.muted,background:billing===b?cs.blue:"transparent",
-                border:"none",borderRadius:7,cursor:"pointer",position:"relative"}}>
-                {l}{b==="yearly"&&<span style={{position:"absolute",top:-8,right:-4,background:"#4FAE8E",color:"white",fontSize:10,fontWeight:700,padding:"1px 6px",borderRadius:99}}>-17%</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tier cards */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12,marginBottom:24}}>
-          {Object.values(TIERS).map(tt=>{
-            const sel=selTier===tt.id;
-            const mp=billing==="monthly"?tt.price_monthly:tt.price_yearly;
-            const total=mp?Math.round(mp*(1-disc/100)):null;
-            return <div key={tt.id} onClick={()=>setSelTier(tt.id)}
-              style={{background:sel?tt.colorDim:cs.card,border:`${sel?"1.5":"0.5"}px solid ${sel?tt.color+"60":cs.border}`,
-                borderRadius:14,padding:"18px 16px",cursor:"pointer",position:"relative",transition:"all .2s",
-                textAlign:isAr?"right":"left"}}>
-              {tt.badge&&<div style={{position:"absolute",top:-9,left:"50%",transform:"translateX(-50%)",
-                background:tt.color,color:"white",fontSize:8,fontWeight:700,padding:"2px 10px",borderRadius:99}}>
-                {isAr&&tt.badge==="Most Popular"?"الأشهر":tt.badge}</div>}
-              <div style={{fontSize:13,fontWeight:700,color:sel?cs.text:"#94a3b8",marginBottom:2}}>{tt.name}</div>
-              <div style={{fontSize:9,color:cs.muted,marginBottom:8}}>{tt.accuracy} accuracy · up to {tt.seats} seats</div>
-              <div style={{fontSize:22,fontWeight:700,color:tt.color,marginBottom:4}}>
-                {total?<>{total.toLocaleString()}<span style={{fontSize:11,fontWeight:400}}> EGP/{isAr?"شهر":"mo"}</span></>:<span style={{fontSize:14}}>{isAr?"حسب الطلب":"Custom"}</span>}
-              </div>
-              <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:3}}>
-                {tt.features.map((f,i)=><div key={i} style={{fontSize:10,color:cs.muted,display:"flex",gap:5,alignItems:"flex-start",flexDirection:isAr?"row-reverse":"row"}}>
-                  <span style={{color:"#4FAE8E",flexShrink:0}}>✓</span>{f}
-                </div>)}
-              </div>
-            </div>;
-          })}
-        </div>
-
-        {/* Seat info — flat-rate pricing, no per-seat addon. Each tier has a
-            fixed employee cap (see tier.seats) included in the base price. */}
-        <div style={{background:cs.card,border:`0.5px solid ${cs.border}`,borderRadius:12,padding:"14px 18px",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexDirection:isAr?"row-reverse":"row"}}>
-            <div style={{fontSize:12,fontWeight:600,color:cs.text}}>{isAr?"الموظفون المشمولون":"Employees included"}</div>
-            <div style={{fontSize:14,fontWeight:700,color:cs.blue}}>
-              {tier.seats<0?(isAr?"غير محدود":"Unlimited"):`${isAr?"حتى":"Up to"} ${tier.seats}`}
-            </div>
-          </div>
-          <div style={{fontSize:10,color:cs.muted,marginTop:4}}>
-            {isAr?"السعر ثابت للباقة بالكامل — بدون رسوم إضافية للمقعد":"Flat price for the whole plan — no per-seat fees"}
-          </div>
-        </div>
-
-        {/* Coupon */}
-        <div style={{marginBottom:6}}>
-          <div style={{display:"flex",gap:7,flexDirection:isAr?"row-reverse":"row"}}>
-            <div style={{flex:1,position:"relative"}}>
-              <input value={coupon} onChange={e=>setCoupon(e.target.value.toUpperCase())}
-                placeholder={isAr?"كود الخصم (سيُطبَّق تلقائياً)":"Coupon code (auto-validates)"}
-                style={{width:"100%",boxSizing:"border-box",background:cs.inp,border:`0.5px solid ${couponErr?"#C6604F":couponData?"rgba(79,174,142,.5)":cs.border}`,
-                  borderRadius:8,padding:"9px 30px 9px 12px",fontSize:12,color:cs.text,outline:"none"}}/>
-              {couponChecking&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:cs.muted,animation:"spin 0.7s linear infinite"}}>⟳</div>}
-              {!couponChecking&&couponData&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#4FAE8E"}}>✓</div>}
-              {!couponChecking&&couponErr&&coupon&&<div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:13,color:"#C6604F"}}>✗</div>}
-            </div>
-            <button onClick={applyCoupon} disabled={couponChecking||!coupon.trim()} style={{background:coupon.trim()?cs.blue:"rgba(148,163,184,.2)",color:"white",border:"none",borderRadius:8,
-              padding:"9px 16px",fontSize:11,fontWeight:600,cursor:coupon.trim()?"pointer":"default",transition:"background .2s"}}>{t.applyCoupon}</button>
-          </div>
-          {couponErr&&<div style={{fontSize:11,color:"#C6604F",marginTop:4}}>{couponErr}</div>}
-          {couponData&&<div style={{fontSize:11,color:"#4FAE8E",marginTop:4}}>✓ {couponData.label} {isAr?"مطبّق":"applied"}</div>}
-          {referralCreditApplied>0&&<div style={{fontSize:11,color:"#4FAE8E",marginTop:4}}>🔗 {isAr?`تم تطبيق ${referralCreditApplied} جنيه من رصيد الإحالة`:`${referralCreditApplied} EGP referral credit applied`}</div>}
-        </div>
-
-        {/* Price summary */}
-        {price&&<div style={{background:"rgba(99,102,241,.06)",border:"0.5px solid rgba(99,102,241,.2)",borderRadius:11,padding:"14px 16px",marginBottom:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:cs.muted,marginBottom:4,flexDirection:isAr?"row-reverse":"row"}}>
-            <span>{tier.name} ({billing})</span>
-            <span>{subtotal?.toLocaleString()} EGP</span>
-          </div>
-          {disc>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:"#4FAE8E",marginBottom:4,flexDirection:isAr?"row-reverse":"row"}}>
-            <span>Discount ({disc}%)</span><span>-{(subtotal-price).toLocaleString()} EGP</span>
-          </div>}
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:15,fontWeight:700,color:cs.text,paddingTop:8,borderTop:`0.5px solid ${cs.border}`,flexDirection:isAr?"row-reverse":"row"}}>
-            <span>{isAr?"الإجمالي":"Total"}</span><span style={{color:"#6366f1"}}>{price.toLocaleString()} EGP/{billing==="monthly"?isAr?"شهر":"mo":isAr?"سنة":"yr"}</span>
-          </div>
-        </div>}
-
-        {/* AI tip */}
-        {aiTip&&<div style={{background:"rgba(79,174,142,.05)",border:"0.5px solid rgba(79,174,142,.2)",borderRadius:10,padding:"11px 14px",marginBottom:20,fontSize:11,color:"#94a3b8",lineHeight:1.6}}>
-          🤖 {aiTip}
-        </div>}
-
-        <Btn cs={cs} style={{width:"100%",padding:"14px 0",fontSize:13}} disabled={!price}
-          onClick={()=>setStep("method")}>{t.continuePay}</Btn>
-        <div style={{textAlign:"center",marginTop:12,fontSize:10,color:cs.muted}}>
-          {isAr?"دفع آمن عبر Kashier · SSL محمي · لا تُحفَظ بيانات البطاقة":"Secure payment via Kashier · SSL encrypted · Card data never stored"}
-        </div>
-      </>}
-
-      {/* Step: payment method */}
-      {step==="method"&&<>
-        <div style={{marginBottom:20,fontSize:13,color:cs.muted,textAlign:"center"}}>
-          {tier.name} · {price?.toLocaleString()} EGP/{billing==="monthly"?isAr?"شهر":"mo":isAr?"سنة":"yr"} · {tier.seats<0?(isAr?"موظفون غير محدودون":"unlimited employees"):`${isAr?"حتى":"up to"} ${tier.seats} ${isAr?"موظف":"employees"}`}
-          <button onClick={()=>setStep("plan")} style={{background:"none",border:"none",color:cs.blue,cursor:"pointer",fontSize:11,marginInlineStart:8}}>{isAr?"تغيير":"Change"}</button>
-        </div>
-
-        {/* Only 2 automatic methods */}
-        <div style={{display:"grid",gap:10,marginBottom:22}}>
-          {PAY_METHODS.map(pm=>(
-            <div key={pm.id} onClick={()=>setPayMethod(pm.id)}
-              style={{background:payMethod===pm.id?`rgba(${pm.id==="visa_card"?"26,86,219":"228,0,43"},.07)`:cs.card,
-                border:`${payMethod===pm.id?"1.5":"0.5"}px solid ${payMethod===pm.id?pm.color+"50":cs.border}`,
-                borderRadius:12,padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",
-                gap:12,flexDirection:isAr?"row-reverse":"row"}}>
-              <div style={{fontSize:24,flexShrink:0}}>{pm.icon}</div>
-              <div style={{flex:1,textAlign:isAr?"right":"left"}}>
-                <div style={{fontSize:13,fontWeight:600,color:cs.text}}>{isAr?pm.nameAr:pm.name}</div>
-                <div style={{fontSize:10,color:cs.muted,marginTop:2}}>{isAr?pm.descAr:pm.desc}</div>
-              </div>
-              {pm.instant&&<span style={{background:"rgba(79,174,142,.12)",color:"#4FAE8E",fontSize:8.5,fontWeight:700,padding:"2px 8px",borderRadius:99}}>{isAr?"فوري":"INSTANT"}</span>}
-            </div>
-          ))}
-        </div>
-
-        {/* Vodafone Cash wallet number input */}
-        {payMethod==="vodafone_cash"&&walletStep&&<div style={{marginBottom:16}}>
-          <input value={walletNumber} onChange={e=>setWalletNumber(e.target.value)}
-            placeholder={isAr?"رقم Vodafone Cash (01XXXXXXXXX)":"Vodafone Cash number (01XXXXXXXXX)"}
-            style={{width:"100%",background:cs.inp,border:`0.5px solid ${cs.border}`,borderRadius:8,
-              padding:"10px 12px",fontSize:12,color:cs.text,outline:"none"}}/>
-        </div>}
-
-        <Btn cs={cs} style={{width:"100%",padding:"14px 0",fontSize:13}} disabled={proc}
-          onClick={doKashier}>{proc?"...":(isAr?`ادفع ${price?.toLocaleString()} EGP`:`Pay ${price?.toLocaleString()} EGP`)}</Btn>
-
-        <div style={{textAlign:"center",marginTop:14,fontSize:10,color:cs.muted}}>
-          🔒 {isAr?"مؤمّن بـ Kashier — PCI DSS compliant":"Secured by Kashier — PCI DSS compliant"}
-        </div>
-      </>}
-    </div>
-  </div>;
-}
 
 // ── Validation readout ────────────────────────────────────────────────
 //
@@ -2188,37 +1392,6 @@ function UpgradePrompt({cs,t,reason,onUpgrade,onDismiss,onClose,lang}){
 }
 
 // ── Account Type + Device Onboarding ─────────────────────────────
-function AccountTypeSelect({cs,t,lang,onSelect}){
-  const isAr=lang==="ar";
-  const dir=isAr?"rtl":"ltr";
-  return <div dir={dir} style={{position:"fixed",inset:0,background:cs.bg,display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,fontFamily:"'IBM Plex Sans Arabic','Segoe UI',system-ui,sans-serif",padding:24}}>
-    <div style={{maxWidth:480,width:"100%"}}>
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{width:52,height:52,background:"linear-gradient(135deg,#1a56db,#0891b2)",borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 14px"}}>◈</div>
-        <div style={{fontSize:20,fontWeight:700,color:cs.text,marginBottom:6}}>{t.acctType}</div>
-        <div style={{fontSize:12,color:cs.muted}}>Posmoz</div>
-      </div>
-      <div style={{display:"grid",gap:14}}>
-        {[
-          {key:"company", icon:"🏢", title:t.acctCompany, desc:t.acctCompanyDesc, color:"#1a56db"},
-          {key:"personal", icon:"👤", title:t.acctPersonal, desc:t.acctPersonalDesc, color:"#0ea5e9"},
-        ].map(opt=>(
-          <div key={opt.key} onClick={()=>onSelect(opt.key)}
-            style={{background:cs.card,border:`1px solid ${cs.border}`,borderRadius:16,padding:"20px 22px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,flexDirection:isAr?"row-reverse":"row",transition:"all .2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor=opt.color;e.currentTarget.style.transform="translateY(-2px)";}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor=cs.border;e.currentTarget.style.transform="none";}}>
-            <div style={{fontSize:34,flexShrink:0}}>{opt.icon}</div>
-            <div style={{textAlign:isAr?"right":"left"}}>
-              <div style={{fontSize:15,fontWeight:700,color:cs.text,marginBottom:4}}>{opt.title}</div>
-              <div style={{fontSize:12,color:cs.muted,lineHeight:1.5}}>{opt.desc}</div>
-            </div>
-            <div style={{marginInlineStart:"auto",color:opt.color,fontSize:20,flexShrink:0}}>›</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>;
-}
 
 // DeviceSelect component removed — was defined but never rendered
 // anywhere (showDeviceSelect was never set to true), and offered Phone
@@ -2369,7 +1542,6 @@ export default function App(){
   const[backendDown,setBackendDown]=useState(false); // true when /api/analyze fails repeatedly in fallback mode — see runLoop
   const[profile,setProfile]=useState(null);
   const[authChecked,setAuthChecked]=useState(false);
-  const[startupError,setStartupError]=useState(null);
 
   // ── ABSOLUTE SAFETY NET — app MUST unblock within 6s no matter what ──
   // Calls goLandingUnlessDeepLinked, which is declared further down. That is
@@ -2633,8 +1805,6 @@ export default function App(){
   const[analysis,setAnalysis]=useState(null);
   const[history,setHistory]=useState([]);
   const[sessionTime,setSessionTime]=useState(0);
-  const[goodF,setGoodF]=useState(0);
-  const[totalF,setTotalF]=useState(0);
   const[alertCounts,setAlertCounts]=useState({total:0,neck:0,dist:0});
   const[alerts,setAlerts]=useState([]);
   // "Select mode to begin" was the default before Phone/Side modes were
@@ -2841,8 +2011,6 @@ export default function App(){
   const[companyId,setCompanyId]=useState(null);
   const[showUpgrade,setShowUpgrade]=useState(false);
   const[upgradeReason,setUpgradeReason]=useState("");
-  const[showAcctSelect,setShowAcctSelect]=useState(false);
-  const[showDeviceSelect,setShowDeviceSelect]=useState(false);
   // Persisted. It was `useState(true)` with no setter call anywhere in the
   // codebase, so "remind me to take breaks" was a permanent, unreachable yes.
   const[breakReminder,setBreakReminder]=useState(()=>{
@@ -2939,7 +2107,7 @@ export default function App(){
   }, [savedCalib]);
 
   // Score smoothing
-  const { smoothed: smoothedScore, push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 6000);
+  const { push: pushScore, reset: resetScore } = useScoreSmoothing(10000, 6000);
 
   // Break timer
   const { showBreak, dismiss: dismissBreak, snooze: snoozeBreak } =
@@ -3016,7 +2184,6 @@ export default function App(){
       import("./services/api.js").then(({getAuthToken})=>getAuthToken().then(setAuthToken));
     }
   },[page,showOnboardingAnalytics,user,authToken]);
-  const[showLegalCompliance,setShowLegalCompliance]=useState(false);
 
   // ── Core derived constants (moved up: must be declared before any JSX
   // that references them — healthConsentModalEl below uses cs/isAr/dir
@@ -3124,7 +2291,7 @@ export default function App(){
   /** Withdraw camera consent. The invite page has always told users they
       "can revoke consent at any time from your account settings" — there was
       no such control anywhere, and the backend revoke endpoint had no
-      caller. */
+      caller. Wired to the Privacy row in Settings (PanelSettings). */
   async function revokeCameraConsent(){
     healthConsentRef.current=false;
     try{localStorage.removeItem("posmoz_health_consent_v1");}catch{}
@@ -3210,7 +2377,6 @@ export default function App(){
   const[showLiveSettings,setShowLiveSettings]=useState(false);
   const[isSavingSession,setIsSavingSession]=useState(false);
   const[hoverBarIdx,setHoverBarIdx]=useState(null);
-  const[showAllMetrics,setShowAllMetrics]=useState(false);
   const[showBillingDashboard,setShowBillingDashboard]=useState(false);
   const[showReferralProgram,setShowReferralProgram]=useState(false);
   const[showIntegrationsHub,setShowIntegrationsHub]=useState(false);
@@ -3261,14 +2427,13 @@ export default function App(){
     setPage("home"); // FIX: go to home first, don't force camera
   },[user]);
   const[showBilling,setShowBilling]=useState(false);
-  const[rsiData,setRsiData]=useState(null);
   const[showAdmin,setShowAdmin]=useState(false);
   const[showMRR,setShowMRR]=useState(false);
   const[showHelp,setShowHelp]=useState(false);
   const[showChangelog,setShowChangelog]=useState(false);
   const { company } = useCompany(profile);
   // ── SW update banner ───────────────────────────────────────────
-  const [swUpdateReady, setSwUpdateReady] = useState(false);
+  const [, setSwUpdateReady] = useState(false);
   useEffect(()=>{
     const fn = () => setSwUpdateReady(true);
     window.addEventListener("sw-update-available", fn);
@@ -4110,7 +3275,7 @@ export default function App(){
           let fusedLms=rawLms;
           try{ fusedLms=enhancerRef.current.fuse(rawLms,vidRef.current,W,H,performance.now()); }catch(e){ fusedLms=rawLms; }
           const lms=lmSmootherRef.current.smooth(fusedLms);
-          totalRef.current++;setTotalF(totalRef.current);
+          totalRef.current++;
           const rawResult=analyzeMP(lms,W,H,mode,calibData?.distCalibFactor,sessRef.current,calibData?.knownDistCm,calibData); // Side mode removed app-wide
           clinicalSinkRef.current?.(lms,W,H,rawResult);
           // Live precision layer: runs beside the engine; it only replaces the distance
@@ -4191,7 +3356,7 @@ export default function App(){
             // onboarding. Using the engine's own result directly removes the
             // second, broken calculation instead of trying to patch it.
             const finalResult = result;
-            if(finalResult.overall>=65){goodRef.current++;setGoodF(goodRef.current);}
+            if(finalResult.overall>=65){goodRef.current++;}
             // Score pipeline: buffer(60frames) → calibration → EMA smoother → UI
             const smoothed1=pushScore(finalResult.overall);
             const displayScore = smoothed1 ?? finalResult.overall;
@@ -4664,8 +3829,8 @@ export default function App(){
             const smoothed = d.overall;
             const result={...d, overall: smoothed};
             result.pain_prediction = updatePainPrediction(smoothed, result.metrics);
-            totalRef.current++;setTotalF(totalRef.current);
-            if(smoothed>=65){goodRef.current++;setGoodF(goodRef.current);}
+            totalRef.current++;
+            if(smoothed>=65){goodRef.current++;}
             histRef.current.push(smoothed);
             if(histRef.current.length>40)histRef.current=histRef.current.slice(-40);
             pushSessionScore(smoothed);
@@ -4810,7 +3975,6 @@ export default function App(){
   // see themselves and adjust framing before anything is recorded. A
   // Cancel button is visible the whole time this is showing.
   async function openPreview(){
-    const effectiveMode = mode || "laptop";
     if (!mode) { setMode("laptop"); }
     setCameraStatus("requesting");
     try{
@@ -4986,8 +4150,8 @@ export default function App(){
       // The result modal's own "New Session" button reaches this in one click.
       histRef.current=[]; setHistory([]);
       fullHistRef.current=[]; fullHistLastMsRef.current=0;
-      goodRef.current=0; setGoodF(0);
-      totalRef.current=0; setTotalF(0);
+      goodRef.current=0;
+      totalRef.current=0;
       acRef.current={total:0,neck:0,dist:0};
       alRef.current=[]; setAlerts([]);
       lmSmootherRef.current?.reset();
@@ -5509,8 +4673,8 @@ export default function App(){
       // sessionResult rather than from these refs.
       histRef.current=[]; setHistory([]);
       fullHistRef.current=[]; fullHistLastMsRef.current=0;
-      goodRef.current=0; setGoodF(0);
-      totalRef.current=0; setTotalF(0);
+      goodRef.current=0;
+      totalRef.current=0;
       acRef.current={total:0,neck:0,dist:0}; setAlertCounts({total:0,neck:0,dist:0});
       alRef.current=[]; setAlerts([]);
       setSessionTime(0);
@@ -6785,7 +5949,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
   // ── HOME PAGE ─────────────────────────────────────────────────────
   const tierList=isAr?Object.values(TIERS).slice().reverse():Object.values(TIERS);
   const allModes=Object.values(MC); // Phone/Side removed app-wide — MC now only has laptop
-  const modeList=allModes; // no filtering needed with a single mode
+   // no filtering needed with a single mode
 
   if(page==="home") return(
     <ErrorBoundary key="page-home">
@@ -6932,6 +6096,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         allUsers={allUsers} setAllUsers={setAllUsers}
         tier={effectiveTier} setTier={setTier} mode={mode} setMode={setMode}
         setPage={setPage} startCamera={startCamera} addToast={addToast} goToBreak={goToBreak}
+        onRevokeCameraConsent={revokeCameraConsent}
         setShowCertModal={setShowCertModal}
         setShowDashboard={setShowDashboard} setShowCoach={setShowCoach}
         setShowGamification={setShowGamification} setShowBilling={setShowBilling}

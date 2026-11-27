@@ -1,10 +1,8 @@
 import { API_BASE_URL } from "./config/api.js";
-import { SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY, whatsappActivationLink,
-         activationPromise, activateLabel, openWhatsapp,
-         ONLINE_PAYMENT_LIVE } from "./lib/salesWhatsapp.js";
-import { useState, useEffect, useCallback } from "react";
+import { SALES_WHATSAPP_DISPLAY, whatsappActivationLink, activationPromise, activateLabel, openWhatsapp, ONLINE_PAYMENT_LIVE } from "./lib/salesWhatsapp.js";
+import { useState, useCallback } from "react";
 
-import { apiFetch, getAuthToken } from "./services/api.js";
+import { getAuthToken } from "./services/api.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 const API = API_BASE_URL;
 const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLIC_KEY || "";

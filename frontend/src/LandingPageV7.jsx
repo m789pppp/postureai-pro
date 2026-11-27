@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { ContactModal } from "./ContactModal.jsx";
 import { LegalModal } from "./LegalCompliance.jsx";
-import { ONLINE_PAYMENT_LIVE, whatsappActivationLink, activateLabel, activationPromise } from "./lib/salesWhatsapp.js";
+import { ONLINE_PAYMENT_LIVE, whatsappActivationLink, activateLabel } from "./lib/salesWhatsapp.js";
 // Same hand-rolled stroke-icon set used throughout the authenticated app
 // (sidebar, dashboard). The Features/How-It-Works sections here used raw
 // platform emoji (🎯🔮🔥🤖) as their icon language instead — emoji render
@@ -19,7 +19,6 @@ import { Icon } from "./LiveUI.jsx";
 
 const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com";
 const CALENDLY_URL  = import.meta.env.VITE_CALENDLY_URL  || `mailto:${import.meta.env.VITE_SUPPORT_EMAIL || "m789pppp@gmail.com"}?subject=Demo%20Request%20—%20Posmoz%20PostureAI&body=Hi%2C%20I%27d%20like%20to%20book%20a%20demo.%0A%0ACompany%3A%0ATeam%20size%3A%0ACountry%3A`;
-const APP_URL       = typeof window !== "undefined" ? window.location.origin : "";
 
 // ── SPA navigation — dispatches event instead of full-page reload ─
 function navTo(path) {
@@ -96,45 +95,6 @@ function StaggerItem({ children, y = 24, style = {}, className }) {
   );
 }
 
-function AnimNum({ to, suffix = "", prefix = "", decimals = 0 }) {
-  const ref = useRef(null);
-  const [vis, setVis] = useState(false);
-  const [v, setV] = useState(0);
-  const started = useRef(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } }, { threshold: 0.1, rootMargin:"0px 0px -20px 0px" });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-  useEffect(() => {
-    if (!vis || started.current) return;
-    started.current = true;
-    const n = parseFloat(String(to)) || 0;
-    const dur = 1600, start = performance.now();
-    let raf;
-    const tick = now => {
-      const p = Math.min((now - start) / dur, 1);
-      setV((1 - Math.pow(1 - p, 4)) * n);
-      if (p < 1) raf = requestAnimationFrame(tick);
-      else setV(n);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => { if (raf) cancelAnimationFrame(raf); }; // cleanup on unmount
-  }, [vis, to]);
-  // Reset only when target value actually changes (prevents flicker on re-render)
-  const prevTo = useRef(to);
-  useEffect(() => {
-    if (prevTo.current !== to) {
-      prevTo.current = to;
-      started.current = false;
-      setVis(false);
-      setTimeout(() => setVis(true), 50);
-    }
-  }, [to]);
-  return <span ref={ref}>{prefix}{v.toFixed(decimals)}{suffix}</span>;
-}
 
 // ── Currency detection ──────────────────────────────────────────────
 // Real IP-based country lookup (not language!) — a Saudi visitor browsing
@@ -2561,44 +2521,6 @@ function Pricing({ lang, onCTA, mode: modeProp, onModeChange, isEgypt, setCurren
 // FAQItem/FAQ used to live here if this needs restoring later.
 
 // ── Mid-page CTA
-function MidCTA({ lang, onCTA, variant="features" }) {
-  const ar = lang === "ar";
-  const msgs = {
-    features: {
-      en: { h:"Seen enough? Start free in 60 seconds.", sub:"No credit card · Works in your browser · Cancel anytime", cta:"Start Free Trial →" },
-      ar: { h:"شفت كفاية؟ ابدأ مجاناً في 60 ثانية.", sub:"بدون بطاقة · في المتصفح · إلغاء في أي وقت", cta:"ابدأ مجاناً ←" },
-    },
-    cases: {
-      // "50+ teams" contradicted the same 50+ figure used everywhere else on
-      // this page, where it means 50+ beta *users* (see SocialProof and Stats).
-      // One page cannot claim both; users is what the rest of the copy supports.
-      en: { h:"Be one of the first to try it.", sub:"7-day free trial, full access, no commitment.", cta:"Try Posmoz Free →" },
-      ar: { h:"كن من أوائل اللي يجرّبوه.", sub:"تجربة مجانية 7 أيام، وصول كامل، بدون التزام.", cta:"جرّب Posmoz مجاناً ←" },
-    },
-  };
-  const m = (msgs[variant]||msgs.features)[ar?"ar":"en"];
-  return (
-    <div style={{ margin:"0 0 0", padding:"0 24px" }}>
-      <div className="lp-wrap">
-        <div style={{
-          background:"linear-gradient(120deg,rgba(79,124,249,.08),rgba(16,217,160,.04))",
-          border:`1px solid rgba(79,124,249,.18)`, borderRadius:20,
-          padding:"28px 32px", display:"flex", alignItems:"center",
-          gap:24, flexWrap:"wrap", justifyContent:"space-between",
-        }}>
-          <div>
-            <div style={{ fontSize:17, fontWeight:700, color:LPV7_TOKENS.text, marginBottom:5, fontFamily:FONT_DISPLAY }}>{m.h}</div>
-            <div style={{ fontSize:12.5, color:LPV7_TOKENS.muted }}>{m.sub}</div>
-          </div>
-          <button type="button" className="lp-btn lp-btn-primary" onClick={e=>{e.preventDefault();onCTA(e);navTo("/auth?mode=signup");}}
-            style={{...btn("primary","md"), whiteSpace:"nowrap", flexShrink:0}}>
-            {m.cta}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function FinalCTA({ lang, onCTA }) {
   const ar = lang === "ar";

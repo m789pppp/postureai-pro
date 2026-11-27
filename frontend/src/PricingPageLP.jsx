@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { tr } from "./lib/marketingCopy.js";
-import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP, SALES_WHATSAPP_DISPLAY,
-         whatsappActivationLink, activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
+import { ONLINE_PAYMENT_LIVE, SALES_WHATSAPP_DISPLAY, whatsappActivationLink, activationPromise, activateLabel } from "./lib/salesWhatsapp.js";
 
 import { motion, AnimatePresence } from "framer-motion";
 import { PageShell } from "./StandaloneLayout.jsx";

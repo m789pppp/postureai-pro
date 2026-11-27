@@ -35,7 +35,6 @@ const MAX_CAPTURE_MS = 15000;
 const MIN_FRAMES = 10;
 const FOCAL_KEY = "posmoz_camera_focal_v1";
 
-const LM = { NOSE: 0, L_EYE: 2, R_EYE: 5, L_EAR: 7, R_EAR: 8, L_SHOULDER: 11, R_SHOULDER: 12 };
 
 // ── angle helpers — identical to the legacy wizard / postureEngine.js ─────────
 const angleV = (p1, p2) => { const dx = Math.abs(p2.x - p1.x), dy = Math.abs(p2.y - p1.y); return dy < 0.001 ? 90 : Math.abs(Math.atan2(dx, dy) * 180 / Math.PI); };

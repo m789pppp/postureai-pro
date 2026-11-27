@@ -3,12 +3,8 @@
  * Granular permissions · Role scopes · Audit logs · Activity tracking
  * SAML SSO config · GDPR tools
  */
-import { useState, useEffect, useCallback, useRef } from "react";
-import {
-  db, auth,
-  doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
-  collection, query, where, orderBy, limit, getDocs, serverTimestamp,
-} from "./firebase.js";
+import { useState, useEffect } from "react";
+import { db, doc, getDoc, setDoc, addDoc, collection, query, orderBy, limit, getDocs, serverTimestamp } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 /* ── Design tokens ─────────────────────────────────────────────── */
@@ -508,21 +504,6 @@ function AuditLogs({orgId,isAr}) {
     getAuditLogs(orgId,100).then(l=>{setLogs(l);setLoading(false);});
   },[orgId]);
 
-  function generateMockLogs() {
-    const actors=["admin@co.com","ahmed@co.com","sara@co.com","system"];
-    const events=Object.entries(AUDIT_EVENTS);
-    return Array.from({length:40},(_,i)=>{
-      const [type,meta]=events[i%events.length];
-      const d=new Date(); d.setMinutes(d.getMinutes()-i*17);
-      return {
-        id:`log-${i}`, type, actor:actors[i%actors.length],
-        details:`${meta.label} performed`, severity:meta.severity,
-        ip:`196.${140+i%10}.${i%255}.${i%255}`,
-        created_at:d.toISOString(),
-        timestamp:{toDate:()=>d},
-      };
-    });
-  }
 
   const filtered=logs.filter(l=>{
     if(filter!=="all"&&l.severity!==filter) return false;
@@ -979,13 +960,6 @@ function GDPRTools({orgId,adminUid,isAr}) {
     });
   },[orgId]);
 
-  function mockGDPRRequests() {
-    return [
-      {id:"gdpr-1",type:"access",subject_email:"user@company.com",status:"fulfilled",created_at:new Date(Date.now()-864000000).toISOString(),notes:"All data exported"},
-      {id:"gdpr-2",type:"deletion",subject_email:"ex-employee@co.com",status:"pending",created_at:new Date(Date.now()-172800000).toISOString(),notes:""},
-      {id:"gdpr-3",type:"portability",subject_email:"contractor@firm.com",status:"in_progress",created_at:new Date(Date.now()-432000000).toISOString(),notes:"Processing"},
-    ];
-  }
 
   const submit=async()=>{
     if(!form.subject_email) return;

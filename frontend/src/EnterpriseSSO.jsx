@@ -3,7 +3,7 @@
  * Supports: Azure AD, Okta, Google Workspace, Auth0, OneLogin
  * Firebase handles the OIDC/SAML flow — this file manages the UI + config
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   getAuth, signInWithPopup,
   OAuthProvider, GoogleAuthProvider,
@@ -13,9 +13,7 @@ import {
 // SAMLAuthProvider — Firebase enterprise SSO (requires Firebase Console setup)
 // Falls back to OAuthProvider for non-SAML providers
 import { db } from "./firebase.js";
-import {
-  doc, getDoc, setDoc, collection, query, where, getDocs, limit,
-} from "firebase/firestore";
+import { doc, setDoc, collection, query, where, getDocs, limit } from "firebase/firestore";
 
 const auth = getAuth();
 

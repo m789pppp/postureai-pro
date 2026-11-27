@@ -2,7 +2,7 @@
  * Posmoz — Empty / Loading / Error States v1.0
  * Skeleton loaders · Onboarding · Zero-state dashboards · Error states
  */
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 // ── SKELETON PRIMITIVES ───────────────────────────────────────────
 export function SkeletonBox({ w = "100%", h = 14, r = 8, style = {} }) {
@@ -347,7 +347,6 @@ export function OnboardingSteps({ steps, currentStep, isAr }) {
       {steps.map((step, i) => {
         const done    = i < currentStep;
         const active  = i === currentStep;
-        const pending = i > currentStep;
         return (
           <div key={i} style={{ display: "flex", alignItems: "center", flex: i < steps.length - 1 ? 1 : 0 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>

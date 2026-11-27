@@ -217,7 +217,6 @@ function analyzeHistory(messages) {
 // ── Follow-up engine ──────────────────────────────────────────────
 function followUp(intent, d, hist, ar) {
   if(hist.lastBot.includes("💬")) return ""; // already asked
-  const already = hist.discussed;
   const pool = {
     pain:     ar ? ["💬 الألم من إمتى بالتحديد؟","💬 وين بالظبط بتحس بالألم — رقبة، كتف، أم ظهر علوي؟"]
                  : ["💬 How long have you had this pain?","💬 Where exactly — neck, shoulder, or upper back?"],

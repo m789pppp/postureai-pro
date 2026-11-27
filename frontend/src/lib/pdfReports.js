@@ -248,7 +248,6 @@ const PDF_FLAGS = {
 };
 
 // ── Spacing — 8pt grid ────────────────────────────────────────────
-const SP = { xs:2, sm:4, md:8, lg:12, xl:20, xxl:32, page:18 };
 
 
 // ── Core helpers ───────────────────────────────────────────────────
@@ -298,7 +297,6 @@ function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
 function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
 function hr(doc,x,y,w,col=PDF_TOKENS.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
-function vl(doc,x,y,h,col=PDF_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
 
 // Truncate a single-line string with "…" so it never overflows a fixed-width
 // slot (table cell, footer strip, badge) — must be called AFTER the font
@@ -728,7 +726,6 @@ export async function generateSessionPDF({ session, profile, user, lang="en", se
   const hist     = session.score_history||[];
   const metrics  = session.metrics||{};
   const aiText   = session.ai_tip||session.ai_insight||session.claude_analysis||aiSummary||"";
-  const painSum  = session.pain_summary||"";
   const name     = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
   const email    = user?.email||"";
   const company  = profile?.company_name||profile?.organization||"—";
@@ -2397,7 +2394,6 @@ export async function generateComparisonPDF({ session1, session2, sessions=[], p
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210, H=297, ml=18, mr=18, cw=W-ml-mr;
-  const sf  = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const now = new Date();
   const nowStr = now.toLocaleDateString(isAr?"ar-EG":"en-US",{year:"numeric",month:"long",day:"numeric"});
   const name   = profile?.name||user?.displayName||user?.email?.split("@")[0]||(isAr?"مستخدم":"User");
@@ -3083,7 +3079,6 @@ export async function generateLongitudinalPDF({ sessions=[], profile, user, lang
   const doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
   await Promise.all([_ensureCairoFont(doc,isAr), _ensureLogo()]);
   const W=210,H=297,ml=18,mr=18,cw=W-ml-mr;
-  const sf = (sz,st="normal") => font(doc,sz,st,isAr&&_cairoLoaded);
   const _rawName4 = profile?.name||user?.displayName||(isAr?"مستخدم":"User");
   const name   = _rawName4.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ').trim();
   const now    = new Date();

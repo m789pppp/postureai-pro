@@ -8,7 +8,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { API_BASE_URL } from "./config/api.js";
 import { LegalModal } from "./LegalCompliance.jsx";
 import { ContactModal } from "./ContactModal.jsx";
-import { TERMS_VERSION, MIN_AGE, meetsMinimumAge, ageFromDob, makeConsentGrant } from "./lib/consent.js";
+import { TERMS_VERSION, MIN_AGE, meetsMinimumAge, ageFromDob } from "./lib/consent.js";
 // Enterprise SSO was sold on four marketing surfaces but SSOLoginPanel was
 // never rendered anywhere in the app — only handleSSORedirect was imported,
 // so no user could ever START an SSO sign-in. Wired in here behind a link.
@@ -257,8 +257,6 @@ export default function AuthPage({ darkMode, setDarkMode, lang, setLang, onAuth,
   // the Terms/Privacy checkbox below; this one is optional marketing and has
   // to be opted into.
   const [newsletter,  setNewsletter] = useState(false);
-  const [showPass,    setShowPass]   = useState(false);
-  const [showPass2,   setShowPass2]  = useState(false);
   const [showP,       setShowP]      = useState(false);
   const [showP2,      setShowP2]     = useState(false);
   const [remember,    setRemember]   = useState(true);

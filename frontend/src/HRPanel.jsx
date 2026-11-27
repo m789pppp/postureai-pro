@@ -5,13 +5,7 @@
 import { API_BASE_URL } from "./config/api.js";
 import { whatsappRequestLink } from "./lib/salesWhatsapp.js";
 import { useState, useEffect, useRef } from "react";
-import {
-  getDepartments, createDepartment, deleteDepartment,
-  getDepartmentEmployees, bulkInviteEmployees,
-  getCompany, updateCompany,
-  getAllUsers,
-  getAuthToken, SUPPORT_EMAIL,
-} from "./firebase.js";
+import { getDepartments, createDepartment, deleteDepartment, getDepartmentEmployees, bulkInviteEmployees, getCompany, getAuthToken } from "./firebase.js";
 
 const sc = v => v>=75?"#10b981":v>=50?"#f59e0b":"#ef4444";
 const grade = (v,ar) => v>=85?(ar?"ممتاز":"Excellent"):v>=70?(ar?"جيد":"Good"):v>=50?(ar?"مقبول":"Fair"):(ar?"ضعيف":"Poor");
@@ -107,7 +101,7 @@ function DeptCard({ dept, employees = [], isAr, onDelete }) {
         )}
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:avg>0?12:0 }}>
-        {[[isAr?"جلسات":"Sessions",ds.length,"#60a5fa"],[isAr?"متوسط":"Avg",avg?`${avg}/100`:"-",avg?sc(avg):"#475569"],[isAr?"خطر":"Risk",risk,risk>0?"#ef4444":"#10b981"]].map(([l,v,c])=>(
+        {[[isAr?"جلسات":"Sessions",de.length,"#60a5fa"],[isAr?"متوسط":"Avg",avg?`${avg}/100`:"-",avg?sc(avg):"#475569"],[isAr?"خطر":"Risk",risk,risk>0?"#ef4444":"#10b981"]].map(([l,v,c])=>(
           <div key={l} style={{ background:"rgba(0,0,0,.2)", borderRadius:8, padding:"8px 10px", textAlign:"center" }}>
             <div style={{ fontSize:9, color:"#475569", marginBottom:3, textTransform:"uppercase", letterSpacing:".06em" }}>{l}</div>
             <div style={{ fontSize:16, fontWeight:700, color:c }}>{v}</div>
@@ -533,7 +527,6 @@ export function HRPanel({ user, profile, companyId: cid, cs, t, addToast, onBack
     setAlertSending(false);
   }
 
-  const dark = { bg:"#0d1a2e", card:"#05101f", border:"rgba(255,255,255,.07)", text:"#f0f6ff", muted:"#64748b" };
 
   if(loading) return (
     <div style={{minHeight:"100dvh",background:"#0d1a2e",display:"flex",alignItems:"center",justifyContent:"center",color:"#f0f6ff",fontFamily:"'IBM Plex Sans Arabic','Inter',system-ui"}}>

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { db } from "./firebase.js";
-import { doc, getDoc, updateDoc, increment, collection, getDocs, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
 const ROADMAP_ITEMS = [
@@ -40,9 +40,7 @@ const SERVICES_STATUS = [
 ];
 
 const STATUS_COLORS = { operational:"#10b981", degraded:"#f59e0b", down:"#ef4444" };
-const ITEM_STATUS   = { shipped:"#10b981", in_progress:"#6366f1", planned:"#0ea5e9", considering:"#64748b" };
 const TYPE_COLORS   = { major:"#6366f1", minor:"#0ea5e9", patch:"#64748b" };
-const TIER_COLORS   = { gold:"#f59e0b", silver:"#94a3b8", bronze:"#cd7c2f" };
 const CAT_COLORS    = { platform:"#6366f1", enterprise:"#f59e0b", billing:"#10b981", product:"#0ea5e9", analytics:"#8b5cf6", integrations:"#ec4899" };
 
 export function GrowthHub({ profile, cs, lang, onClose }) {

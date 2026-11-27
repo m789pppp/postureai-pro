@@ -5,7 +5,7 @@
  * Executive KPIs: company wellness - dept comparison - session regularity - posture stability - monthly insights
  * Powered by Posmoz AI — runs locally in the browser, free, no API key
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { sessionFatigue } from "./lib/clinicalMetrics.js";
 import { geminiAnalysis } from "./gemini.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
@@ -34,15 +34,6 @@ function Md({ text }) {
 }
 
 /* ── Animated counter ─────────────────────────────────────────────── */
-function useCounter(target, active) {
-  const [val,setVal]=useState(0);
-  useEffect(()=>{
-    if(!active) return;
-    let f=0; const tick=()=>{ f++; setVal(Math.round((1-Math.pow(1-f/60,3))*target)); if(f<60) requestAnimationFrame(tick); };
-    requestAnimationFrame(tick);
-  },[target,active]);
-  return val;
-}
 
 /* ── Loading skeleton ─────────────────────────────────────────────── */
 function Skeleton({h=14,w="100%",r=6}) {
@@ -99,19 +90,6 @@ function Bars({data=[],h=60,color}) {
 }
 
 /* ── Heatmap cell ─────────────────────────────────────────────────── */
-function HeatCell({v,label,sub}) {
-  const color=v==null?"rgba(148,163,184,.08)":v>=80?"rgba(16,185,129,.18)":v>=60?"rgba(245,158,11,.15)":v>=40?"rgba(239,68,68,.12)":"rgba(239,68,68,.22)";
-  const tc=v==null?"var(--wa-muted)":v>=80?"#34d399":v>=60?"#fbbf24":v>=40?"#f87171":"#ef4444";
-  return (
-    <div style={{background:color,borderRadius:10,padding:"11px 12px",textAlign:"center",minHeight:64,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,transition:"transform 200ms",cursor:"default"}}
-      onMouseEnter={e=>e.currentTarget.style.transform="scale(1.04)"}
-      onMouseLeave={e=>e.currentTarget.style.transform="none"}>
-      <div style={{fontFamily:SYNE,fontSize:v!=null?20:12,fontWeight:800,color:tc,lineHeight:1}}>{v!=null?v:"—"}</div>
-      <div style={{fontSize:11,fontWeight:700,color:"var(--wa-muted)",textTransform:"uppercase",letterSpacing:".06em"}}>{label}</div>
-      {sub && <div style={{fontSize:11,color:tc,fontWeight:600}}>{sub}</div>}
-    </div>
-  );
-}
 
 /* ── Gauge ring ───────────────────────────────────────────────────── */
 function Gauge({value,size=90,sw=8,label,sublabel}) {
@@ -429,7 +407,6 @@ function ProductivityTrends({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
     {label:isAr?"نقاط الصحة":"Wellness score", data:(data.daily30||[]).map(d=>d.score||0), color:"#1a56db"},
     {label:isAr?"جلسات/يوم":"Sessions/day",   data:(data.daily30||[]).map(d=>d.count*25),  color:"#10b981"},
   ];
-  const weekDays = isAr?["أح","إث","ثل","أر","خم","جم","سب"]:["Su","Mo","Tu","We","Th","Fr","Sa"];
   return (
     <Sec title={isAr?"اتجاهات الإنتاجية":"Productivity Trends"} sub={isAr?"30 يوم | نقاط الصحة والجلسات":"30 days | Wellness score & session frequency"} accent="#1a56db">
       {loading ? <CardSkeleton h={100}/> : (
@@ -507,7 +484,6 @@ function FocusTrends({data,isAr,loading}) {
 /* ── Fatigue Patterns ───────────────────────────────────────────── */
 function FatiguePatterns({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
   const weekDays = isAr?["أح","إث","ثل","أر","خم","جم","سب"]:["Su","Mo","Tu","We","Th","Fr","Sa"];
-  const hourBuckets = [isAr?"صباح":"AM",isAr?"ظهر":"Noon",isAr?"بعد الظهر":"PM",isAr?"مساء":"Eve"];
   const fd = data.fatigueDecline;
   const burnColor = fd==null?"#64748b":fd>=15?"#ef4444":fd>=5?"#f59e0b":"#10b981";
   return (
@@ -583,7 +559,6 @@ function FatiguePatterns({data,isAr,loading,onAI,aiData,aiLoading,aiError}) {
 
 /* ── Engagement Analytics ───────────────────────────────────────── */
 function EngagementAnalytics({data,profile,isAr,loading}) {
-  const streakDays = [1,2,3,4,5,6,7];
   const currentStreak = data.streak||0;
   return (
     <Sec title={isAr?"تحليلات التفاعل":"Engagement Analytics"} sub={isAr?"السلاسل والاتساق والحوافز":"Streaks, consistency & motivation"} accent="#f59e0b">
@@ -799,52 +774,6 @@ function BurnoutAlerts({data,isAr,loading}) {
 }
 
 /* ── Monthly Insights ───────────────────────────────────────────── */
-function MonthlyInsights({data,profile,isAr,loading,onAI,aiData,aiLoading,aiError}) {
-  const improvePct = pct(data.monthAvg,data.prevAvg);
-  return (
-    <Sec title={isAr?"رؤى الشهر":"Monthly Insights"} sub={isAr?"ملخص الأداء الشهري — AI":"Monthly performance digest — AI"} accent="#10b981">
-      {loading ? <CardSkeleton h={120}/> : (
-        <>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
-            {[
-              {l:isAr?"هذا الشهر":"This month",  v:`${data.monthAvg}/100`, c:sc(data.monthAvg)},
-              {l:isAr?"الشهر الماضي":"Last month", v:`${data.prevAvg||"—"}/100`, c:sc(data.prevAvg)},
-              {l:isAr?"التغيير":"Change",          v:`${improvePct>0?"+":""}${improvePct}%`, c:improvePct>=0?"#10b981":"#ef4444"},
-            ].map((m,i)=>(
-              <div key={i} style={{background:"var(--wa-surf)",border:"1px solid var(--wa-border)",borderRadius:11,padding:"11px 13px",textAlign:"center"}}>
-                <div style={{fontSize:11,color:"var(--wa-muted)",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>{m.l}</div>
-                <div style={{fontFamily:SYNE,fontSize:20,fontWeight:800,color:m.c}}>{m.v||"—"}</div>
-              </div>
-            ))}
-          </div>
-          {/* 6-month spark */}
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
-              {isAr?"اتجاه 6 أشهر":"6-Month Trend"}
-            </div>
-            <Spark data={(data.monthly6||[]).map(m=>m.score)} color="#10b981" h={48}/>
-            <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-              {(data.monthly6||[]).map(m=>(
-                <div key={m.label} style={{fontSize:10.5,color:"var(--wa-muted)",fontWeight:600}}>{m.label}</div>
-              ))}
-            </div>
-          </div>
-          {/* Session count bars */}
-          <div>
-            <div style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".07em",color:"var(--wa-muted)",marginBottom:8}}>
-              {isAr?"جلسات/شهر":"Sessions / month"}
-            </div>
-            <Bars data={(data.monthly6||[]).map(m=>({v:m.count,l:m.label}))} h={42} color="#1a56db"/>
-          </div>
-        </>
-      )}
-      <button onClick={onAI} style={{width:"100%",marginTop:12,background:"rgba(16,185,129,.08)",border:"1px solid rgba(16,185,129,.18)",borderRadius:9,padding:"9px 0",fontSize:11,fontWeight:700,color:"#34d399",cursor:"pointer"}}>
-        🧠 {isAr?"توليد رؤى الشهر":"Generate Monthly Insights"}
-      </button>
-      {(aiData||aiLoading||aiError) && <AIBlock loading={aiLoading} data={aiData} error={aiError} onRetry={onAI} isAr={isAr} accentColor="#10b981"/>}
-    </Sec>
-  );
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    MAIN EXPORT

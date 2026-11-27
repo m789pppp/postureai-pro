@@ -104,7 +104,6 @@ export function AuditSystem({ profile, cs, lang, token, onClose }) {
   }, [events, search, catFilter, sevFilter]);
 
   const criticalCount = events.filter(e => e.severity === "critical").length;
-  const warningCount  = events.filter(e => e.severity === "warning").length;
 
   // ── Export via backend ─────────────────────────────────────────────
   const doExport = async () => {

@@ -6,7 +6,7 @@ export { CalibrationWizard } from "./SmartCalibration.jsx";
 
 // ── Calibration constants ─────────────────────────────────────────
 const CALIB_DURATION = 10; // seconds
-const CALIB_FRAMES   = 30; // frames to average
+ // frames to average
 
 // ── Helpers ───────────────────────────────────────────────────────
 // Absolute angle (used for scoring thresholds)
@@ -68,7 +68,6 @@ export function LegacyCalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }
   const [step, setStep]       = useState("intro");   // intro | align | counting | done
   const [countdown, setCountdown] = useState(CALIB_DURATION);
   const [progress, setProgress]   = useState(0);
-  const [frames, setFrames]       = useState([]);
   const [stream, setStream]       = useState(null);
   const [error, setError]         = useState("");
   const [result, setResult]       = useState(null);
@@ -255,7 +254,6 @@ export function LegacyCalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }
   // Countdown
   const startCounting = useCallback(() => {
     frameRef.current = [];
-    setFrames([]);
     setStep("counting");
     let remaining = CALIB_DURATION;
     setCountdown(remaining);
@@ -292,7 +290,7 @@ export function LegacyCalibrationWizard({ uid, onDone, onSkip, cs, lang = "en" }
     const { W: Wd, H: Hd } = dimsRef.current;
     collected.forEach(lms0 => {
       const P = i => ({ x: (lms0[i]?.x ?? 0) * Wd, y: (lms0[i]?.y ?? 0) * Hd, visibility: lms0[i]?.visibility });
-      const lms = lms0; // keep raw for visibility/IPD checks below
+       // keep raw for visibility/IPD checks below
       const lSh = P(LM.L_SHOULDER), rSh = P(LM.R_SHOULDER);
       const lEar = P(LM.L_EAR),    rEar = P(LM.R_EAR);
       const lEye = P(LM.L_EYE),    rEye = P(LM.R_EYE);

@@ -4,10 +4,7 @@
  * Pulls live customer health scores, login frequency, session counts from Firestore.
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  collection, query, where, orderBy, limit, getDocs,
-  getDoc, doc, updateDoc, serverTimestamp,
-} from "firebase/firestore";
+import { collection, query, where, orderBy, limit, getDocs, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase.js";
 import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 
@@ -110,7 +107,6 @@ export function ChurnPrediction({ profile, cs, lang, token, onClose }) {
   const [sortBy, setSortBy]         = useState("churnRisk");
   const [triggering, setTriggering] = useState(null);
   const [triggerResult, setTriggerResult] = useState({}); // {customerId: "ok"|"error"}
-  const [page, setPage]             = useState(0);
   const PAGE_SIZE = 50;
 
   // ── Load real data from Firestore ────────────────────────────────

@@ -36,7 +36,7 @@ export default function EmbedWidget() {
 
   const [board,   setBoard]   = useState(MOCK_BOARD.slice(0, limit));
   const [org,     setOrg]     = useState({ name: "Posmoz Team", logo: null });
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   const isDark = theme === "dark";
   const bg     = isDark ? "#0f172a" : "#ffffff";

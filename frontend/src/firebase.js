@@ -20,12 +20,7 @@ import {
   browserLocalPersistence, browserSessionPersistence, setPersistence,
   deleteUser as _deleteAuthUser,
 } from "firebase/auth";
-import {
-  initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, getDoc, getDocFromServer, setDoc, updateDoc, addDoc, deleteDoc,
-  collection, query, where, orderBy, limit, getDocs,
-  onSnapshot, serverTimestamp as _serverTimestamp, increment, writeBatch, runTransaction,
-} from "firebase/firestore";
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocFromServer, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, orderBy, limit, getDocs, onSnapshot, serverTimestamp as _serverTimestamp, runTransaction } from "firebase/firestore";
 import { tierAtLeast } from "./lib/tierQuality.js";
 import { bySessionTimeDesc } from "./lib/clinicalMetrics.js";
 
@@ -454,7 +449,6 @@ function _shouldElevateToElite(email) {
 // setProfile() with the raw doc strips Elite from elevated accounts.
 function _applyEliteElevation(data) {
   if (!data) return data;
-  const TIER_LEVEL = { standard:0, basic:1, professional:2, elite:3 };
 
   // ── Elite whitelist check FIRST — whitelisted users bypass ALL expiry logic ──
   // Founder accounts, university pilots, etc. are ALWAYS elite regardless of
@@ -930,72 +924,6 @@ export async function sendWeeklyProgressEmails(params) {
   }
 }
 
-// ── Demo Data Seeder ──────────────────────────────────────────────
-export async function seedDemoUser(uid, type) {
-  const base = {
-    updated_at: _serverTimestamp(),
-    setup_complete: true,
-    last_session_at: _serverTimestamp(),
-  };
-
-  if (type === "individual") {
-    // 12 demo sessions
-    const sessions = [];
-    for (let i = 11; i >= 0; i--) {
-      const score = Math.round(65 + Math.random() * 25);
-      const d = new Date(); d.setDate(d.getDate() - i);
-      sessions.push({
-        uid, avg_score: score, duration_sec: 1200 + Math.round(Math.random()*1800),
-        created_at: d, feedback: score > 80 ? "great" : score > 65 ? "good" : "needs_work",
-      });
-    }
-    for (const s of sessions) {
-      await import("firebase/firestore").then(({addDoc,collection}) =>
-        addDoc(collection(db,"sessions"), s).catch(()=>{})
-      );
-    }
-    const scores = sessions.map(s=>s.avg_score||0).filter(n=>n>0);
-    const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
-    await import("firebase/firestore").then(({updateDoc,doc:_doc}) =>
-      updateDoc(_doc(db,"users",uid), { ...base, avg_score:avg, sessions_count:12, streak_days:5 }).catch(()=>{})
-    );
-  }
-
-  if (type === "hr_admin") {
-    // 5 demo employees
-    const employees = [
-      { name:"Ahmed Hassan",    email:"ahmed@democorp.com",   department:"Engineering", avg_score:82, sessions_count:18 },
-      { name:"Sara Mohamed",    email:"sara@democorp.com",    department:"Design",      avg_score:71, sessions_count:9  },
-      { name:"Omar Khalil",     email:"omar@democorp.com",    department:"Engineering", avg_score:44, sessions_count:3  },
-      { name:"Nada Youssef",    email:"nada@democorp.com",    department:"Marketing",   avg_score:88, sessions_count:22 },
-      { name:"Karim Farouk",    email:"karim@democorp.com",   department:"Sales",       avg_score:55, sessions_count:6  },
-    ];
-    const companyRef = await import("firebase/firestore").then(({addDoc,collection}) =>
-      addDoc(collection(db,"companies"), {
-        name:"Posmoz Demo Co.", owner_uid:uid, tier:"professional",
-        created_at:_serverTimestamp(), employee_count:employees.length,
-      }).catch(()=>({id:"demo-co"}))
-    );
-    const companyId = companyRef?.id || "demo-co";
-    for (const emp of employees) {
-      await import("firebase/firestore").then(({addDoc,collection}) =>
-        addDoc(collection(db,"users"), {
-          ...emp, company_id:companyId, user_type:"employee",
-          is_active:true, created_at:_serverTimestamp(),
-          last_session_at:_serverTimestamp(),
-        }).catch(()=>{})
-      );
-    }
-    await import("firebase/firestore").then(({updateDoc,doc:_doc}) =>
-      updateDoc(_doc(db,"users",uid), {
-        ...base, company_id:companyId, company:"Posmoz Demo Co.",
-        user_type:"hr_admin", is_org_owner:true, tier:"professional",
-        avg_score:68, sessions_count:3, streak_days:1,
-      }).catch(()=>{})
-    );
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────
 // METRIC LABEL MAP — human-readable labels for every engine key
 // ─────────────────────────────────────────────────────────────────
@@ -1016,24 +944,6 @@ const METRIC_LABELS = {
   trunk_lean:     "Trunk Lean",
   hip_angle:      "Hip Angle",
   knee_angle:     "Knee Angle",
-};
-const METRIC_LABELS_AR = {
-  neck_lean:      "ميل الرقبة",
-  neck_lean_side: "ميل الرقبة (جانبي)",
-  head_tilt:      "انحناء الرأس",
-  head_yaw:       "دوران الرأس",
-  shoulder:       "توازن الكتفين",
-  spine_lean:     "ميل العمود الفقري",
-  spine_align:    "محاذاة العمود الفقري",
-  fhp:            "تقدم الرأس للأمام",
-  fhp_side:       "تقدم الرأس (جانبي)",
-  rounded:        "تقريس الأكتاف",
-  elbow:          "زاوية الكوع",
-  monitor:        "ارتفاع الشاشة",
-  distance:       "مسافة المشاهدة",
-  trunk_lean:     "ميل الجذع",
-  hip_angle:      "زاوية الورك",
-  knee_angle:     "زاوية الركبة",
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1088,7 +998,6 @@ const FB_FLAGS = {
 };
 
 // ── Spacing — 8pt grid ────────────────────────────────────────────
-const SP = { xs:2, sm:4, md:8, lg:12, xl:20, xxl:32, page:18 };
 
 
 // ── Core helpers ───────────────────────────────────────────────────
@@ -1120,7 +1029,6 @@ function tc(doc,...c){doc.setTextColor(...c);}
 function lw(doc,w){doc.setLineWidth(w);}
 function rr(doc,x,y,w,h,r=3,m="F"){doc.roundedRect(x,y,w,h,r,r,m);}
 function hr(doc,x,y,w,col=FB_TOKENS.border,thickness=0.18){dc(doc,...col);lw(doc,thickness);doc.line(x,y,x+w,y);lw(doc,0.3);}
-function vl(doc,x,y,h,col=FB_TOKENS.border){dc(doc,...col);lw(doc,0.18);doc.line(x,y,x,y+h);lw(doc,0.3);}
 
 // ── Font helper ────────────────────────────────────────────────────
 let _cairoLoaded=false, _cairoCachedB64=null;
@@ -1138,10 +1046,6 @@ async function _loadCairo(doc){await _ensureCairoFont(doc);return _cairoLoaded;}
 
 function font(doc,size,style="normal",isAr=false){
   doc.setFont(isAr&&_cairoLoaded?"cairo":"helvetica",style);
-  doc.setFontSize(size);
-}
-function fontAr(doc,size,style="normal",useAr=false){
-  doc.setFont(useAr&&_cairoLoaded?"cairo":"helvetica",style);
   doc.setFontSize(size);
 }
 
