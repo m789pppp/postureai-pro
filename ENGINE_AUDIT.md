@@ -54,6 +54,8 @@
 
 ## 5. حاجات باينة إنها شغالة وهي مش شغالة
 
+اتصلحت كلها في PR #20، ما عدا RISK_ZONES اللي هتتربط في Score v2.
+
 دي أخطر نوع، لأن الواجهة أو النص بيوعد بحاجة مش موجودة.
 
 | الحاجة | المكان | المشكلة | الخطورة |
@@ -69,7 +71,7 @@
 ## 6. كود مكتوب ومش مستخدم (lint)
 
 - `postureEngine.js`: الدوال `vec3` و`angleBetween3D`، والمتغيرات `elevRatio` (analyzeRoundedShoulders) و`lateralPx` (analyzeFHP).
-- `PostureCalibration.jsx`: `CALIB_FRAMES` و`frames`، يعني الـ calibration القديم مش بيجمع الفريمات اللي الثوابت بتاعته بتقول عليها.
+- `PostureCalibration.jsx`: `CALIB_FRAMES` و`frames` state مش مستخدمين. الفريمات نفسها بتتجمع صح في `frameRef`، فده كود زيادة بس مش عطل.
 - `SmartCalibration.jsx` و`App.jsx`: ثابت `LM` مش مستخدم.
 - `App.jsx`: 78 حاجة مش مستخدمة. منهم 35 import (APIs وcomponents)، و8 states متعرفة ومحدش بيستخدمها (`showAcctSelect`، `showDeviceSelect`، `showLegalCompliance`، `rsiData`، `startupError`، `swUpdateReady`، `company`، `isOnline`)، ودوال كاملة (`Onboard`، `Auth`، `Profile`، `Pricing`، `AccountTypeSelect`).
 - `LiveUI.jsx`: `mpIcon` و`coachIcon`.
