@@ -30,7 +30,7 @@ const TherapistMarketplace = lazy(()=>import("./TherapistMarketplace.jsx").then(
 const SymptomCorrelation = lazy(()=>import("./SymptomCorrelation.jsx").then(m=>({default:m.SymptomCorrelation})));
 import { ErrorBoundary } from "./ErrorBoundary.jsx";
 import { CalibrationWizard, useCalibration } from "./PostureCalibration.jsx";
-import { BreakTimer, useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
+import { useBreakTimer, useScoreSmoothing, useSoundFeedback, usePainPrediction } from "./PostureUtils.jsx";
 import { AICoach } from "./AICoach.jsx";
 import { preloadAIInsights } from "./aiPreloader.js";
 import { NotificationsHub, useNotifications } from "./NotificationsHub.jsx";
@@ -3047,8 +3047,8 @@ export default function App(){
     // a break reminder is not a posture failure, and 0 rendered it with the
     // red "your posture is critical" dot.
     if(desktopNotifs) sendDesktopNotif(
-      isAr?`وقت الاستراحة! مرّت ${breakIntervalMin} دقيقة — خذ استراحة دقيقتين`
-          :`Break time! ${breakIntervalMin} min passed — take a 2-min stretch`,
+      isAr?`وقت الاستراحة! مرّت ${breakIntervalMin} دقيقة — خد استراحة حركة قصيرة`
+          :`Break time! ${breakIntervalMin} min passed — take a short movement break`,
       100, { lang: isAr?"ar":"en" }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -6972,7 +6972,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
         calibData={calibData} Toasts={Toasts} toasts={toasts} dismissToast={dismissToast}
         NavAvatarDropdown={NavAvatarDropdown} UpgradePrompt={UpgradePrompt}
         showUpgrade={showUpgrade} upgradeReason={upgradeReason}
-        setShowUpgrade={setShowUpgrade} BreakTimer={BreakTimer}
+        setShowUpgrade={setShowUpgrade}
         CalibrationWizard={CalibrationWizard} setCalibData={setCalibData}
         toast={addToast}
         downloadPDF={downloadPDF}
@@ -9385,7 +9385,7 @@ async function downloadPDF(sessionOverride, isClinical=false){
           <div style={{margin:"10px 14px",background:"rgba(214,162,76,.08)",border:"1px solid rgba(214,162,76,.3)",borderRadius:12,padding:"12px 14px",textAlign:"center",animation:"fadeUp .3s ease"}}>
             <div style={{fontSize:14,fontWeight:700,color:darkMode?"#fcd34d":"#b45309",marginBottom:4}}>⏰ {isAr?"وقت استراحة!":"Break time!"}</div>
             <div style={{fontSize:11,color:cs.muted,marginBottom:10}}>
-              {isAr?`${breakIntervalMin} دقيقة مرت — استرح دقيقتين`:`${breakIntervalMin} min passed — take a 2-min stretch`}
+              {isAr?`${breakIntervalMin} دقيقة مرت — خد استراحة حركة قصيرة`:`${breakIntervalMin} min passed — take a short movement break`}
             </div>
             <div style={{display:"flex",gap:6,justifyContent:"center"}}>
               <button className="liveui-focusable" onClick={()=>{dismissBreak();goToBreak();}}

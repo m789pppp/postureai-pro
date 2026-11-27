@@ -88,21 +88,40 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false, alertCau
   const [refImgFailed, setRefImgFailed] = useState(false);
   const [exImgFailed,  setExImgFailed]  = useState({});
   const tickRef = useRef(null);
+  // The short beat between "time's up" and the next exercise. Held in a ref so
+  // a manual Next/Prev or leaving the page cancels it — otherwise it fired
+  // anyway and skipped an exercise, or chimed after the user had left.
+  const advanceRef = useRef(null);
 
   const ex = EXERCISES[idx];
   const total = EXERCISES.length;
+  const totalMin = Math.max(1, Math.round(EXERCISES.reduce((s, e) => s + e.dur, 0) / 60));
 
   const clearTick = () => { if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; } };
-  useEffect(() => () => clearTick(), []);
+  const clearAdvance = () => { if (advanceRef.current) { clearTimeout(advanceRef.current); advanceRef.current = null; } };
+  useEffect(() => () => { clearTick(); clearAdvance(); }, []);
 
   // Reset the countdown whenever we land on a new exercise.
-  useEffect(() => { setSecs(EXERCISES[idx].dur); setRunning(false); clearTick(); }, [idx]);
+  useEffect(() => { setSecs(EXERCISES[idx].dur); setRunning(false); clearTick(); clearAdvance(); }, [idx]);
 
   const goNext = useCallback(() => {
+    clearAdvance();
     setDoneSet(prev => { const n = new Set(prev); n.add(idx); return n; });
     if (idx < total - 1) setIdx(i => i + 1);
     else { clearTick(); setFinished(true); if (!muted) playSuccessChime(); }
   }, [idx, total, muted]);
+
+  // Time's up. This lives in an effect, not inside the setSecs updater: React
+  // may run an updater twice (StrictMode does), and side effects in it meant
+  // two sounds and two queued advances — the second one skipping an exercise.
+  useEffect(() => {
+    if (!running || secs > 0) return;
+    clearTick();
+    setRunning(false);
+    if (!muted) playPostureAlert(0.15);
+    clearAdvance();
+    advanceRef.current = setTimeout(() => { advanceRef.current = null; goNext(); }, 700);
+  }, [secs, running, muted, goNext]);
 
   const start = () => {
     if (running) return;
@@ -110,17 +129,7 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false, alertCau
     setRunning(true);
     clearTick();
     tickRef.current = setInterval(() => {
-      setSecs(prev => {
-        if (prev <= 1) {
-          clearTick();
-          setRunning(false);
-          if (!muted) playPostureAlert(0.15);
-          // brief beat, then advance
-          setTimeout(() => goNext(), 700);
-          return 0;
-        }
-        return prev - 1;
-      });
+      setSecs(prev => Math.max(0, prev - 1));
     }, 1000);
   };
   const pause = () => { setRunning(false); clearTick(); };
@@ -149,7 +158,7 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false, alertCau
           </span>
           <div>
             <div style={{ fontSize:15, fontWeight:800 }}>{isAr?"استراحة الحركة":"Movement Break"}</div>
-            <div style={{ fontSize:11, color:muted2 }}>{isAr?"دقيقتان تعيدان ضبط وضعيتك":"Two minutes to reset your posture"}</div>
+            <div style={{ fontSize:11, color:muted2 }}>{isAr?`حوالي ${totalMin} دقايق تعيد ضبط وضعيتك`:`About ${totalMin} minutes to reset your posture`}</div>
           </div>
         </div>
         <button onClick={onExit} style={{ background:"rgba(148,163,184,.1)", border:`1px solid ${border}`,
@@ -353,7 +362,11 @@ export default function BreakPage({ cs, lang="en", onExit, muted=false, alertCau
               ))}
             </div>
 
-            <button onClick={onExit} style={{ width:"100%", marginTop:14, background:"none", border:"none",
+            <div style={{ fontSize:11, color:muted2, textAlign:"center", marginTop:12, lineHeight:1.6 }}>
+              {isAr?"اتحرك بالراحة — وقّف أي تمرين لو حسيت بألم أو دوخة."
+                   :"Move gently — stop any exercise that causes pain or dizziness."}
+            </div>
+            <button onClick={onExit} style={{ width:"100%", marginTop:6, background:"none", border:"none",
               fontSize:12, color:muted2, cursor:"pointer", padding:6 }}>
               {isAr?"تخطّي الاستراحة والعودة":"Skip break and go back"}
             </button>

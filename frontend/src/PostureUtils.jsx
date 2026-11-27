@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useBodyScrollLock } from "./lib/useBodyScrollLock.js";
 import { NON_POSTURAL_METRICS } from "./lib/clinicalMetrics.js";
 
 // ── Score Smoothing ───────────────────────────────────────────────
@@ -75,115 +74,8 @@ export function useScoreSmoothing(
 }
 
 // ── Break Timer ───────────────────────────────────────────────────
-const BREAK_EXERCISES = [
-  { icon: "🔄", name: "Neck Rolls",      desc: "Slowly roll your head in a full circle, 5 times each direction.", duration: 30 },
-  { icon: "💪", name: "Shoulder Shrugs", desc: "Lift both shoulders to your ears, hold 3s, release. Repeat 10x.",  duration: 20 },
-  { icon: "🙆", name: "Arms Overhead",   desc: "Interlace fingers, stretch arms above head, hold 15s.",            duration: 15 },
-  { icon: "👀", name: "20-20-20 Eyes",   desc: "Look at something 20 feet away for 20 seconds.",                   duration: 20 },
-  { icon: "🧘", name: "Deep Breathing",  desc: "Inhale 4s, hold 4s, exhale 6s. Repeat 3 times.",                  duration: 42 },
-];
-
-export function BreakTimer({ onDismiss, onComplete, cs, lang = "en", intervalMin = 30 }) {
-  useBodyScrollLock();
-  const [exerciseIdx, setExerciseIdx] = useState(0);
-  const [exTimer, setExTimer]         = useState(0);
-  const [running, setRunning]         = useState(false);
-  const [done, setDone]               = useState(false);
-  const timerRef = useRef(null);
-
-  const DARK = cs || { card: "#05101f", border: "rgba(148,163,184,.1)", text: "#f0f4f8", muted: "#64748b" };
-  const ex = BREAK_EXERCISES[exerciseIdx];
-
-  const T = { en: { title: "Time for a Break! 🧘", sub: `You've been working for ${intervalMin} minutes`, next: "Next exercise →", skip: "Skip break", done: "Break complete! 🎉", doneSub: "Great job! Your body thanks you.", finish: "Back to work →", start: "Start exercise", rest: "seconds remaining" },
-               ar: { title: "وقت الاستراحة! 🧘", sub: `مضت ${intervalMin} دقيقة من العمل`, next: "التمرين التالي →", skip: "تخطي الاستراحة", done: "انتهت الاستراحة! 🎉", doneSub: "عمل رائع! جسمك شاكرك.", finish: "العودة للعمل →", start: "بدء التمرين", rest: "ثانية متبقية" } };
-  const t = T[lang] || T.en;
-
-  const startExercise = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setExTimer(ex.duration);
-    setRunning(true);
-    timerRef.current = setInterval(() => {
-      setExTimer(prev => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          setRunning(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, [ex.duration]);
-
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
-
-  const nextExercise = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    setRunning(false);
-    if (exerciseIdx < BREAK_EXERCISES.length - 1) {
-      setExerciseIdx(i => i + 1);
-      setExTimer(0);
-    } else {
-      setDone(true);
-      onComplete?.();
-    }
-  };
-
-  const progressPct = ex.duration > 0 ? Math.round(((ex.duration - exTimer) / ex.duration) * 100) : 0;
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9100 }}>
-      <div style={{ background: DARK.card, border: `0.5px solid ${DARK.border}`, borderRadius: 20, padding: "28px 24px", maxWidth: 400, width: "92%", textAlign: "center" }}>
-
-        {done ? (
-          <>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: DARK.text, marginBottom: 6 }}>{t.done}</div>
-            <div style={{ fontSize: 12, color: DARK.muted, marginBottom: 24 }}>{t.doneSub}</div>
-            <button onClick={onDismiss} style={{ background: "#1a56db", border: "none", borderRadius: 9, padding: "12px 32px", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer" }}>{t.finish}</button>
-          </>
-        ) : (
-          <>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1a56db", marginBottom: 4 }}>{t.title}</div>
-            <div style={{ fontSize: 11, color: DARK.muted, marginBottom: 20 }}>{t.sub}</div>
-
-            {/* Exercise progress dots */}
-            <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 20 }}>
-              {BREAK_EXERCISES.map((_, i) => (
-                <div key={i} style={{ width: i === exerciseIdx ? 20 : 7, height: 7, borderRadius: 99, background: i < exerciseIdx ? "#10b981" : i === exerciseIdx ? "#1a56db" : "rgba(148,163,184,.2)", transition: "all .3s" }} />
-              ))}
-            </div>
-
-            <div style={{ background: "rgba(26,86,219,.06)", border: "0.5px solid rgba(26,86,219,.15)", borderRadius: 14, padding: 20, marginBottom: 18 }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>{ex.icon}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: DARK.text, marginBottom: 6 }}>{ex.name}</div>
-              <div style={{ fontSize: 12, color: DARK.muted, lineHeight: 1.6 }}>{ex.desc}</div>
-
-              {running && (
-                <div style={{ marginTop: 16 }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "#1a56db", lineHeight: 1 }}>{exTimer}</div>
-                  <div style={{ fontSize: 10, color: DARK.muted, marginBottom: 8 }}>{t.rest}</div>
-                  <div style={{ background: "rgba(148,163,184,.1)", borderRadius: 99, height: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", borderRadius: 99, width: `${progressPct}%`, background: "#1a56db", transition: "width 1s linear" }} />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: "flex", gap: 8 }}>
-              {!running && exTimer === 0 && (
-                <button onClick={startExercise} style={{ flex: 2, background: "#1a56db", border: "none", borderRadius: 9, padding: "11px 0", fontSize: 13, fontWeight: 600, color: "white", cursor: "pointer" }}>{t.start}</button>
-              )}
-              <button onClick={nextExercise} style={{ flex: running ? 1 : 1, background: "none", border: `0.5px solid ${DARK.border}`, borderRadius: 9, padding: "11px 0", fontSize: 12, color: DARK.muted, cursor: "pointer" }}>
-                {exerciseIdx < BREAK_EXERCISES.length - 1 ? t.next : "Finish →"}
-              </button>
-            </div>
-            <button onClick={onDismiss} style={{ width: "100%", marginTop: 8, background: "none", border: "none", fontSize: 11, color: DARK.muted, cursor: "pointer", padding: 4 }}>{t.skip}</button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
+// A pause at least this long while a break is due counts as the break itself.
+const BREAK_REST_CREDIT_MS = 2 * 60 * 1000;
 
 // ── useBreakTimer hook ────────────────────────────────────────────
 export function useBreakTimer(intervalMin = 30, enabled = true) {
@@ -199,6 +91,14 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
   // feature. The remainder is carried across instead.
   const remainingRef = useRef(null);
   const startedAtRef = useRef(0);
+  // Interval the banked remainder was measured against, and whether the
+  // pending timeout is a snooze (a snooze is not part of any interval).
+  const intervalAtRef = useRef(intervalMin);
+  const snoozingRef = useRef(false);
+  // A break that came due and was still on screen when the session paused.
+  const owedAtRef = useRef(null);
+  const showingRef = useRef(false);
+  useEffect(() => { showingRef.current = showBreak; }, [showBreak]);
 
   const scheduleIn = useCallback((ms) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -207,11 +107,14 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       remainingRef.current = null;
+      snoozingRef.current = false;
       setShowBreak(true);
     }, ms);
   }, []);
 
   const scheduleNext = useCallback((extraMs = 0) => {
+    snoozingRef.current = false;
+    intervalAtRef.current = intervalMin;
     scheduleIn(intervalMin * 60 * 1000 + extraMs);
   }, [intervalMin, scheduleIn]);
 
@@ -219,7 +122,28 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
     // Turning reminders off (or ending the session) must also take down a card
     // that is already on screen — otherwise the prompt outlives the setting
     // that produced it, and the user's "off" appears not to have worked.
-    if (!enabled) { setShowBreak(false); return; }
+    if (!enabled) {
+      if (showingRef.current) owedAtRef.current = Date.now();
+      setShowBreak(false);
+      return;
+    }
+    // A break that was on screen when the session paused is still owed after
+    // a short pause (a sip of water is not a break). A pause of two minutes or
+    // more is itself the rest, so it starts a fresh interval instead.
+    if (owedAtRef.current != null) {
+      const pausedMs = Date.now() - owedAtRef.current;
+      owedAtRef.current = null;
+      if (pausedMs < BREAK_REST_CREDIT_MS) { setShowBreak(true); return; }
+      remainingRef.current = null;
+    }
+    // The interval was changed mid-way: the time already served counts
+    // against the NEW interval. Carrying the old remainder meant switching
+    // from 60 to 15 minutes after five minutes still waited 55.
+    if (remainingRef.current != null && !snoozingRef.current && intervalAtRef.current !== intervalMin) {
+      remainingRef.current = Math.max(1000,
+        remainingRef.current + (intervalMin - intervalAtRef.current) * 60 * 1000);
+    }
+    intervalAtRef.current = intervalMin;
     // Resume what was left, or start a fresh interval if there is nothing owed.
     scheduleIn(remainingRef.current != null && remainingRef.current > 0
       ? remainingRef.current
@@ -244,6 +168,7 @@ export function useBreakTimer(intervalMin = 30, enabled = true) {
   const snooze = useCallback((min = 5) => {
     setShowBreak(false);
     setSnoozeCount(c => c + 1);
+    snoozingRef.current = true;
     // A snooze is the snooze length, not a whole interval on top of it. This
     // added `min` minutes to a FULL interval, so "remind me in 5" meant 30.
     scheduleIn(min * 60 * 1000);
