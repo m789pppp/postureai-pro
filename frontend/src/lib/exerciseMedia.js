@@ -99,14 +99,25 @@ export const BREAK_ROUTINE = [
     en: "Shoulder Shrugs", ar: "رفع الأكتاف",
     dens: "Lift both shoulders toward your ears, then let them drop and settle back.",
     dar: "ارفع كتفيك ناحية ودانك، وبعدين سيبهم ينزلوا ويرجعوا لورا.",
-    reps: "10× — hold 3s at the top", repsAr: "١٠ مرات — اثبت ٣ ثوانٍ فوق", dur: 30,
-    targets: ["shrug", "round", "sh"],
+    // 10 reps with a 3s hold is ~45s of work, not 30.
+    reps: "10× — hold 3s at the top", repsAr: "١٠ مرات — اثبت ٣ ثوانٍ فوق", dur: 45,
+    // Shrug-and-drop releases elevated shoulders. It does nothing for rounded
+    // shoulders, so "round" moved to the shoulder-blade squeeze below.
+    targets: ["shrug", "sh"],
+  },
+  {
+    id: "scap_squeeze", icon: "🔙", img: null,   // no licensed illustration yet
+    en: "Shoulder Blade Squeeze", ar: "ضم لوحي الكتف",
+    dens: "Sit tall and draw your shoulder blades back and down, as if holding a pencil between them. Keep your lower back still.",
+    dar: "اقعد مفرود وارجع بلوحي كتفك لورا ولتحت كأنك ماسك قلم بينهم. خلي أسفل ضهرك ثابت.",
+    reps: "10× — hold 3s", repsAr: "١٠ مرات — اثبت ٣ ثوانٍ", dur: 40,
+    targets: ["round", "slouch", "spine"],
   },
   {
     id: "wrist_extensor", icon: "✋", img: "/exercises/wrist-extensor.webp",
     en: "Wrist Stretch", ar: "شد الرسغ",
-    dens: "Straighten one arm, palm down, and gently pull the fingers back toward you.",
-    dar: "مُدّ دراعك وكفّك لتحت، واسحب صوابعك ناحيتك بلطف.",
+    dens: "Straighten one arm, palm down, and let the wrist bend down. With the other hand, gently press the back of the hand toward you until you feel the stretch on top of the forearm.",
+    dar: "مُدّ دراعك وكفّك لتحت، وسيب رسغك ينزل لتحت. بإيدك التانية اضغط على ضهر الكف ناحيتك بلطف لحد ما تحس بالشد فوق الساعد.",
     reps: "15s each hand", repsAr: "١٥ ثانية لكل يد", dur: 30,
     targets: ["elbow"],
   },
